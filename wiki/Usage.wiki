@@ -1,0 +1,5 @@
+#labels Featured
+#Slow HTTP vulnerability test tool
+Sample usage
+
+./slowhttptest-macos-0.1 -d -t body -u http://127.0.0.1:7777/ -c 700 -i 20 -r 200
