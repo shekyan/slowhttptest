@@ -42,8 +42,8 @@ void log_init(const bool to_file) {
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    char filename[24] = {0};
-    strftime(filename, 23, "slow_%H%M%S%Y%m%d.log", timeinfo);
+    char filename[23] = {0};
+    strftime(filename, 22, "slow_%H%M%Y%m%d.log", timeinfo);
     log_file = fopen(filename , "w");
     if(!log_file) {
       printf("Unable to open log file %s for writing: %s", filename, strerror(errno));
