@@ -42,7 +42,7 @@ static void usage() {
       "[-r <connections per second>] [-l <test duration in seconds>]\n"
       "Options:\n\t"
       "-c,          target number of connections\n\t"
-      "-h or -b,    specifies test mode(either slow headers or body)\n\t"
+      "-h or -p,    specifies test mode(either slow headers or POST)\n\t"
       "-i,          interval between followup data in seconds\n\t"
       "-l,          target test length in seconds\n\t"
       "-r,          connections rate(connections per seconds)\n\t"
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 	int duration = 300;
 	SlowTestType type = eHeader;
 	char o;
-	while((o = getopt(argc, argv, "t:l:c:i:r:u:d")) != -1) {
+	while((o = getopt(argc, argv, "hpvl:c:i:r:u:")) != -1) {
 		switch (o) {
 		case 'u':
 			strncpy(url, optarg, 1024);
@@ -82,10 +82,10 @@ int main(int argc, char **argv) {
 				return -1;
       }
       break;
-    case 'd':
+    case 'v':
       to_file = false; 
       break;
-		case 'v':
+		case 'p':
       type = ePost;
 			break;
 		case 'h':
