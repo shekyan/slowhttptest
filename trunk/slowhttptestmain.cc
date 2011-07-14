@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 			return -1;
 		}
 	}
-  log_init(debug);
+  log_init(!debug);
 	std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
 	if(!slow_test->init(url)) {
 		printf("%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
