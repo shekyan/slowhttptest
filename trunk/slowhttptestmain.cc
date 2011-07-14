@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 
 	char url[1024] = { 0 };
 	long tmp;
-  bool debug = false;
+  bool to_file = true;
 	int conn_cnt = 100;
 	int delay = 100;
 	int interval = 10;
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
       }
       break;
     case 'd':
-      debug = true; 
+      to_file = false; 
       break;
 		case 't':
 			if(!strcmp(optarg, "body")) {
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 			return -1;
 		}
 	}
-  log_init(!debug);
+  log_init(to_file);
 	std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
 	if(!slow_test->init(url)) {
 		printf("%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
