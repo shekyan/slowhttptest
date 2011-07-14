@@ -184,7 +184,7 @@ int SlowSocket::send_slow(const void *buf, size_t len, const SendType type) {
 }
 int SlowSocket::close_slow() {
 	//printf("closing slow, sock is %d\n", sockfd_);
-	int ret;
+	int ret = -1;
 	if(ssl_) {
 		SSL_free(ssl_);
 		ssl_ = NULL;

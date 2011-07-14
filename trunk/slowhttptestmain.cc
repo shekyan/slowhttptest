@@ -34,11 +34,22 @@
 
 static void usage() {
 	printf(
-			"Program that tests for slow HTTP DoS vulnerabilities.\n"
+      "slowhttptest v.%d, a tool to test for slow HTTP "
+      "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-d debug] [-t header|body] [-u URL] "
-      "[-c number of connections] [-i interval in sec] "
-      "[-r connections per second] [-l test duration in sec]\n");
+      "slowtest [-v] [-<h|b>] [-u <URL>] "
+      "[-c <number of connections>] [-i <interval in seconds>] "
+      "[-r <connections per second>] [-l <test duration in seconds>]\n"
+      "Options:\n\t"
+      "-c,          target number of connections\n\t"
+      "-h or -b,    specifies test mode(either slow headers or body)\n\t"
+      "-i,          interval between followup data in seconds\n\t"
+      "-l,          target test length in seconds\n\t"
+      "-r,          connections rate(connections per seconds)\n\t"
+      "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
+      "-v,          verbose\n"
+      , VERSION
+      );
 }
 
 int main(int argc, char **argv) {
@@ -74,10 +85,11 @@ int main(int argc, char **argv) {
     case 'd':
       to_file = false; 
       break;
-		case 't':
-			if(!strcmp(optarg, "body")) {
-				type = ePost;
-      }
+		case 'v':
+      type = ePost;
+			break;
+		case 'h':
+      type = eHeader;
 			break;
 		case 'r':
 			tmp = strtol(optarg, 0, 10);

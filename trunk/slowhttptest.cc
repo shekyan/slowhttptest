@@ -178,7 +178,7 @@ bool SlowHTTPTest::run_test() {
 	int maxfd = 0;
 	int result = 0;
 	int ret = 0;
-	int last_followup_timing = 0;
+	unsigned int last_followup_timing = 0;
 	timeval now, timeout, start, progressTimer;
 	unsigned int seconds_passed = 0; //stores seconds passed since we started
 	unsigned int active_sock_num;
@@ -221,7 +221,7 @@ bool SlowHTTPTest::run_test() {
 		seconds_passed = progressTimer.tv_sec;
 		FD_ZERO(&readfds);
 		FD_ZERO(&writefds);
-		for(int i = 0; i < num_connected; ++i) {
+		for(unsigned int i = 0; i < num_connected; ++i) {
 			if(sock_[i] && sock_[i]->get_sockfd() > 0) {
 				FD_SET(sock_[i]->get_sockfd(), &readfds);
 				++active_sock_num;
@@ -262,7 +262,7 @@ bool SlowHTTPTest::run_test() {
 		} else if(result == 0) {
 			continue;
 		} else {
-			for(int i = 0; i < num_connected; i++) {
+			for(unsigned int i = 0; i < num_connected; i++) {
 				if(sock_[i] && sock_[i]->get_sockfd() > 0) {
 					if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { //read
 						ret = sock_[i]->recv_slow(buf, BUF_SIZE);
@@ -334,7 +334,7 @@ bool SlowHTTPTest::run_test() {
    active_sock_num, seconds_passed);
   slowlog("%s: %d active sockets left by the end of the test on %dth second\n",
    __FUNCTION__, active_sock_num, seconds_passed);
-  for(int i = 0; i < num_connections_; ++i) {
+  for(unsigned int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {
       delete sock_[i];
 		}
