@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
       return -1;
     }
   }
-  slowlog_init(debug_level);
+  slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
     slowlog(0, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);

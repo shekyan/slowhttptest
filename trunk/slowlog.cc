@@ -32,17 +32,26 @@
 
 #include "slowlog.h"
 namespace {
-static FILE* log_file = stdout;
-static unsigned int g_debug_level;
+static FILE* log_file = NULL;
+static unsigned int current_log_level;
+
+void dispose_of_log() {
+  if (log_file != stdout) {
+    fclose(log_file);
+  }
+}
+
 }
 
 namespace slowhttptest {
-void slowlog_init(unsigned int debug_level) {
-  g_debug_level = debug_level;
+void slowlog_init(unsigned int debug_level, const char* file_name) {
+  log_file = file_name == NULL ? stdout : fopen(file_name, "w");
+  atexit(&dispose_of_log);
+  debug_level = debug_level;
 }
 
 void slowlog(unsigned int lvl, const char* format, ...) {
-  if(lvl <= g_debug_level) {
+  if(lvl <= current_log_level) {
     time_t  now = time(NULL);
     char    ctimebuf[32],
             *buf = ctime_r(&now, ctimebuf);

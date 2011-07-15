@@ -29,7 +29,7 @@
 #ifndef _SLOWLOG_H_
 #define _SLOWLOG_H_
 namespace slowhttptest {
-void slowlog_init(unsigned int debug_level);
+void slowlog_init(unsigned int debug_level, const char* file_name);
 void slowlog(unsigned int lvl, const char* format, ...);
 }  // namespace slowhttptest
 #endif
