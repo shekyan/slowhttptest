@@ -30,77 +30,82 @@
 
 #include "slowurl.h"
 #include <string>
+
+namespace slowhttptest {
 Url::Url() {
 }
 
 bool Url::prepare(const char* url) {
-	if(!url)
-		return false;
-	bool has_port = false;
-	bool has_path = false;
-	size_t host_len = 0;
-	size_t path_start = 0;
-	size_t port_start = 0;
+  if(!url)
+    return false;
+  bool has_port = false;
+  bool has_path = false;
+  size_t host_len = 0;
+  size_t path_start = 0;
+  size_t port_start = 0;
 
-	data_.append(url);
-	const std::string scheme("https");
-	size_t host_start = 0;
+  data_.append(url);
+  const std::string scheme("https");
+  size_t host_start = 0;
 
-	if(data_.size() < 7 || data_.find("http") != 0
-			|| 4 > data_.find("://") > 5) {
-		return false;
-	} else {
-		is_ssl_ = data_[4] == 's';
-		host_start = is_ssl_ ? 8 : 7;
-	}
+  if(data_.size() < 7 || data_.find("http") != 0
+      || 4 > data_.find("://") > 5) {
+    return false;
+  } else {
+    is_ssl_ = data_[4] == 's';
+    host_start = is_ssl_ ? 8 : 7;
+  }
 
-	size_t tmp = data_.find_first_of(":", host_start);
-	if(tmp != std::string::npos) {
-		has_port = true;
-		port_start = tmp;
-	}
-	tmp = host_start;
+  size_t tmp = data_.find_first_of(":", host_start);
+  if(tmp != std::string::npos) {
+    has_port = true;
+    port_start = tmp;
+  }
+  tmp = host_start;
 
-	tmp = data_.find_first_of("/", tmp);
-	if(tmp != std::string::npos) {
-		has_path = true;
-		path_start = tmp;
-	}
+  tmp = data_.find_first_of("/", tmp);
+  if(tmp != std::string::npos) {
+    has_path = true;
+    path_start = tmp;
+  }
 
-	if(has_port)
-		host_len = port_start;
-	else if(has_path)
-		host_len = path_start;
-	else
-		host_len = data_.size();
-	// get host
-	host_.append(data_, host_start, host_len - host_start);
+  if(has_port)
+    host_len = port_start;
+  else if(has_path)
+    host_len = path_start;
+  else
+    host_len = data_.size();
+  // get host
+  host_.append(data_, host_start, host_len - host_start);
 
-	// get port
-	if(has_port) {
-		std::string port;
-		if(has_path) {
-			port.append(data_, port_start + 1, path_start - port_start - 1);
+  // get port
+  if(has_port) {
+    std::string port;
+    if(has_path) {
+      port.append(data_, port_start + 1, path_start - port_start - 1);
 
-		} else {
-			port.append(data_, port_start + 1, data_.size() - port_start - 1);
-		}
+    } else {
+      port.append(data_, port_start + 1, data_.size() - port_start - 1);
+    }
 
-		long tmp = strtol(port.c_str(), 0, 10);
-		if(tmp && tmp <= USHRT_MAX) {
-			port_ = static_cast<int>(tmp);
-		} else
-			return false;
-	} else
-		port_ = is_ssl_ ? 443 : 80;
+    long tmp = strtol(port.c_str(), 0, 10);
+    if(tmp && tmp <= USHRT_MAX) {
+      port_ = static_cast<int>(tmp);
+    } else
+      return false;
+  } else
+    port_ = is_ssl_ ? 443 : 80;
 
-	// get path
-	if(has_path) {
-		path_.append(data_, path_start, data_.size() - path_start);
-	} else {
-		path_.append("/");
+  // get path
+  if(has_path) {
+    path_.append(data_, path_start, data_.size() - path_start);
+  } else {
+    path_.append("/");
     data_.append("/");
-	}
+  }
 
-	return true;
+  return true;
 }
+
+
+}  // namespace slowhttptest

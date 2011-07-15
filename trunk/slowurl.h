@@ -29,33 +29,36 @@
 
 #include <string>
 
+namespace slowhttptest {
 class Url {
 public:
-	Url();
-	bool prepare(const char* url);
+  Url();
+  bool prepare(const char* url);
 
-	const int isSSL() const {
-		return is_ssl_;
-	}
-	const std::string& getHost() const {
-		return host_;
-	}
-	const int getPort() const {
-		return port_;
-	}
-	const std::string& getPath() const {
-		return path_;
-	}
-	const char* getData() const {
-		return data_.c_str();
-	}
+  const int isSSL() const {
+    return is_ssl_;
+  }
+  const std::string& getHost() const {
+    return host_;
+  }
+  const int getPort() const {
+    return port_;
+  }
+  const std::string& getPath() const {
+    return path_;
+  }
+  const char* getData() const {
+    return data_.c_str();
+  }
 
 private:
-	std::string data_;
-	std::string host_;
-	std::string path_;
-	int port_;
-	bool is_ssl_;
+  std::string data_;
+  std::string host_;
+  std::string path_;
+  int port_;
+  bool is_ssl_;
 };
+
+}  // namespace slowhttptest
 
 #endif

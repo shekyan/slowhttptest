@@ -28,46 +28,49 @@
 #ifndef _SLOWHTTPTEST_H_
 #define _SLOWHTTPTEST_H_
 
+#include "netdb.h"
 #include <string>
 #include <vector>
 
-#include "slowsocket.h"
 #include "slowurl.h"
 
+namespace slowhttptest {
+
 enum SlowTestType {
-	eHeader = 0,
+  eHeader = 0,
   ePost
 };
 
+class SlowSocket;
 class SlowHTTPTest {
-public:
-	SlowHTTPTest(int delay, int duration, int interval, int con_cnt, SlowTestType type);
-	~SlowHTTPTest();
+ public:
+  SlowHTTPTest(int delay, int duration, int interval, int con_cnt, SlowTestType type);
+  ~SlowHTTPTest();
 
-	bool init(const char* url);
-	void report_parameters();
-	bool run_test();
-	static bool fillRandomData(char * random_string, const size_t len);
-	static bool grabResponseCode(const char *buf, unsigned int& code);
+  bool init(const char* url);
+  void report_parameters();
+  bool run_test();
+  static bool fillRandomData(char * random_string, const size_t len);
+  static bool grabResponseCode(const char *buf, int& code);
 
-private:
+ private:
+  void remove_sock(int id);
 
-	void remove_sock(int id);
-
-	hostent * server_;
+  hostent* server_;
   std::string request_;
   std::string random_post_;
   std::string user_agent_;
-	Url base_uri_;
+  Url base_uri_;
 
-	std::vector<SlowSocket*> sock_;
-  unsigned   delay_,
-             duration_,
-             followup_timing_,
-             followup_cnt_,
-             num_connections_;
+  std::vector<SlowSocket*> sock_;
+  int delay_;
+  int duration_;
+  int followup_timing_;
+  int followup_cnt_;
+  int num_connections_;
 
   SlowTestType type_;
 };
 
+}  // namespace slowhttptest
 #endif

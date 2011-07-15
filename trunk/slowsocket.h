@@ -26,58 +26,61 @@
  *  if it is plain or SSL connection.
  *****/
 
-#include <string>
-#include <openssl/ssl.h>
-
 #ifndef _SLOWSOCKET_H_
 #define _SLOWSOCKET_H_
 
-class Url;
+#include <string>
+#include <openssl/ssl.h>
+
 struct hostent;
 struct sockaddr_in;
 
+namespace slowhttptest {
+class Url;
+
 enum SendType {
-	eInitialSend = 0, eFollowUpSend
+  eInitialSend = 0, eFollowUpSend
 };
 
 class SlowSocket {
 public:
-	SlowSocket();
-	~SlowSocket();
-	// you should have a dtor, which calls close_slow, if it has not been closed yet.
-	bool isEmpty() {
-		return -1 == sockfd_ && !ssl_;
-	}
-	// Should all those methods be public?
-	int close_slow();
+  SlowSocket();
+  ~SlowSocket();
+  // you should have a dtor, which calls close_slow, if it has not been closed yet.
+  bool isEmpty() {
+    return -1 == sockfd_ && !ssl_;
+  }
+  // Should all those methods be public?
+  int close_slow();
 
-	bool init(hostent* server, const Url* url, int& maxfd,
-			int followups_to_send);
-	int recv_slow(void *buf, size_t len);
-	int send_slow(const void *msg, size_t len, const SendType type =
-			eInitialSend);
-	const int get_sockfd() const {
-		return sockfd_;
-	}
-	const int get_requests_to_send() const {
-		return requests_to_send_;
-	}
-	const int get_followups_to_send() const {
-		return followups_to_send_;
-	}
+  bool init(const hostent* server, const Url* url, int& maxfd,
+      int followups_to_send);
+  int recv_slow(void *buf, size_t len);
+  int send_slow(const void *msg, size_t len, const SendType type =
+      eInitialSend);
+  const int get_sockfd() const {
+    return sockfd_;
+  }
+  const int get_requests_to_send() const {
+    return requests_to_send_;
+  }
+  const int get_followups_to_send() const {
+    return followups_to_send_;
+  }
 
 private:
 
-	int connect_plain(sockaddr_in & addr);
-	int connect_ssl(sockaddr_in & addr);
-	int set_nonblocking();
-	// It is better to have each member have it's own type decl.
-	int sockfd_;
-	int requests_to_send_;
-	int followups_to_send_;
-	int offset_;
-	SSL *ssl_;
-	const void * buf_;
+  int connect_plain(sockaddr_in & addr);
+  int connect_ssl(sockaddr_in & addr);
+  int set_nonblocking();
+  // It is better to have each member have it's own type decl.
+  int sockfd_;
+  int requests_to_send_;
+  int followups_to_send_;
+  int offset_;
+  SSL *ssl_;
+  const void * buf_;
 };
 
+}  // namespace slowhttptest
 #endif

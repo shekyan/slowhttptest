@@ -31,10 +31,12 @@
 #include <string.h>
 
 #include "slowlog.h"
-
+namespace {
 static FILE* log_file = stdout;
 static unsigned int g_debug_level;
+}
 
+namespace slowhttptest {
 void slowlog_init(unsigned int debug_level) {
   g_debug_level = debug_level;
 }
@@ -54,4 +56,4 @@ void slowlog(unsigned int lvl, const char* format, ...) {
   }
 }
 
-
+}  // namespace slowhttptest
