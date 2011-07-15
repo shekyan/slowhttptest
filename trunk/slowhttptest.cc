@@ -90,7 +90,7 @@ bool SlowHTTPTest::init(const char* url) {
   }
 	server_ = gethostbyname(base_uri_.getHost().c_str());
 	if(server_ == NULL) {
-		printf("%s: ERROR, no such host\n", __FUNCTION__);
+		slowlog(0, "%s: ERROR, no such host\n", __FUNCTION__);
 		return false;
 	}
 	user_agent_.append(USER_AGENT);
@@ -151,7 +151,7 @@ bool SlowHTTPTest::grabResponseCode(const char* buf, unsigned int& code) {
 
 void SlowHTTPTest::report_parameters() {
 
-  slowlog("\nUsing:\n"
+  slowlog(0, "\nUsing:\n"
     "test mode:                        %s\n"
     "URL:                              %s\n"
     "number of connections:            %d\n"
@@ -210,7 +210,7 @@ bool SlowHTTPTest::run_test() {
 			sock_[num_connected] = new SlowSocket();
 			if(!sock_[num_connected]->init(server_, &base_uri_, maxfd,
 					followup_cnt_)) {
-				printf("%s: Unable to initialize %dth socket.\n", __FUNCTION__,
+				slowlog(0, "%s: Unable to initialize %dth socket.\n", __FUNCTION__,
 						(int) num_connected);
 				num_connections_ = num_connected;
 			} else {
@@ -240,14 +240,15 @@ bool SlowHTTPTest::run_test() {
 		}
 		if(seconds_passed % 5 == 0) { //printing heartbeat
       if(heartbeat_reported != seconds_passed) { //not so precise
-        printf("%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
+        slowlog(0, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
           __FUNCTION__, (int)active_sock_num, seconds_passed);
         heartbeat_reported = seconds_passed;
       }
-      // more precise
-      slowlog("%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
+      else { // more precise
+        slowlog(7, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
         __FUNCTION__, (int)active_sock_num, seconds_passed);
-		}
+      }
+    }
 		if(seconds_passed > duration_ || active_sock_num == 0) { //limit to test
 			break;
 		}
@@ -257,7 +258,7 @@ bool SlowHTTPTest::run_test() {
 		gettimeofday(&now, 0);
 		timersub(&now, &start, &progressTimer);
 		if(result < 0) {
-			printf("%s: select() error: %s\n", __FUNCTION__, strerror(errno));
+			slowlog(1, "%s: select() error: %s\n", __FUNCTION__, strerror(errno));
 			break;
 		} else if(result == 0) {
 			continue;
@@ -268,12 +269,12 @@ bool SlowHTTPTest::run_test() {
 						ret = sock_[i]->recv_slow(buf, BUF_SIZE);
 						buf[ret] = '\0';
 						if(ret <= 0 && errno != EAGAIN) {
-							slowlog("%s: sock %d closed\n", __FUNCTION__,
+							slowlog(5, "%s: sock %d closed\n", __FUNCTION__,
 									sock_[i]->get_sockfd());
 							remove_sock(i);
 							continue;
 						} else {
-							slowlog("%s: sock %d replied %s\n", __FUNCTION__,
+							slowlog(5, "%s: sock %d replied %s\n", __FUNCTION__,
 									sock_[i]->get_sockfd(), buf);
 						}
 					}
@@ -282,14 +283,14 @@ bool SlowHTTPTest::run_test() {
 							ret = sock_[i]->send_slow(request_.c_str(),
 									request_.size());
 							if(ret <= 0 && errno != EAGAIN) {
-								slowlog(
+								slowlog(5,
 										"%s:error sending initial slow post on sock %d: %s\n",
 										__FUNCTION__, sock_[i]->get_sockfd(),
 										strerror(errno));
 								remove_sock(i);
 								continue;
 							} else {
-								slowlog(
+								slowlog(5,
 										"%s:initial %d of %d bytes sent on slow post socket %d:\n %s\n",
 										__FUNCTION__, ret,
 										(int) request_.size(),
@@ -302,14 +303,14 @@ bool SlowHTTPTest::run_test() {
 							ret = sock_[i]->send_slow(extra_data,
 									strlen(extra_data), eFollowUpSend);
 							if(ret <= 0 && errno != EAGAIN) {
-								slowlog(
+								slowlog(5,
 										"%s:error sending follow up data on socket %d: %s\n",
 										__FUNCTION__, sock_[i]->get_sockfd(),
 										strerror(errno));
 								remove_sock(i);
 								continue;
 							} else {
-								slowlog(
+								slowlog(5,
 										"%s:%d of %d follow up data sent on socket %d:\n%s\n%d follow ups left\n",
 										__FUNCTION__, ret,
 										(int) strlen(extra_data),
@@ -321,8 +322,7 @@ bool SlowHTTPTest::run_test() {
 					} else {
             if(sock_[i] && sock_[i]->get_requests_to_send() > 0) {
               // trying to connect, server slowing down probably
-              slowlog("pending connection on socket %d\n", sock_[i]->get_sockfd());
-             // printf("pending connection on socket %d\n", sock_[i]->get_sockfd());
+              slowlog(5, "pending connection on socket %d\n", sock_[i]->get_sockfd());
             }
           }
 				}
@@ -330,10 +330,8 @@ bool SlowHTTPTest::run_test() {
 		}
 	}
 
-  printf("%d active sockets left by the end of the test on %dth second\n",
+  slowlog(0, "%d active sockets left by the end of the test on %dth second\n",
    active_sock_num, seconds_passed);
-  slowlog("%s: %d active sockets left by the end of the test on %dth second\n",
-   __FUNCTION__, active_sock_num, seconds_passed);
   for(unsigned int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {
       delete sock_[i];

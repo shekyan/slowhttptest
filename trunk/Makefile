@@ -1,8 +1,6 @@
-UNAME := $(shell uname)
-
 VERSION		= 1 #current version
-TARGET		= slowhttptest_$(UNAME)_v$(VERSION)
-DEFINES		= -DVERSION=$(VERSION) -DUNAME=$(UNAME)
+TARGET		= slowhttptest
+DEFINES		= -DVERSION=$(VERSION)
 CC=g++
 CFLAGS=-c -Wall -O3 $(DEFINES)
 LDFLAGS= -lssl

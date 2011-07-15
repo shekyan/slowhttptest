@@ -34,6 +34,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include "slowlog.h"
 #include "slowsocket.h"
 #include "slowurl.h"
 
@@ -72,11 +73,11 @@ bool SlowSocket::init(hostent* server, const Url* url, int& maxfd,
 	requests_to_send_ = 1;
 	sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
 	if(-1 == sockfd_) {
-		printf("%s: Failed to create socket\n", __FUNCTION__);
+		slowlog(0, "%s: Failed to create socket\n", __FUNCTION__);
 		return false;
 	}
 	if(-1 == set_nonblocking()) {
-		printf("%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
+		slowlog(0, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
 				sockfd_);
 		return false;
 	}
@@ -98,7 +99,7 @@ int SlowSocket::connect_plain(sockaddr_in & addr) {
 	errno = 0;
 	if(sockfd_ > 0 && connect(sockfd_, (sockaddr*) &addr, sizeof(addr)) < 0) {
 		if(EINPROGRESS != errno) {
-			printf("%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
+			slowlog(1, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
 					strerror(errno), sockfd_);
 			close(sockfd_);
 			return -1;
@@ -118,13 +119,13 @@ int SlowSocket::connect_ssl(sockaddr_in & addr) {
 	method = SSLv23_client_method();
 	ssl_ctx = SSL_CTX_new(method);
 	if(!ssl_ctx) {
-		printf("%s: Cannot create new SSL context\n", __FUNCTION__);
+	  slowlog(0, "%s: Cannot create new SSL context\n", __FUNCTION__);
 		close_slow();
 		return sockfd_; // Is it usable? may be -1?
 	}
 	ssl_ = SSL_new(ssl_ctx);
 	if(!ssl_) {
-		printf("%s: Cannot create SSL structure for a connection\n",
+		slowlog(0, "%s: Cannot create SSL structure for a connection\n",
 				__FUNCTION__);
 		close_slow();
 		return sockfd_; // same.
@@ -133,13 +134,13 @@ int SlowSocket::connect_ssl(sockaddr_in & addr) {
 	int ret = SSL_connect(ssl_);
 	if(ret <= 0) {
 		int err = SSL_get_error(ssl_, ret);
-		printf("%s: SSL connect error: %d\n", __FUNCTION__, err);
+		slowlog(0, "%s: SSL connect error: %d\n", __FUNCTION__, err);
 		if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
 			close_slow();
 			return sockfd_; // same
 		}
 	}
-	printf("%s: SSL connection is using %s\n", __FUNCTION__,
+	slowlog(5, "%s: SSL connection is using %s\n", __FUNCTION__,
 			SSL_get_cipher(ssl_));
 	return sockfd_;
 }
@@ -183,7 +184,7 @@ int SlowSocket::send_slow(const void *buf, size_t len, const SendType type) {
 	return ret;
 }
 int SlowSocket::close_slow() {
-	//printf("closing slow, sock is %d\n", sockfd_);
+	slowlog(7, "closing slow, sock is %d\n", sockfd_);
 	int ret = -1;
 	if(ssl_) {
 		SSL_free(ssl_);

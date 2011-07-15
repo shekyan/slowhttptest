@@ -37,7 +37,7 @@ static void usage() {
       "slowhttptest v.%d, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-v] [-<h|b>] [-u <URL>] "
+      "slowtest [-v <verbosity level>] [-<h|b>] [-u <URL>] "
       "[-c <number of connections>] [-i <interval in seconds>] "
       "[-r <connections per second>] [-l <test duration in seconds>]\n"
       "Options:\n\t"
@@ -47,7 +47,7 @@ static void usage() {
       "-l,          target test length in seconds\n\t"
       "-r,          connections rate(connections per seconds)\n\t"
       "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
-      "-v,          verbose\n"
+      "-v,          verbosity level 0-9 \n"
       , VERSION
       );
 }
@@ -60,19 +60,16 @@ int main(int argc, char **argv) {
 	}
 
 	char url[1024] = { 0 };
-	long tmp;
-  bool to_file = true;
 	int conn_cnt = 100;
+  unsigned int debug_level = 0;
 	int delay = 100;
-	int interval = 10;
 	int duration = 300;
+	int interval = 10;
+	long tmp;
 	SlowTestType type = eHeader;
 	char o;
-	while((o = getopt(argc, argv, "hpvl:c:i:r:u:")) != -1) {
+	while((o = getopt(argc, argv, "hpv:l:c:i:r:u:")) != -1) {
 		switch (o) {
-		case 'u':
-			strncpy(url, optarg, 1024);
-			break;
 		case 'c':
 			tmp = strtol(optarg, 0, 10);
 			if(tmp && tmp <= INT_MAX) {
@@ -82,22 +79,8 @@ int main(int argc, char **argv) {
 				return -1;
       }
       break;
-    case 'v':
-      to_file = false; 
-      break;
-		case 'p':
-      type = ePost;
-			break;
 		case 'h':
       type = eHeader;
-			break;
-		case 'r':
-			tmp = strtol(optarg, 0, 10);
-			if(tmp && tmp <= INT_MAX) {
-				delay = static_cast<int>(tmp);
-      } else {
-				return -1;
-      }
 			break;
 		case 'i':
 			tmp = strtol(optarg, 0, 10);
@@ -114,9 +97,32 @@ int main(int argc, char **argv) {
       } else {
 				return -1;
       }
+      break;
+		case 'p':
+      type = ePost;
 			break;
+		case 'r':
+			tmp = strtol(optarg, 0, 10);
+			if(tmp && tmp <= INT_MAX) {
+				delay = static_cast<int>(tmp);
+      } else {
+				return -1;
+      }
+			break;
+    case 'u':
+      strncpy(url, optarg, 1024);
+			break;
+    case 'v':
+      tmp = strtol(optarg, 0, 10);
+      if(0 <= tmp <= 9) {
+        debug_level = static_cast<unsigned int>(tmp);
+      }
+      else {
+        debug_level = 9;
+      }
+      break;
     case '?':
-     printf("Illegal option\n");
+      printf("Illegal option\n");
     usage();
     return -1;
 		default:
@@ -124,14 +130,13 @@ int main(int argc, char **argv) {
 			return -1;
 		}
 	}
-  log_init(to_file);
+  slowlog_init(debug_level);
 	std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
 	if(!slow_test->init(url)) {
-		printf("%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
+		slowlog(0, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
 		return -1;
 	} else if(!slow_test->run_test()) {
     return -1;
   }
-  log_close();
 	return 0;
 }

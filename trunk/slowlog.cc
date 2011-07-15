@@ -32,49 +32,26 @@
 
 #include "slowlog.h"
 
-static FILE* log_file = 0;
-static bool  g_to_file = false;
+static FILE* log_file = stdout;
+static unsigned int g_debug_level;
 
-void log_init(const bool to_file) {
-  g_to_file = to_file;
-  if(g_to_file) {
-    time_t rawtime;
-    struct tm * timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    char filename[23] = {0};
-    strftime(filename, 22, "slow_%H%M%Y%m%d.log", timeinfo);
-    log_file = fopen(filename , "w");
-    if(!log_file) {
-      printf("Unable to open log file %s for writing: %s", filename, strerror(errno));
-      log_file = stdout;
-    }
-  } else {
-    log_file = stdout;
+void slowlog_init(unsigned int debug_level) {
+  g_debug_level = debug_level;
+}
+
+void slowlog(unsigned int lvl, const char* format, ...) {
+  if(lvl <= g_debug_level) {
+    time_t  now = time(NULL);
+    char    ctimebuf[32],
+            *buf = ctime_r(&now, ctimebuf);
+
+    fprintf(log_file, "%-.24s:", buf);
+
+    va_list va;
+    va_start(va, format);
+    vfprintf(log_file, format, va);
+    va_end(va);
   }
 }
 
-void slowlog(const char* format, ...)
-{
-  time_t  now = time(NULL);
-  char    ctimebuf[32],
-          *buf = ctime_r(&now, ctimebuf);
-
-  fprintf(log_file, "%-.24s:", buf);
-
-  va_list va;
-  va_start(va, format);
-  vfprintf(log_file, format, va);
-  va_end(va);
-
-  if(g_to_file) {
-    fflush(log_file);
-  }
-}
-
-void log_close() {
-  if(g_to_file) {
-    fclose(log_file);
-  }
-}
 

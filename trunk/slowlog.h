@@ -28,9 +28,7 @@
 
 #ifndef _SLOWLOG_H_
 #define _SLOWLOG_H_
-
-void log_init(const bool to_file);
-void slowlog(const char* format, ...);
-void log_close();
+void slowlog_init(unsigned int debug_level);
+void slowlog(unsigned int lvl, const char* format, ...);
 
 #endif
