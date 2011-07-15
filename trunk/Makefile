@@ -23,7 +23,7 @@ $(TARGET): $(OBJECTS)
 
 clean:
 	@echo Removing binary files...
-	$(DEL_FILE) $(BINDIR)$(TARGET) $(BIN_DIR)*.o
+	@$(DEL_FILE) $(BIN_DIR)*.o $(BIN_DIR)$(TARGET)
 
 tags:
 	@echo Generating tags...
@@ -38,3 +38,4 @@ install:
 	@$(MOVE) *.o $(BIN_DIR)
 	@$(INSTALL_PROGRAM) $(TARGET) $(BIN_DIR)$(TARGET)
 	@$(DEL_FILE) $(TARGET)
+
