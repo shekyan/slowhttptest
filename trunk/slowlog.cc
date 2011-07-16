@@ -47,7 +47,7 @@ namespace slowhttptest {
 void slowlog_init(unsigned int debug_level, const char* file_name) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   atexit(&dispose_of_log);
-  debug_level = debug_level;
+  current_log_level = debug_level;
 }
 
 void slowlog(unsigned int lvl, const char* format, ...) {
