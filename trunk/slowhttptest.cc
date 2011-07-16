@@ -44,7 +44,7 @@ static const int kBufSize = 65537;
  AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1"
 
 static const char post_request[] = "Connection: close\r\n"
-    "Referer: http://code.google.com/p/slowhttptest/r\n"
+    "Referer: http://code.google.com/p/slowhttptest/\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
     "Content-Length: 512\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
