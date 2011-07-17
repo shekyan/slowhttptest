@@ -34,6 +34,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 
 #include "slowlog.h"
 #include "slowsocket.h"
@@ -75,6 +76,32 @@ SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
 }
 
+bool SlowHTTPTest::change_fd_limits() {
+  rlimit fd_limit = {0, 0};
+  if(getrlimit(RLIMIT_NOFILE, &fd_limit)) {
+    slowlog(slowhttptest::eLogError, "error getting limits for open files: %s\n", strerror(errno));
+    return false;
+  }
+  // +3 is stdin, stdout, stderr  
+  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 3)) { //extend limits
+    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 3)) {
+      fd_limit.rlim_cur = num_connections_ + 3;
+    } else { // max limit is lower than requested
+      fd_limit.rlim_cur = fd_limit.rlim_max;
+      num_connections_ = fd_limit.rlim_max - 3;
+      slowlog(slowhttptest::eLogWarning, "decreasing target connection number to %d\n", num_connections_);
+    }
+    if(setrlimit(RLIMIT_NOFILE, &fd_limit)) {
+      slowlog(slowhttptest::eLogError, "error setting limits for open files: %s\n", strerror(errno));
+      return false;
+    } else {
+      slowlog(slowhttptest::eLogInfo, "set open files limit to %d\n", fd_limit.rlim_cur);
+    }
+  }
+  
+  return true;
+}
+
 bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
   if(len > 0) {
     size_t pos = 0;
@@ -89,6 +116,10 @@ bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
 }
 
 bool SlowHTTPTest::init(const char* url) {
+  if(!change_fd_limits()) {
+    slowlog(slowhttptest::eLogCritical, "error setting open file limits\n");
+    return false;
+  }
   if(!base_uri_.prepare(url)) {
     slowlog(slowhttptest::eLogCritical, "Error parsing URL\n");
     return false;

@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
       break;
     case 'v':
       tmp = strtol(optarg, 0, 10);
-      if(0 <= tmp && tmp <= 5) {
+      if(0 <= tmp && tmp <= 6) {
         debug_level = static_cast<LogLevelType>(tmp);
       }
       else {
@@ -145,10 +145,10 @@ int main(int argc, char **argv) {
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
-    slowlog(slowhttptest::eLogCritical, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogCritical, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
-    slowlog(slowhttptest::eLogCritical, "%s: ERROR running slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogCritical, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
   return 0;

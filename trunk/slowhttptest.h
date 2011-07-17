@@ -55,6 +55,7 @@ class SlowHTTPTest {
 
  private:
   void remove_sock(int id);
+  bool change_fd_limits();
 
   addrinfo* addr_;
   std::string request_;
