@@ -22,16 +22,23 @@
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *
- *  Simple logging
+ *  Simple logging with verbosity levels
  *****/
-
-
 
 #ifndef _SLOWLOG_H_
 #define _SLOWLOG_H_
 namespace slowhttptest {
-void slowlog_init(unsigned int debug_level, const char* file_name);
-void slowlog(unsigned int lvl, const char* format, ...);
+enum LogLevelType {
+  eLogNothing,
+  eLogStatus,
+  eLogCritical,
+  eLogError,
+  eLogWarning,
+  eLogInfo,
+  eLogDebug
+};
+void slowlog_init(LogLevelType debug_level, const char* file_name);
+void slowlog(LogLevelType lvl, const char* format, ...);
 void log_fatal(const char* format, ...);
 
 void check(bool f, const char* message);

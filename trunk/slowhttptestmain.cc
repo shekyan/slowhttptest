@@ -47,7 +47,7 @@ static void usage() {
       "-l,          target test length in seconds\n\t"
       "-r,          connections rate(connections per seconds)\n\t"
       "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
-      "-v,          verbosity level 0-9 \n"
+      "-v,          verbosity level 0-6. 0 - nothing, 6 - everything\n"
       , VERSION
       );
 }
@@ -57,6 +57,7 @@ using slowhttptest::slowlog_init;
 using slowhttptest::slowlog;
 using slowhttptest::SlowHTTPTest;
 using slowhttptest::SlowTestType;
+using slowhttptest::LogLevelType;
 
 int main(int argc, char **argv) {
 
@@ -67,11 +68,11 @@ int main(int argc, char **argv) {
 
   char url[1024] = { 0 };
   int conn_cnt = 100;
-  unsigned int debug_level = 0;
   int delay = 100;
   int duration = 300;
   int interval = 10;
   long tmp;
+  LogLevelType debug_level = slowhttptest::eLogStatus;
   SlowTestType type = slowhttptest::eHeader;
   char o;
   while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:")) != -1) {
@@ -124,18 +125,18 @@ int main(int argc, char **argv) {
       break;
     case 'v':
       tmp = strtol(optarg, 0, 10);
-      if(0 <= tmp && tmp <= 9) {
-        debug_level = static_cast<unsigned int>(tmp);
+      if(0 <= tmp && tmp <= 5) {
+        debug_level = static_cast<LogLevelType>(tmp);
       }
       else {
-        debug_level = 9;
+        debug_level = slowhttptest::eLogCritical;
       }
       break;
     case '?':
       printf("Illegal option\n");
-    usage();
-    return -1;
-    break;
+      usage();
+      return -1;
+      break;
     default:
       usage();
       return -1;
@@ -144,10 +145,10 @@ int main(int argc, char **argv) {
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
-    slowlog(0, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogCritical, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
-    slowlog(0, "%s: ERROR running slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogCritical, "%s: ERROR running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
   return 0;

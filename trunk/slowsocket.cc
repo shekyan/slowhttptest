@@ -66,14 +66,14 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     sockfd_ = socket(res->ai_family, res->ai_socktype,
                      res->ai_protocol);
     if(-1 == sockfd_) {
-      slowlog(0, "%s: Failed to create socket\n", __FUNCTION__);
+      slowlog(slowhttptest::eLogError, "%s: Failed to create socket\n", __FUNCTION__);
       return false;
     }
     connected = url->isSSL() ? connect_ssl(addr) : connect_plain(addr); 
   }
 
   if(-1 == set_nonblocking()) {
-    slowlog(0, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
+    slowlog(slowhttptest::eLogCritical, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
             sockfd_);
     return false;
   }
@@ -92,7 +92,7 @@ bool SlowSocket::connect_plain(addrinfo* addr) {
 
   if (connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0
       && EINPROGRESS != errno) {
-    slowlog(0, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
+    slowlog(slowhttptest::eLogError, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
             strerror(errno), sockfd_);
     close();
     return false;
@@ -116,13 +116,13 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   method = SSLv23_client_method();
   ssl_ctx = SSL_CTX_new(method);
   if(!ssl_ctx) {
-    slowlog(0, "%s: Cannot create new SSL context\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogError, "%s: Cannot create new SSL context\n", __FUNCTION__);
     close();
     return false;
   }
   ssl_ = SSL_new(ssl_ctx);
   if(!ssl_) {
-    slowlog(0, "%s: Cannot create SSL structure for a connection\n",
+    slowlog(slowhttptest::eLogError, "%s: Cannot create SSL structure for a connection\n",
             __FUNCTION__);
     close();
     return false;
@@ -131,13 +131,13 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   int ret = SSL_connect(ssl_);
   if(ret <= 0) {
     int err = SSL_get_error(ssl_, ret);
-    slowlog(0, "%s: SSL connect error: %d\n", __FUNCTION__, err);
+    slowlog(slowhttptest::eLogError, "%s: SSL connect error: %d\n", __FUNCTION__, err);
     if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
       close();
       return false;
     }
   }
-  slowlog(5, "%s: SSL connection is using %s\n", __FUNCTION__,
+  slowlog(slowhttptest::eLogInfo, "%s: SSL connection is using %s\n", __FUNCTION__,
           SSL_get_cipher(ssl_));
   return true;
 }
@@ -177,7 +177,7 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
 void SlowSocket::close() {
   if (-1 == sockfd_) return;
 
-  slowlog(7, "closing slow, sock is %d\n", sockfd_);
+  slowlog(slowhttptest::eLogDebug, "closing slow, sock is %d\n", sockfd_);
   if(ssl_) {
     SSL_free(ssl_);
     ssl_ = NULL;
