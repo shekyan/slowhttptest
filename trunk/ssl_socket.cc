@@ -15,8 +15,7 @@ static class SSLContextHolder {
   SSLContextHolder() {
     // No reason to work without ssl
     if (1 != SSL_library_init()) {
-      printf("SSL Could not be initialized!");
-      abort();
+      slowhttptest::check(false, "SSL Could not be initialized!");
     }
   }
 
@@ -31,7 +30,10 @@ static class SSLContextHolder {
   }
   
   static void ReleaseSSL(SSL* ssl, SSL_CTX* context) {
-    if (NULL != ssl) SSL_free(ssl);
+    if (NULL != ssl) {
+      SSL_shutdown(ssl);
+      SSL_free(ssl);
+    }
     if (NULL != context) SSL_CTX_free(context);
   }
 } ___ssl___;
@@ -40,8 +42,7 @@ static class SSLContextHolder {
 
 namespace slowhttptest {
 SSLSocket::SSLSocket()
-    : fd_(-1),
-      ssl_(0),
+    : ssl_(0),
       context_(0) {
 }
 
@@ -49,43 +50,53 @@ SSLSocket::~SSLSocket() {
   Close();
 }
 
-void SSLSocket::Close() {
-  if (ssl_) {
-    SSL_free(ssl_);
-    ssl_ = NULL;
-    SSL_CTX_free(context_);
-    context_ = NULL;
-  }
-  if (fd_ > 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
+int SSLSocket::Send(const char* data, const int size) {
+  CHECK_NOTNULL(data);
+  return SSL_write(ssl_, data, size);
 }
 
-bool SSLSocket::Init(int fd) {
-  check(fd >= 0, "Invalid socket passed");
-  // SSL ran out of memory, no reason to go on.
+int SSLSocket::Recv(char* data, const int size) {
+  CHECK_NOTNULL(data);
+  return SSL_read(ssl_, data, size);
+}
+
+void SSLSocket::Close() {
+  if (ssl_) {
+    ___ssl___.ReleaseSSL(ssl_, context_);
+    ssl_ = NULL;
+    context_ = NULL;
+  }
+  Socket::Close();
+}
+
+bool SSLSocket::Init(const addrinfo* addr) {
+  // Initialize underlying transport first.
+  if (!Socket::Init(addr)) return false;
+
+  // SSL ran out of memory or is not installed, no reason to go on.
   context_ = CHECK_NOTNULL(___ssl___.CreateSSLContext());
   ssl_ = CHECK_NOTNULL(___ssl___.CreateSSL(context_));
-  SSL_set_fd(ssl_, fd_);
+  SSL_set_fd(ssl_, get_socket());
   const int ret = SSL_connect(ssl_);
   if (ret != 1) {
     const int err = SSL_get_error(ssl_, ret);
-    slowlog(0, "%s: SSL connect error: %d\n", __FUNCTION__, err);
+    slowlog(eLogError, "%s: SSL connect error: %d\n", __FUNCTION__, err);
     if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
       Close();
-    }
+      return false;
+    } 
   }
-  return ret == 1;
+  return true;
 }
 
-SSLSocket* SSLSocket::Create(int fd) {
+SSLSocket* SSLSocket::Create(const addrinfo* addr) {
   SSLSocket* sock = new SSLSocket();
-  if (!sock->Init(fd)) {
+  if (!sock->Init(addr)) {
     delete sock;
     sock = NULL;
   }
   return sock;
 }
 
-}  // slowhttptest
+}  // namespace slowhttptest
+
