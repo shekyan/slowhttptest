@@ -1,3 +1,8 @@
+// Wrappers around sockets.
+//
+// (c) Victor Agababov (vagababov@gmail.com) 2011
+// Apache license goes here.
+
 #include "socket.h"
 #include "slowlog.h"
 #include <unistd.h>
@@ -35,9 +40,6 @@ bool Socket::Init(const addrinfo* addr) {
                             addr->ai_protocol);
   check(sock != -1, "Sockets cannot be created");
   const int ret = ::connect(sock, addr->ai_addr, addr->ai_addrlen);
-  if (ret != 0) {
-    Close();
-  }
   return ret == 0;
 }
 

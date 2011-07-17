@@ -3,7 +3,6 @@
 // (c) Victor Agababov (vagababov@gmail.com) 2011
 // Apache license goes here.
 
-
 #ifndef _SLOW_HTTP_TEST_SSL_SOCKET_
 #define _SLOW_HTTP_TEST_SSL_SOCKET_
 

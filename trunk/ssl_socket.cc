@@ -1,4 +1,7 @@
-
+// Wrappers around sockets.
+//
+// (c) Victor Agababov (vagababov@gmail.com) 2011
+// Apache license goes here.
 
 #include "ssl_socket.h"
 #include "slowlog.h"
@@ -81,12 +84,8 @@ bool SSLSocket::Init(const addrinfo* addr) {
   if (ret != 1) {
     const int err = SSL_get_error(ssl_, ret);
     slowlog(eLogError, "%s: SSL connect error: %d\n", __FUNCTION__, err);
-    if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
-      Close();
-      return false;
-    } 
   }
-  return true;
+  return ret == 1;
 }
 
 SSLSocket* SSLSocket::Create(const addrinfo* addr) {
