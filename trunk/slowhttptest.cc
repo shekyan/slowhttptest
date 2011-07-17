@@ -89,7 +89,7 @@ bool SlowHTTPTest::change_fd_limits() {
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
       num_connections_ = fd_limit.rlim_max - 3;
-      slowlog(slowhttptest::eLogWarning, "decreasing target connection number to %d\n", num_connections_);
+      slowlog(slowhttptest::eLogWarn, "decreasing target connection number to %d\n", num_connections_);
     }
     if(setrlimit(RLIMIT_NOFILE, &fd_limit)) {
       slowlog(slowhttptest::eLogError, "error setting limits for open files: %s\n", strerror(errno));
@@ -117,11 +117,10 @@ bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
 
 bool SlowHTTPTest::init(const char* url) {
   if(!change_fd_limits()) {
-    slowlog(slowhttptest::eLogCritical, "error setting open file limits\n");
-    return false;
+    slowlog(slowhttptest::eLogError, "error setting open file limits\n");
   }
   if(!base_uri_.prepare(url)) {
-    slowlog(slowhttptest::eLogCritical, "Error parsing URL\n");
+    slowlog(slowhttptest::eLogFatal, "Error parsing URL\n");
     return false;
   }
   
@@ -133,7 +132,7 @@ bool SlowHTTPTest::init(const char* url) {
   /* resolve the domain name into a list of addresses */
   error = getaddrinfo(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &hints, &addr_);
   if(error != 0) {
-    slowlog(slowhttptest::eLogCritical, "Error in getaddrinfo: %s\n", gai_strerror(error));
+    slowlog(slowhttptest::eLogFatal, "Error in getaddrinfo: %s\n", gai_strerror(error));
     return false;
   }
 
@@ -195,7 +194,7 @@ bool SlowHTTPTest::grabResponseCode(const char* buf, int& code) {
 
 void SlowHTTPTest::report_parameters() {
 
-  slowlog(slowhttptest::eLogNothing, "\nUsing:\n"
+  slowlog(slowhttptest::eLogInfo, "\nUsing:\n"
     "test mode:                        %s\n"
     "URL:                              %s\n"
     "number of connections:            %d\n"
@@ -298,12 +297,12 @@ bool SlowHTTPTest::run_test() {
     }
     if(seconds_passed % 5 == 0) { //printing heartbeat
       if(heartbeat_reported != seconds_passed) { //not so precise
-        slowlog(slowhttptest::eLogStatus, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
+        slowlog(slowhttptest::eLogInfo, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
           __FUNCTION__, (int)active_sock_num, seconds_passed);
         heartbeat_reported = seconds_passed;
       }
       else { // more precise
-        slowlog(slowhttptest::eLogInfo, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
+        slowlog(slowhttptest::eLogDebug, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
         __FUNCTION__, (int)active_sock_num, seconds_passed);
       }
     }
@@ -316,7 +315,7 @@ bool SlowHTTPTest::run_test() {
     gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
-      slowlog(slowhttptest::eLogCritical, "%s: select() error: %s\n", __FUNCTION__, strerror(errno));
+      slowlog(slowhttptest::eLogFatal, "%s: select() error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
       continue;
@@ -327,12 +326,12 @@ bool SlowHTTPTest::run_test() {
             ret = sock_[i]->recv_slow(buf, kBufSize);
             buf[ret] = '\0';
             if(ret <= 0 && errno != EAGAIN) {
-              slowlog(slowhttptest::eLogInfo, "%s: sock %d closed\n", __FUNCTION__,
+              slowlog(slowhttptest::eLogDebug, "%s: sock %d closed\n", __FUNCTION__,
                   sock_[i]->get_sockfd());
               remove_sock(i);
               continue;
             } else {
-              slowlog(slowhttptest::eLogInfo, "%s: sock %d replied %s\n", __FUNCTION__,
+              slowlog(slowhttptest::eLogDebug, "%s: sock %d replied %s\n", __FUNCTION__,
                   sock_[i]->get_sockfd(), buf);
             }
           }
@@ -341,14 +340,14 @@ bool SlowHTTPTest::run_test() {
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {
-                slowlog(slowhttptest::eLogError,
+                slowlog(slowhttptest::eLogDebug,
                     "%s:error sending initial slow post on sock %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 remove_sock(i);
                 continue;
               } else {
-                slowlog(slowhttptest::eLogInfo,
+                slowlog(slowhttptest::eLogDebug,
                     "%s:initial %d of %d bytes sent on slow post socket %d:\n%s\n",
                     __FUNCTION__, ret,
                     (int) request_.size(),
@@ -361,14 +360,14 @@ bool SlowHTTPTest::run_test() {
               ret = sock_[i]->send_slow(extra_data,
                   strlen(extra_data), eFollowUpSend);
               if(ret <= 0 && errno != EAGAIN) {
-                slowlog(slowhttptest::eLogError,
+                slowlog(slowhttptest::eLogDebug,
                     "%s:error sending follow up data on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 remove_sock(i);
                 continue;
               } else {
-                slowlog(slowhttptest::eLogInfo,
+                slowlog(slowhttptest::eLogDebug,
                     "%s:%d of %d follow up data sent on socket %d:\n%s\n%d follow ups left\n",
                     __FUNCTION__, ret,
                     (int) strlen(extra_data),
@@ -380,7 +379,7 @@ bool SlowHTTPTest::run_test() {
           } else {
             if(sock_[i] && sock_[i]->get_requests_to_send() > 0) {
               // trying to connect, server slowing down probably
-              slowlog(slowhttptest::eLogWarning, "pending connection on socket %d\n", sock_[i]->get_sockfd());
+              slowlog(slowhttptest::eLogWarn, "pending connection on socket %d\n", sock_[i]->get_sockfd());
             }
           }
         }
@@ -388,7 +387,7 @@ bool SlowHTTPTest::run_test() {
     }
   }
 
-  slowlog(slowhttptest::eLogStatus, "%d active sockets left by the end of the test on %dth second\n",
+  slowlog(slowhttptest::eLogInfo, "%d active sockets left by the end of the test on %dth second\n",
    active_sock_num, seconds_passed);
   for(int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {

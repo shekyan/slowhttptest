@@ -29,12 +29,10 @@
 #define _SLOWLOG_H_
 namespace slowhttptest {
 enum LogLevelType {
-  eLogNothing,
-  eLogStatus,
-  eLogCritical,
-  eLogError,
-  eLogWarning,
+  eLogFatal,
   eLogInfo,
+  eLogError,
+  eLogWarn,
   eLogDebug
 };
 void slowlog_init(LogLevelType debug_level, const char* file_name);

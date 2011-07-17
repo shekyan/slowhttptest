@@ -47,7 +47,7 @@ static void usage() {
       "-l,          target test length in seconds\n\t"
       "-r,          connections rate(connections per seconds)\n\t"
       "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
-      "-v,          verbosity level 0-6. 0 - nothing, 6 - everything\n"
+      "-v,          verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n"
       , VERSION
       );
 }
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
   int duration = 300;
   int interval = 10;
   long tmp;
-  LogLevelType debug_level = slowhttptest::eLogStatus;
+  LogLevelType debug_level = slowhttptest::eLogInfo;
   SlowTestType type = slowhttptest::eHeader;
   char o;
   while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:")) != -1) {
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
         debug_level = static_cast<LogLevelType>(tmp);
       }
       else {
-        debug_level = slowhttptest::eLogCritical;
+        debug_level = slowhttptest::eLogFatal;
       }
       break;
     case '?':
@@ -145,10 +145,10 @@ int main(int argc, char **argv) {
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
-    slowlog(slowhttptest::eLogCritical, "%s: error setting up slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogFatal, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
-    slowlog(slowhttptest::eLogCritical, "%s: error running slow HTTP test\n", __FUNCTION__);
+    slowlog(slowhttptest::eLogFatal, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
   return 0;

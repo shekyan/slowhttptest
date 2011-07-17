@@ -73,7 +73,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
   }
 
   if(-1 == set_nonblocking()) {
-    slowlog(slowhttptest::eLogCritical, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
+    slowlog(slowhttptest::eLogError, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
             sockfd_);
     return false;
   }
@@ -137,7 +137,7 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
       return false;
     }
   }
-  slowlog(slowhttptest::eLogInfo, "%s: SSL connection is using %s\n", __FUNCTION__,
+  slowlog(slowhttptest::eLogDebug, "%s: SSL connection is using %s\n", __FUNCTION__,
           SSL_get_cipher(ssl_));
   return true;
 }
