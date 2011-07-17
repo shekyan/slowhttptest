@@ -42,7 +42,7 @@ enum SendType {
 };
 
 class SlowSocket {
-public:
+ public:
   SlowSocket();
   ~SlowSocket();
   // you should have a dtor, which calls close_slow, if it has not been closed yet.
@@ -50,12 +50,12 @@ public:
     return -1 == sockfd_ && !ssl_;
   }
   // Should all those methods be public?
-  int close_slow();
+  void close();
 
   bool init(addrinfo* addr, const Url* url, int& maxfd,
       int followups_to_send);
-  int recv_slow(void *buf, size_t len);
-  int send_slow(const void *msg, size_t len, const SendType type =
+  int recv_slow(void* buf, size_t len);
+  int send_slow(const void* msg, size_t len, const SendType type =
       eInitialSend);
   const int get_sockfd() const {
     return sockfd_;
@@ -67,18 +67,17 @@ public:
     return followups_to_send_;
   }
 
-private:
-
-  int connect_plain(addrinfo* addr);
-  int connect_ssl(addrinfo* addr);
+ private:
+  bool connect_plain(addrinfo* addr);
+  bool connect_ssl(addrinfo* addr);
   int set_nonblocking();
   // It is better to have each member have it's own type decl.
   int sockfd_;
   int requests_to_send_;
   int followups_to_send_;
   int offset_;
-  SSL *ssl_;
-  const void * buf_;
+  SSL* ssl_;
+  const void* buf_;
 };
 
 }  // namespace slowhttptest

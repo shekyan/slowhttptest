@@ -39,17 +39,16 @@
 #include "slowurl.h"
 
 namespace slowhttptest {
-SlowSocket::SlowSocket() :
-    sockfd_(-1), requests_to_send_(0), followups_to_send_(0), offset_(0), ssl_(
-        0), buf_(0) {
-
+SlowSocket::SlowSocket()
+    : sockfd_(-1), requests_to_send_(0),
+      followups_to_send_(0), offset_(0),
+      ssl_(0), buf_(0) {
 }
 
 SlowSocket::~SlowSocket() {
-
-  //printf("%s: DTOR\n", __FUNCTION__);
-  close_slow();
+  close();
 }
+
 int SlowSocket::set_nonblocking() {
   int flags;
 
@@ -60,32 +59,22 @@ int SlowSocket::set_nonblocking() {
 }
 
 bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
-    int followups_to_send) {
-
+                      int followups_to_send) {
   addrinfo* res;
-  for (res = addr; res; res = res->ai_next) {
+  bool connected = false;
+  for (res = addr; !connected && res; res = res->ai_next) {
     sockfd_ = socket(res->ai_family, res->ai_socktype,
-     res->ai_protocol);
+                     res->ai_protocol);
     if(-1 == sockfd_) {
       slowlog(0, "%s: Failed to create socket\n", __FUNCTION__);
       return false;
     }
-    
-    if(url->isSSL()) {
-      sockfd_ = connect_ssl(addr);
-    } else {
-      sockfd_ = connect_plain(addr);
-    }
-    if(sockfd_ > 0) {
-      break;
-    } else {
-      continue;
-    }
+    connected = url->isSSL() ? connect_ssl(addr) : connect_plain(addr); 
   }
 
   if(-1 == set_nonblocking()) {
     slowlog(0, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
-     sockfd_);
+            sockfd_);
     return false;
   }
 
@@ -95,45 +84,48 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
   if(sockfd_ > maxfd) {
     maxfd = sockfd_;
   }
-
   return true;
 }
 
-int SlowSocket::connect_plain(addrinfo* addr) {
+bool SlowSocket::connect_plain(addrinfo* addr) {
   errno = 0;
 
-  if(connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0) {
-    if(EINPROGRESS != errno) {
-      slowlog(0, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
-          strerror(errno), sockfd_);
-      close(sockfd_);
-      return -1;
-    }
+  if (connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0
+      && EINPROGRESS != errno) {
+    slowlog(0, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
+            strerror(errno), sockfd_);
+    close();
+    return false;
   }
-  return sockfd_;
+  return true;
 }
 
-int SlowSocket::connect_ssl(addrinfo* addr) {
-  if(!connect_plain(addr)) {
-    return sockfd_; // return -1?
+bool SlowSocket::connect_ssl(addrinfo* addr) {
+  // Establish regular connection.
+  if(!connect_plain(addr))  return false;
+   
+  // Init SSL related stuff.
+  // TODO(vagababov): this is not thread safe of pretty.
+  static bool ssl_is_initialized = false;
+  if (!ssl_is_initialized) {
+    SSL_library_init();
+    ssl_is_initialized = true;
   }
-
-  SSL_library_init();
-  SSL_METHOD *method = NULL;
-  SSL_CTX *ssl_ctx = NULL;
+  SSL_METHOD* method = NULL;
+  SSL_CTX* ssl_ctx = NULL;
   method = SSLv23_client_method();
   ssl_ctx = SSL_CTX_new(method);
   if(!ssl_ctx) {
     slowlog(0, "%s: Cannot create new SSL context\n", __FUNCTION__);
-    close_slow();
-    return sockfd_; // Is it usable? may be -1?
+    close();
+    return false;
   }
   ssl_ = SSL_new(ssl_ctx);
   if(!ssl_) {
     slowlog(0, "%s: Cannot create SSL structure for a connection\n",
-        __FUNCTION__);
-    close_slow();
-    return sockfd_; // same.
+            __FUNCTION__);
+    close();
+    return false;
   }
   SSL_set_fd(ssl_, sockfd_);
   int ret = SSL_connect(ssl_);
@@ -141,25 +133,21 @@ int SlowSocket::connect_ssl(addrinfo* addr) {
     int err = SSL_get_error(ssl_, ret);
     slowlog(0, "%s: SSL connect error: %d\n", __FUNCTION__, err);
     if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
-      close_slow();
-      return sockfd_; // same
+      close();
+      return false;
     }
   }
   slowlog(5, "%s: SSL connection is using %s\n", __FUNCTION__,
-      SSL_get_cipher(ssl_));
-  return sockfd_;
+          SSL_get_cipher(ssl_));
+  return true;
 }
 
 int SlowSocket::recv_slow(void *buf, size_t len) {
-  if(ssl_) {
-    return SSL_read(ssl_, buf, len);
-  } else {
-    return recv(sockfd_, buf, len, 0);
-  }
+  return ssl_ ? SSL_read(ssl_, buf, len)
+              : recv(sockfd_, buf, len, 0);
 }
 
-int SlowSocket::send_slow(const void *buf, size_t len, const SendType type) {
-
+int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
   // VA: this is not good. create a "prepare" method.
   // initial send
   if(buf_ == 0) {
@@ -167,41 +155,37 @@ int SlowSocket::send_slow(const void *buf, size_t len, const SendType type) {
     offset_ = len;
   }
 
-  int ret;
-  if(ssl_) {
-    ret = SSL_write(ssl_, buf_, offset_);
-  } else {
-    ret = send(sockfd_, buf_, offset_, 0);
-  }
-  // entire data was sent
+  int ret = ssl_ ? SSL_write(ssl_, buf_, offset_)
+                 : send(sockfd_, buf_, offset_, 0);
 
+  // entire data was sent
   if(ret > 0 && ret == offset_) {
-    if(eInitialSend == type)
-      requests_to_send_--;
-    else if(eFollowUpSend == type)
-      followups_to_send_--;
+    if(eInitialSend == type) {
+      --requests_to_send_;
+    } else if(eFollowUpSend == type) {
+      --followups_to_send_;
+    }
     buf_ = 0;
     offset_ = 0;
   } else if(ret > 0 && ret < offset_) {
     buf_ = static_cast<const char*>(buf_) + ret;
-    offset_ = offset_ - ret;
-  }
+    offset_ -= ret;
+  }  
   return ret;
 }
-int SlowSocket::close_slow() {
+
+void SlowSocket::close() {
+  if (-1 == sockfd_) return;
+
   slowlog(7, "closing slow, sock is %d\n", sockfd_);
-  int ret = -1;
   if(ssl_) {
     SSL_free(ssl_);
     ssl_ = NULL;
   }
   requests_to_send_ = 0;
   followups_to_send_ = 0;
-  if(sockfd_ > 0) {
-    ret = close(sockfd_);
-  }
+  ::close(sockfd_);
   sockfd_ = -1;
-  return ret;
 }
 
 }  // namespace slowhttptest
