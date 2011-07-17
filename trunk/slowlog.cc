@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <ctime>
 #include <string.h>
+#include <execinfo.h>
 
 #include "slowlog.h"
 namespace {
@@ -41,6 +42,15 @@ void dispose_of_log() {
   }
 }
 
+
+void print_call_stack() {
+  static void* buf[64];
+  const int depth = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
+  backtrace_symbols_fd(buf, depth, fileno(stdout));
+  if (stdout != log_file) {
+    backtrace_symbols_fd(buf, depth, fileno(log_file));
+  }
+}
 }
 
 namespace slowhttptest {
@@ -48,6 +58,29 @@ void slowlog_init(unsigned int debug_level, const char* file_name) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   atexit(&dispose_of_log);
   current_log_level = debug_level;
+}
+
+void check(bool f) {
+  if (!f) {
+    print_call_stack();
+    exit(1);
+  }   
+}
+
+void log_fatal(const char* format, ...) {
+  time_t  now = time(NULL);
+  char    ctimebuf[32],
+          *buf = ctime_r(&now, ctimebuf);
+
+  fprintf(log_file, "%-.24s FATAL:", buf);
+
+  va_list va;
+  va_start(va, format);
+  vfprintf(log_file, format, va);
+  va_end(va);
+  fflush(log_file);
+  print_call_stack();
+  exit(1);
 }
 
 void slowlog(unsigned int lvl, const char* format, ...) {
