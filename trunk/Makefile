@@ -9,7 +9,6 @@ CHK_DIR_EXISTS	= test -d
 MOVE          	= mv -f
 MKDIR         	= mkdir -p
 DEL_FILE      	= rm -f
-INSTALL_PROGRAM = install -m 755 -p
 CC							= g++
 #CFLAGS					= -c -strip -Wall -O3 $(DEFINES)
 CFLAGS					= -c -g -Wall $(DEFINES)
