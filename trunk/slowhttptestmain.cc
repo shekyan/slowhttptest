@@ -57,7 +57,6 @@ using slowhttptest::slowlog_init;
 using slowhttptest::slowlog;
 using slowhttptest::SlowHTTPTest;
 using slowhttptest::SlowTestType;
-using slowhttptest::LogLevelType;
 
 int main(int argc, char **argv) {
 
@@ -72,7 +71,7 @@ int main(int argc, char **argv) {
   int duration = 300;
   int interval = 10;
   long tmp;
-  LogLevelType debug_level = slowhttptest::eLogInfo;
+  int debug_level = LOG_INFO;
   SlowTestType type = slowhttptest::eHeader;
   char o;
   while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:")) != -1) {
@@ -125,11 +124,11 @@ int main(int argc, char **argv) {
       break;
     case 'v':
       tmp = strtol(optarg, 0, 10);
-      if(0 <= tmp && tmp <= 6) {
-        debug_level = static_cast<LogLevelType>(tmp);
+      if(0 <= tmp && tmp <= 4) {
+        debug_level = static_cast<int>(tmp);
       }
       else {
-        debug_level = slowhttptest::eLogFatal;
+        debug_level = LOG_FATAL;
       }
       break;
     case '?':
@@ -145,10 +144,10 @@ int main(int argc, char **argv) {
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(delay, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
-    slowlog(slowhttptest::eLogFatal, "%s: error setting up slow HTTP test\n", __FUNCTION__);
+    slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
-    slowlog(slowhttptest::eLogFatal, "%s: error running slow HTTP test\n", __FUNCTION__);
+    slowlog(LOG_FATAL, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
   return 0;

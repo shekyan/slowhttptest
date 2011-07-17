@@ -33,11 +33,9 @@
 
 #include "slowlog.h"
 
-using slowhttptest::LogLevelType;
-
 namespace {
 static FILE* log_file = NULL;
-LogLevelType current_log_level;
+int current_log_level;
 
 void dispose_of_log() {
   if (log_file != stdout) {
@@ -57,7 +55,7 @@ void print_call_stack() {
 }
 
 namespace slowhttptest {
-void slowlog_init(LogLevelType debug_level, const char* file_name) {
+void slowlog_init(int debug_level, const char* file_name) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   atexit(&dispose_of_log);
   current_log_level = debug_level;
@@ -89,7 +87,7 @@ void log_fatal(const char* format, ...) {
   exit(1);
 }
 
-void slowlog(LogLevelType lvl, const char* format, ...) {
+void slowlog(int lvl, const char* format, ...) {
   if(lvl <= current_log_level) {
     time_t  now = time(NULL);
     char    ctimebuf[32],

@@ -24,19 +24,18 @@
  *
  *  Simple logging with verbosity levels
  *****/
-
 #ifndef _SLOWLOG_H_
 #define _SLOWLOG_H_
+// log levels
+#define LOG_INFO    0
+#define LOG_FATAL   1
+#define LOG_ERROR   2
+#define LOG_WARN    3
+#define LOG_DEBUG   4
+
 namespace slowhttptest {
-enum LogLevelType {
-  eLogFatal,
-  eLogInfo,
-  eLogError,
-  eLogWarn,
-  eLogDebug
-};
-void slowlog_init(LogLevelType debug_level, const char* file_name);
-void slowlog(LogLevelType lvl, const char* format, ...);
+void slowlog_init(int debug_level, const char* file_name);
+void slowlog(int lvl, const char* format, ...);
 void log_fatal(const char* format, ...);
 
 void check(bool f, const char* message);
