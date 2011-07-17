@@ -11,10 +11,13 @@
 #include <netdb.h>
 
 namespace slowhttptest {
+// This is a simple wrapper around SSL wrapped sockets.
+// The instances of the class are created using factory method
+// Create on the heap. Instances are initialized using addrinfo structure.
 class SSLSocket : public Socket {
  public:
   // Factory method to create a SSL Socket
-  // Takes ownership of fd and will dispose of it.
+  // Will return NULL if initialization of the socket fails.
   static SSLSocket* Create(const addrinfo* addr);
   ~SSLSocket();
 
