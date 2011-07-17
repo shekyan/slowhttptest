@@ -192,7 +192,12 @@ bool SlowHTTPTest::run_test() {
   int result = 0;
   int ret = 0;
   int last_followup_timing = 0;
-  timeval now, timeout, start, progressTimer;
+  timeval now, timeout, start, progress_timer, 
+          connect_start, connect_end, connect_result, tv_delay;
+
+  // connection rate per second
+  tv_delay.tv_sec = 0;
+  tv_delay.tv_usec = 1000000 / delay_; 
   int seconds_passed = 0; //stores seconds passed since we started
   int active_sock_num;
   char buf[kBufSize];
@@ -200,7 +205,10 @@ bool SlowHTTPTest::run_test() {
   int heartbeat_reported = 1; //trick to print 0 sec hb  
   timerclear(&now);
   timerclear(&timeout);
-  timerclear(&progressTimer);
+  timerclear(&progress_timer);
+  timerclear(&connect_start);
+  timerclear(&connect_end);
+  timerclear(&connect_result);
   gettimeofday(&start, 0);
 
   if(eHeader == type_) {
@@ -221,17 +229,23 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_usec = 0; //microseconds
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
+      gettimeofday(&connect_start, 0);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           followup_cnt_)) {
-        slowlog(0, "%s: Unable to initialize %dth socket.\n", __FUNCTION__,
+        slowlog(0, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);
         num_connections_ = num_connected;
       } else {
         ++num_connected;
-        usleep(1000000 / delay_); // throttle down conenction rate
+        gettimeofday(&connect_end, 0);
+        timersub(&connect_end, &connect_start, &connect_result);
+        // throttle down conenction rate if connect took less than delay we need
+        if((connect_result.tv_sec == 0) && 
+         tv_delay.tv_usec > connect_result.tv_usec) {
+          usleep(tv_delay.tv_usec - connect_result.tv_usec);        }
       }
     }
-    seconds_passed = progressTimer.tv_sec;
+    seconds_passed = progress_timer.tv_sec;
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
     for(int i = 0; i < num_connected; ++i) {
@@ -269,7 +283,7 @@ bool SlowHTTPTest::run_test() {
     result = select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL
         , &timeout);
     gettimeofday(&now, 0);
-    timersub(&now, &start, &progressTimer);
+    timersub(&now, &start, &progress_timer);
     if(result < 0) {
       slowlog(1, "%s: select() error: %s\n", __FUNCTION__, strerror(errno));
       break;
