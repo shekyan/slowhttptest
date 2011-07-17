@@ -32,6 +32,7 @@
 #include <vector>
 
 #include <netdb.h>
+#include <netinet/in.h>
 #include <sys/time.h>
 
 #include "slowlog.h"
@@ -46,7 +47,7 @@ static const int kBufSize = 65537;
 static const char post_request[] = "Connection: close\r\n"
     "Referer: http://code.google.com/p/slowhttptest/\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
-    "Content-Length: 512\r\n"
+    "Content-Length: 8192\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
     "foo=bar";
 
@@ -71,6 +72,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration, int interval,
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
+  freeaddrinfo(addr_);
 }
 
 bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
@@ -88,13 +90,22 @@ bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
 
 bool SlowHTTPTest::init(const char* url) {
   if(!base_uri_.prepare(url)) {
+    slowlog(0, "Error parsing URL\n");
     return false;
   }
-  server_ = gethostbyname(base_uri_.getHost().c_str());
-  if(server_ == NULL) {
-    slowlog(0, "%s: ERROR, no such host\n", __FUNCTION__);
+  
+  int error;
+  addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = PF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  /* resolve the domain name into a list of addresses */
+  error = getaddrinfo(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &hints, &addr_);
+  if(error != 0) {
+    slowlog(0, "Error in getaddrinfo: %s\n", gai_strerror(error));
     return false;
   }
+
   user_agent_.append(USER_AGENT);
   request_.clear();
   if(eHeader == type_) {
@@ -210,14 +221,14 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_usec = 0; //microseconds
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
-      if(!sock_[num_connected]->init(server_, &base_uri_, maxfd,
+      if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           followup_cnt_)) {
         slowlog(0, "%s: Unable to initialize %dth socket.\n", __FUNCTION__,
             (int) num_connected);
         num_connections_ = num_connected;
       } else {
         ++num_connected;
-        usleep(1000000 / delay_);
+        usleep(1000000 / delay_); // throttle down conenction rate
       }
     }
     seconds_passed = progressTimer.tv_sec;
@@ -286,14 +297,14 @@ bool SlowHTTPTest::run_test() {
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {
                 slowlog(5,
-                    "%s:error sending initial slow post on sock %d: %s\n",
+                    "%s:error sending initial slow post on sock %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 remove_sock(i);
                 continue;
               } else {
                 slowlog(5,
-                    "%s:initial %d of %d bytes sent on slow post socket %d:\n %s\n",
+                    "%s:initial %d of %d bytes sent on slow post socket %d:\n%s\n",
                     __FUNCTION__, ret,
                     (int) request_.size(),
                     (int) sock_[i]->get_sockfd(),
@@ -306,7 +317,7 @@ bool SlowHTTPTest::run_test() {
                   strlen(extra_data), eFollowUpSend);
               if(ret <= 0 && errno != EAGAIN) {
                 slowlog(5,
-                    "%s:error sending follow up data on socket %d: %s\n",
+                    "%s:error sending follow up data on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 remove_sock(i);

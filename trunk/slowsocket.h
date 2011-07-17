@@ -32,8 +32,7 @@
 #include <string>
 #include <openssl/ssl.h>
 
-struct hostent;
-struct sockaddr_in;
+struct addrinfo;
 
 namespace slowhttptest {
 class Url;
@@ -53,7 +52,7 @@ public:
   // Should all those methods be public?
   int close_slow();
 
-  bool init(const hostent* server, const Url* url, int& maxfd,
+  bool init(addrinfo* addr, const Url* url, int& maxfd,
       int followups_to_send);
   int recv_slow(void *buf, size_t len);
   int send_slow(const void *msg, size_t len, const SendType type =
@@ -70,8 +69,8 @@ public:
 
 private:
 
-  int connect_plain(sockaddr_in & addr);
-  int connect_ssl(sockaddr_in & addr);
+  int connect_plain(addrinfo* addr);
+  int connect_ssl(addrinfo* addr);
   int set_nonblocking();
   // It is better to have each member have it's own type decl.
   int sockfd_;

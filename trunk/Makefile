@@ -11,7 +11,8 @@ MKDIR         	= mkdir -p
 DEL_FILE      	= rm -f
 INSTALL_PROGRAM = install -m 755 -p
 CC							= g++
-CFLAGS					= -c -g -Wall -O3 $(DEFINES)
+#CFLAGS					= -c -strip -Wall -O3 $(DEFINES)
+CFLAGS					= -c -g -Wall $(DEFINES)
 LDFLAGS					= -lssl
 
 all: create_bin $(SOURCES) $(TARGET) 

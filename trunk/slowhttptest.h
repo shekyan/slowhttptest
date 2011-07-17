@@ -56,7 +56,7 @@ class SlowHTTPTest {
  private:
   void remove_sock(int id);
 
-  hostent* server_;
+  addrinfo* addr_;
   std::string request_;
   std::string random_post_;
   std::string user_agent_;

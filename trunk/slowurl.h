@@ -44,6 +44,9 @@ public:
   const int getPort() const {
     return port_;
   }
+  const char* getPortStr() const {
+    return port_str_.c_str();
+  }
   const std::string& getPath() const {
     return path_;
   }
@@ -55,6 +58,7 @@ private:
   std::string data_;
   std::string host_;
   std::string path_;
+  std::string port_str_;
   int port_;
   bool is_ssl_;
 };

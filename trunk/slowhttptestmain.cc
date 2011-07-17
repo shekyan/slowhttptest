@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   long tmp;
   SlowTestType type = slowhttptest::eHeader;
   char o;
-  while((o = getopt(argc, argv, "hpv:l:c:i:r:u:")) != -1) {
+  while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:")) != -1) {
     switch (o) {
     case 'c':
       tmp = strtol(optarg, 0, 10);
@@ -82,6 +82,7 @@ int main(int argc, char **argv) {
         conn_cnt = static_cast<int>(tmp);
       }
       else {
+        usage();
         return -1;
       }
       break;
@@ -93,6 +94,7 @@ int main(int argc, char **argv) {
       if(tmp && tmp <= INT_MAX) {
         interval = static_cast<int>(tmp);
       } else {
+        usage();
         return -1;
       }
       break;
@@ -101,6 +103,7 @@ int main(int argc, char **argv) {
       if(tmp && tmp <= INT_MAX) {
         duration = static_cast<int>(tmp);
       } else {
+        usage();
         return -1;
       }
       break;
@@ -112,6 +115,7 @@ int main(int argc, char **argv) {
       if(tmp && tmp <= INT_MAX) {
         delay = static_cast<int>(tmp);
       } else {
+        usage();
         return -1;
       }
       break;
@@ -131,6 +135,7 @@ int main(int argc, char **argv) {
       printf("Illegal option\n");
     usage();
     return -1;
+    break;
     default:
       usage();
       return -1;
@@ -142,7 +147,7 @@ int main(int argc, char **argv) {
     slowlog(0, "%s: ERROR setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
-    slowlog(0, "%s: ERROR RUNNINGslow HTTP test\n", __FUNCTION__);
+    slowlog(0, "%s: ERROR running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
   return 0;

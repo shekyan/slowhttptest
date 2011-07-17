@@ -59,35 +59,38 @@ int SlowSocket::set_nonblocking() {
   return fcntl(sockfd_, F_SETFL, flags | O_NONBLOCK);
 }
 
-bool SlowSocket::init(const hostent* server, const Url* url, int& maxfd,
+bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     int followups_to_send) {
 
-  sockaddr_in addr;
-  memset((void*) &addr, '\0', sizeof(addr));
-  addr.sin_family = AF_INET;
-
-  memcpy((char *) &addr.sin_addr.s_addr, (char *) server->h_addr,
-      server->h_length);
-
-  addr.sin_port = htons(url->getPort());
-  followups_to_send_ = followups_to_send;
-  requests_to_send_ = 1;
-  sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
-  if(-1 == sockfd_) {
-    slowlog(0, "%s: Failed to create socket\n", __FUNCTION__);
-    return false;
+  addrinfo* res;
+  for (res = addr; res; res = res->ai_next) {
+    sockfd_ = socket(res->ai_family, res->ai_socktype,
+     res->ai_protocol);
+    if(-1 == sockfd_) {
+      slowlog(0, "%s: Failed to create socket\n", __FUNCTION__);
+      return false;
+    }
+    
+    if(url->isSSL()) {
+      sockfd_ = connect_ssl(addr);
+    } else {
+      sockfd_ = connect_plain(addr);
+    }
+    if(sockfd_ > 0) {
+      break;
+    } else {
+      continue;
+    }
   }
+
   if(-1 == set_nonblocking()) {
     slowlog(0, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
-        sockfd_);
+     sockfd_);
     return false;
   }
 
-  if(url->isSSL()) {
-    sockfd_ = connect_ssl(addr);
-  } else {
-    sockfd_ = connect_plain(addr);
-  }
+  followups_to_send_ = followups_to_send;
+  requests_to_send_ = 1;
 
   if(sockfd_ > maxfd) {
     maxfd = sockfd_;
@@ -96,11 +99,12 @@ bool SlowSocket::init(const hostent* server, const Url* url, int& maxfd,
   return true;
 }
 
-int SlowSocket::connect_plain(sockaddr_in & addr) {
+int SlowSocket::connect_plain(addrinfo* addr) {
   errno = 0;
-  if(sockfd_ > 0 && connect(sockfd_, (sockaddr*) &addr, sizeof(addr)) < 0) {
+
+  if(connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0) {
     if(EINPROGRESS != errno) {
-      slowlog(1, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
+      slowlog(0, "%s: Cannot connect qsocket: %s %d \n", __FUNCTION__,
           strerror(errno), sockfd_);
       close(sockfd_);
       return -1;
@@ -109,7 +113,7 @@ int SlowSocket::connect_plain(sockaddr_in & addr) {
   return sockfd_;
 }
 
-int SlowSocket::connect_ssl(sockaddr_in & addr) {
+int SlowSocket::connect_ssl(addrinfo* addr) {
   if(!connect_plain(addr)) {
     return sockfd_; // return -1?
   }

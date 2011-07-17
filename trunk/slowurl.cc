@@ -77,7 +77,8 @@ bool Url::prepare(const char* url) {
     host_len = data_.size();
   // get host
   host_.append(data_, host_start, host_len - host_start);
-
+ if(host_.size() == 0)
+   return false;
   // get port
   if(has_port) {
     std::string port;
@@ -87,14 +88,16 @@ bool Url::prepare(const char* url) {
     } else {
       port.append(data_, port_start + 1, data_.size() - port_start - 1);
     }
-
+    port_str_ = port;
     long tmp = strtol(port.c_str(), 0, 10);
     if(tmp && tmp <= USHRT_MAX) {
       port_ = static_cast<int>(tmp);
     } else
       return false;
-  } else
+  } else {
     port_ = is_ssl_ ? 443 : 80;
+    port_str_ = is_ssl_?"443" : "80";
+  }
 
   // get path
   if(has_path) {
