@@ -60,12 +60,15 @@ void slowlog_init(unsigned int debug_level, const char* file_name) {
   current_log_level = debug_level;
 }
 
-void check(bool f) {
+void check(bool f, const char* message) {
   if (!f) {
+    fprintf(log_file, "%s\n", message);
+    fflush(log_file);
     print_call_stack();
     exit(1);
   }   
 }
+
 
 void log_fatal(const char* format, ...) {
   time_t  now = time(NULL);

@@ -17,6 +17,7 @@
 
 /*****
  * Author: Sergey Shekyan sshekyan@qualys.com
+ *         Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
@@ -33,7 +34,13 @@ void slowlog_init(unsigned int debug_level, const char* file_name);
 void slowlog(unsigned int lvl, const char* format, ...);
 void log_fatal(const char* format, ...);
 
-void check(bool f);
-
+void check(bool f, const char* message);
+template <class T> T* check_not_null(T* p, const char* message) {
+  check(p != 0, message);
+  return p;
+}
 }  // namespace slowhttptest
-#endif
+
+#define CHECK_NOTNULL(p) slowhttptest::check_not_null(p, #p" is NULL")
+
+#endif  // _SLOWLOG_H_
