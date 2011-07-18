@@ -17,7 +17,7 @@ LDFLAGS					= -lssl
 all: create_bin $(SOURCES) $(TARGET) 
 		
 $(TARGET): $(OBJECT_FILES)
-	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 
 .cc.o:
 	$(CC) $(CFLAGS) $< -o $(BIN_DIR)$@
