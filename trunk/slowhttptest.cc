@@ -120,7 +120,7 @@ bool SlowHTTPTest::init(const char* url) {
     slowlog(LOG_ERROR, "error setting open file limits\n");
   }
   if(!base_uri_.prepare(url)) {
-    slowlog(LOG_ERROR, "Error parsing URL\n");
+    slowlog(LOG_FATAL, "Error parsing URL\n");
     return false;
   }
   

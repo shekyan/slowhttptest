@@ -49,7 +49,7 @@ bool Url::prepare(const char* url) {
   size_t host_start = 0;
 
   if(data_.size() < 7 || data_.find("http") != 0
-      || 4 > data_.find("://") > 5) {
+      || 4 > data_.find("://") || data_.find("://") > 5) {
     return false;
   } else {
     is_ssl_ = data_[4] == 's';
