@@ -64,19 +64,20 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
   bool connected = false;
   for (res = addr; !connected && res; res = res->ai_next) {
     sockfd_ = socket(res->ai_family, res->ai_socktype,
-                     res->ai_protocol);
+     res->ai_protocol);
     if(-1 == sockfd_) {
       slowlog(LOG_ERROR, "%s: Failed to create socket\n", __FUNCTION__);
+      return false;
+    }
+
+    if(-1 == set_nonblocking()) {
+      slowlog(LOG_ERROR, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
+       sockfd_);
       return false;
     }
     connected = url->isSSL() ? connect_ssl(addr) : connect_plain(addr); 
   }
 
-  if(-1 == set_nonblocking()) {
-    slowlog(LOG_ERROR, "%s: Failed to set socket %d to non-blocking \n", __FUNCTION__,
-            sockfd_);
-    return false;
-  }
 
   followups_to_send_ = followups_to_send;
   requests_to_send_ = 1;
