@@ -221,7 +221,6 @@ bool SlowHTTPTest::run_test() {
   int maxfd = 0;
   int result = 0;
   int ret = 0;
-  int last_followup_timing = 0;
   timeval now, timeout, start, progress_timer, 
           connect_start, connect_end, connect_result, tv_delay;
 
@@ -287,8 +286,8 @@ bool SlowHTTPTest::run_test() {
           FD_SET(sock_[i]->get_sockfd(), &writefds);
         } else if(sock_[i]->get_followups_to_send() > 0
             && (seconds_passed > 0 && seconds_passed % followup_timing_ == 0)) {
-          if(last_followup_timing != seconds_passed) {
-            last_followup_timing = seconds_passed;
+          if(sock_[i]->get_last_followup_timing() != seconds_passed) {
+            sock_[i]->set_last_followup_timing(seconds_passed);
             ++wr;
             FD_SET(sock_[i]->get_sockfd(), &writefds);
           }

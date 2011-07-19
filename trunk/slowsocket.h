@@ -66,6 +66,14 @@ class SlowSocket {
   const int get_followups_to_send() const {
     return followups_to_send_;
   }
+  
+  const int get_last_followup_timing() const {
+    return last_followup_timing_;
+  }
+
+  void set_last_followup_timing(int timing) {
+    last_followup_timing_ = timing;
+  }
 
  private:
   bool connect_plain(addrinfo* addr);
@@ -75,6 +83,7 @@ class SlowSocket {
   int sockfd_;
   int requests_to_send_;
   int followups_to_send_;
+  int last_followup_timing_;
   int offset_;
   SSL* ssl_;
   const void* buf_;
