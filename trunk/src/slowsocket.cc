@@ -114,7 +114,7 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   }
   SSL_METHOD* method = NULL;
   SSL_CTX* ssl_ctx = NULL;
-  method = SSLv23_client_method();
+  method = (SSL_METHOD*)SSLv23_client_method();
   ssl_ctx = SSL_CTX_new(method);
   if(!ssl_ctx) {
     slowlog(LOG_ERROR, "%s: Cannot create new SSL context\n", __FUNCTION__);
