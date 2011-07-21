@@ -56,6 +56,10 @@ CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 CXXLD = $(CXX)
 CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
 	-o $@
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+CCLD = $(CC)
+LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 SOURCES = $(slowhttptest_SOURCES)
 DIST_SOURCES = $(slowhttptest_SOURCES)
 ETAGS = etags
@@ -150,7 +154,7 @@ target_alias = @target_alias@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign
-slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowurl.cc slowlog.cc
+slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowurl.cc slowlog.cc slowhttptest.h slowsocket.h slowurl.h slowlog.h
 all: all-am
 
 .SUFFIXES:
