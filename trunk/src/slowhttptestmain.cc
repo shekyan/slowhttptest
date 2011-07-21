@@ -45,7 +45,7 @@ static void usage() {
       "-h or -p,    specifies test mode(either slow headers or POST)\n\t"
       "-i,          interval between followup data in seconds\n\t"
       "-l,          target test length in seconds\n\t"
-      "-r,          connections rate(connections per seconds)\n\t"
+      "-r,          connection rate(connections per seconds)\n\t"
       "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
       "-v,          verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n"
       , PACKAGE
