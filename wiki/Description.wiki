@@ -1,0 +1,28 @@
+What are slow HTTP attacks and how this tool helps you fighting with it
+== Introduction ==
+
+Slow HTTP attacks rely on the fact that the HTTP protocol, by design, requires requests to be completely received by the server before they are processed. If an HTTP request is not complete, or if the transfer rate is very low, the server keeps its resources busy waiting for the rest of the data. If the server keeps too many resources busy, this creates a denial of service. 
+This tool is sending partial HTTP requests, trying to get denial of service from target HTTP server.
+
+
+== Details ==
+
+Due to implementation differences among various HTTP servers, two main attack vectors exist:
+
+* slowing down HTTP headers;
+* slowing down HTTP message body;
+
+slowhhtptest tool accepts the following arguments: 
+* -c: maximum number of connections tool would try to esatblish
+* -r: connection rate(connections per second), to bypass throttling down mechanisms, if any
+* -u: full URL to request, e.g. https://127.0.0.1:8888/foo/index.php
+* -h or -p: specifies which part of HTTP request, headears or POST body  you want to slow down.
+* -l: length of test is seconds, if server doesn't close all connections first
+* -i: interval in seconds between slowed down data chunks. Should be less than connection timeout on the server
+* -v: verbosity level 0-4. 0 - minimum information, 4 - everything including debug information
+
+slowhttptest tool supports 
+* SSL connections(URLs starting with 'https://')
+* host names resolved to IPv6
+* will try to change the limit for max open file descriptors for current process if requested number of connections is greater than current limit
+
