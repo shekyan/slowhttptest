@@ -31,6 +31,6 @@ slowhttptest tool supports
 
 == Installation == 
 
-  * download the tarball from [Download section]http://code.google.com/p/slowhttptest/downloads/list
+  * download the tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads section]
   * unpack
   * ./configure && make && make install
