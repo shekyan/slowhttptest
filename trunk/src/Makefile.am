@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 
-CFLAGS=-Wall -I/usr/local/include"
+CFLAGS=-Wall -I/usr/local/include
 LDFLAGS=-L/usr/local/lib -lssl
 
 bin_PROGRAMS = slowhttptest
