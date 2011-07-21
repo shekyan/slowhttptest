@@ -1,5 +1,0 @@
-#labels Featured,Phase-Deploy
-#Slow HTTP vulnerability test tool
-Sample usage
-
-./slowhttptest -u http://foo:7777/bar -c 100 -r 100 -l 120 -h -i 5 -v 5
