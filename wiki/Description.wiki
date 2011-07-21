@@ -25,3 +25,12 @@ slowhttptest tool supports
   * SSL connections(URLs starting with 'https://')
   * host names resolved to IPv6
   * will try to change the limit for max open file descriptors for current process if requested number of connections is greater than current limit
+
+== Usage example ==
+./slowhttptest -c 800 -p -i 10 -l 300 -r 100 -u http://127.0.0.1/ -v 1
+
+== Installation == 
+
+- Download the tarball from Download section
+- unpack
+- ./configure && make && make install
