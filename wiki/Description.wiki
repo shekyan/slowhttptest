@@ -31,6 +31,6 @@ slowhttptest tool supports
 
 == Installation == 
 
-- Download the tarball from Download section
-- unpack
-- ./configure && make && make install
+  * Download the tarball from Download section
+  * unpack
+  * ./configure && make && make install
