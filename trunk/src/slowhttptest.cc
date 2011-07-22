@@ -305,7 +305,12 @@ bool SlowHTTPTest::run_test() {
             (int)active_sock_num, seconds_passed);
       }
     }
-    if(seconds_passed > duration_ || active_sock_num == 0) { //limit to test
+    if(seconds_passed > duration_) { // hit time limit
+      slowlog(LOG_INFO, "hit the time limit, ending the test\n");
+      break;
+    }
+    if(active_sock_num == 0) {
+      slowlog(LOG_INFO, "host is probably not alive, ending the test\n");
       break;
     }
 
