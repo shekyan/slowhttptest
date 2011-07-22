@@ -296,13 +296,13 @@ bool SlowHTTPTest::run_test() {
     }
     if(seconds_passed % 5 == 0) { //printing heartbeat
       if(heartbeat_reported != seconds_passed) { //not so precise
-        slowlog(LOG_INFO, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
-          __FUNCTION__, (int)active_sock_num, seconds_passed);
+        slowlog(LOG_INFO, "slow HTTP test status: %d open connection(s) on %dth second\n",
+            (int)active_sock_num, seconds_passed);
         heartbeat_reported = seconds_passed;
       }
       else { // more precise
-        slowlog(LOG_DEBUG, "%s: Slow HTTP test status: %d open connection(s) on %dth second\n",
-        __FUNCTION__, (int)active_sock_num, seconds_passed);
+        slowlog(LOG_DEBUG, "slow HTTP test status: %d open connection(s) on %dth second\n",
+            (int)active_sock_num, seconds_passed);
       }
     }
     if(seconds_passed > duration_ || active_sock_num == 0) { //limit to test
@@ -321,37 +321,50 @@ bool SlowHTTPTest::run_test() {
     } else {
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
-          if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { //read
+          if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
             ret = sock_[i]->recv_slow(buf, kBufSize);
             buf[ret] = '\0';
             if(ret <= 0 && errno != EAGAIN) {
-              slowlog(LOG_DEBUG, "%s: sock %d closed\n", __FUNCTION__,
-                  sock_[i]->get_sockfd());
+              slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
+                  sock_[i]->get_sockfd(),
+                  strerror(errno));
               remove_sock(i);
               continue;
             } else {
-              slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
-                  sock_[i]->get_sockfd(), buf);
+              if(ret > 0) {// actual data recieved
+                slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
+                    sock_[i]->get_sockfd(), buf);
+              } else {
+                slowlog(LOG_DEBUG, "socket %d rd status:%s\n",
+                    (int)sock_[i]->get_sockfd(),
+                    strerror(errno));
+              }
             }
           }
-          if(FD_ISSET(sock_[i]->get_sockfd(), &writefds)) { //write
+          if(FD_ISSET(sock_[i]->get_sockfd(), &writefds)) { // write
             if(sock_[i]->get_requests_to_send() > 0) {
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {
                 slowlog(LOG_DEBUG,
-                    "%s:error sending initial slow post on sock %d:\n%s\n",
+                    "%s:error sending initial slow request on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 remove_sock(i);
                 continue;
               } else {
-                slowlog(LOG_DEBUG,
-                    "%s:initial %d of %d bytes sent on slow post socket %d:\n%s\n",
-                    __FUNCTION__, ret,
-                    (int) request_.size(),
-                    (int) sock_[i]->get_sockfd(),
-                    request_.c_str());
+                if(ret > 0) { //actual data was sent
+                  slowlog(LOG_DEBUG,
+                      "%s:initial %d of %d bytes sent on socket %d:\n%s\n",
+                      __FUNCTION__, ret,
+                      (int) request_.size(),
+                      (int) sock_[i]->get_sockfd(),
+                      request_.c_str());
+                } else {
+                  slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
+                      (int)sock_[i]->get_sockfd(),
+                      strerror(errno));
+                }
               }
             } else if(sock_[i]->get_followups_to_send() > 0
                 && (seconds_passed > 0
@@ -366,13 +379,19 @@ bool SlowHTTPTest::run_test() {
                 remove_sock(i);
                 continue;
               } else {
-                slowlog(LOG_DEBUG,
-                    "%s:%d of %d follow up data sent on socket %d:\n%s\n%d follow ups left\n",
-                    __FUNCTION__, ret,
-                    (int) strlen(extra_data),
-                    (int) sock_[i]->get_sockfd(),
-                    extra_data,
-                    sock_[i]->get_followups_to_send());
+                if(ret > 0) { //actual data was sent
+                  slowlog(LOG_DEBUG,
+                      "%s:%d of %d follow up data sent on socket %d:\n%s\n%d follow ups left\n",
+                        __FUNCTION__, ret,
+                        (int) strlen(extra_data),
+                        (int) sock_[i]->get_sockfd(),
+                        extra_data,
+                        sock_[i]->get_followups_to_send());
+                } else {
+                    slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
+                        (int)sock_[i]->get_sockfd(),
+                        strerror(errno));
+                }
               }
             }
           } else {
