@@ -23,6 +23,7 @@
  *****/
 #include "config.h"
 #include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,6 +144,7 @@ int main(int argc, char **argv) {
       return -1;
     }
   }
+  signal(SIGPIPE, SIG_IGN);
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(rate, duration, interval, conn_cnt, type));
   if(!slow_test->init(url)) {
