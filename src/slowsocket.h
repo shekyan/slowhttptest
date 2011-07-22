@@ -45,11 +45,10 @@ class SlowSocket {
  public:
   SlowSocket();
   ~SlowSocket();
-  // you should have a dtor, which calls close_slow, if it has not been closed yet.
   bool isEmpty() {
     return -1 == sockfd_ && !ssl_;
   }
-  // Should all those methods be public?
+  const bool is_connect_initiated() const {return connect_initiated_;};
   void close();
 
   bool init(addrinfo* addr, const Url* url, int& maxfd,
@@ -79,7 +78,8 @@ class SlowSocket {
   bool connect_plain(addrinfo* addr);
   bool connect_ssl(addrinfo* addr);
   int set_nonblocking();
-  // It is better to have each member have it's own type decl.
+  
+  int connect_initiated_;
   int sockfd_;
   int requests_to_send_;
   int followups_to_send_;
