@@ -74,7 +74,10 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
       slowlog(LOG_ERROR, "Failed to set socket %d to non-blocking \n", sockfd_);
       return false;
     }
-    connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr); 
+    if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
+      break; //found right addrinfo
+    }
+      
   }
 
 
@@ -145,6 +148,26 @@ int SlowSocket::recv_slow(void *buf, size_t len) {
 }
 
 int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
+  int ret;
+  if(ssl_) {
+    if(!SSL_is_init_finished(ssl_)) {
+      ret = SSL_do_handshake(ssl_);
+      if(ret <= 0) {
+        int err = SSL_get_error(ssl_, ret);
+        if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
+          slowlog(LOG_ERROR, "socket %d: SSL connect error: %d\n", sockfd_, err);
+          close();
+          return -1;
+        } else {
+          errno = EAGAIN;
+          return -1;
+        }
+      }
+    } else { //connected and handhsake finished
+      slowlog(LOG_DEBUG, "SSL connection is using %s\n", SSL_get_cipher(ssl_));
+  }
+
+  }
   // VA: this is not good. create a "prepare" method.
   // initial send
   if(buf_ == 0) {
@@ -152,7 +175,7 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
     offset_ = len;
   }
 
-  int ret = ssl_ ? SSL_write(ssl_, buf_, offset_)
+  ret = ssl_ ? SSL_write(ssl_, buf_, offset_)
                  : send(sockfd_, buf_, offset_, 0);
 
   // entire data was sent
