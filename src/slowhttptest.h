@@ -51,7 +51,6 @@ class SlowHTTPTest {
   bool init(const char* url);
   void report_parameters();
   bool run_test();
-  static bool fillRandomData(char * random_string, const size_t len);
   static bool grabResponseCode(const char *buf, int& code);
 
  private:
