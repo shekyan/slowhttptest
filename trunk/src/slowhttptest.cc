@@ -61,10 +61,6 @@ static const char post_request[] = "Connection: close\r\n"
     "Content-Length: 8192\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
     "foo=bar";
-
-static const char post_extra[] = "alpha=beta&";
-
-static const char header_extra[] = "X-Header: 1234567\r\n";
 // per RFC 2616 section 4.2, header can be any US_ASCII character (0-127),
 // but we'll start with X-
 static const char header_prefix[] = "X-";
