@@ -44,7 +44,8 @@ enum SlowTestType {
 class SlowSocket;
 class SlowHTTPTest {
  public:
-  SlowHTTPTest(int delay, int duration, int interval, int con_cnt, SlowTestType type);
+  SlowHTTPTest(int delay, int duration, int interval, int con_cnt,
+    int max_random_data_len, SlowTestType type);
   ~SlowHTTPTest();
 
   bool init(const char* url);
@@ -56,19 +57,23 @@ class SlowHTTPTest {
  private:
   void remove_sock(int id);
   bool change_fd_limits();
+  const char* get_random_extra();
 
   addrinfo* addr_;
   std::string request_;
-  std::string random_post_;
+  std::string random_extra_;
   std::string user_agent_;
   Url base_uri_;
-
+  const char* separator_;
+  const char* prefix_;
+  const char* postfix_;
   std::vector<SlowSocket*> sock_;
   int delay_;
   int duration_;
   int followup_timing_;
   int followup_cnt_;
   int num_connections_;
+  int extra_data_max_len_;
 
   SlowTestType type_;
 };
