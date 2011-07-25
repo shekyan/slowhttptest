@@ -124,30 +124,18 @@ const char* SlowHTTPTest::get_random_extra() {
   random_extra_.clear();
   random_extra_.append(prefix_);
   while(name_len) {
-    random_extra_.append(&symbols[random() % 51], 1);
+    random_extra_.push_back(symbols[random() % (sizeof(symbols)/sizeof(*symbols))]);
     --name_len;
   }
   random_extra_.append(separator_);
   while(value_len) {    
-    random_extra_.append(&symbols[random() % 51], 1);  
+    random_extra_.push_back(symbols[random() % (sizeof(symbols)/sizeof(*symbols))]);  
     --value_len;
   }
   if(postfix_) {
     random_extra_.append(postfix_);
   }
   return random_extra_.c_str();
-}
-bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
-  if(len > 0) {
-    size_t pos = 0;
-    while(pos < len) {
-      random_string[pos++] = symbols[random() % 51];
-  }
-
-    random_string[len] = '\0';
-    return true;
-  } else
-    return false;
 }
 
 bool SlowHTTPTest::init(const char* url) {
