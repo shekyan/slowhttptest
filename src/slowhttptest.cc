@@ -42,9 +42,19 @@
 
 namespace {
 static const int kBufSize = 65537;
-#define USER_AGENT "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) \
- AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1"
-
+static const char* user_agents[] = {
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
+   "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
+  "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) "
+   "AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.7; rv:5.0.1) "
+   "Gecko/20100101 Firefox/5.0.1",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) "
+   "AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.122 Safari/534.30",
+  "Opera/9.80 (Macintosh; Intel Mac OS X 10.7.0; U; Edition MacAppStore; en) "
+   "Presto/2.9.168 Version/11.50",
+  "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
+};
 static const char post_request[] = "Connection: close\r\n"
     "Referer: http://code.google.com/p/slowhttptest/\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
@@ -55,19 +65,27 @@ static const char post_request[] = "Connection: close\r\n"
 static const char post_extra[] = "alpha=beta&";
 
 static const char header_extra[] = "X-Header: 1234567\r\n";
+// per RFC 2616 section 4.2, header can be any US_ASCII character (0-127),
+// but we'll start with X-
+static const char header_prefix[] = "X-";
+static const char header_separator[] = ": ";
 
+static const char body_prefix[] = "&";
+static const char body_separator[] = "=";
+static const char crlf[] = "\r\n";
 static const char symbols[] =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 }  // namespace
 
 namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, int interval,
- int con_cnt, SlowTestType type) :
+ int con_cnt, int max_random_data_len, SlowTestType type) :
   delay_(delay)
   ,duration_(duration)
   ,followup_timing_(interval)
   ,followup_cnt_(duration_ / followup_timing_)
   ,num_connections_(con_cnt)
+  ,extra_data_max_len_(max_random_data_len)
   ,type_(type)
 {
 }
@@ -101,12 +119,33 @@ bool SlowHTTPTest::change_fd_limits() {
   
   return true;
 }
+const char* SlowHTTPTest::get_random_extra() {
+  size_t name_len = 0;
+  size_t value_len = 0;
 
+  while(name_len == 0) name_len= random() % (extra_data_max_len_/2);
+  while(value_len == 0) value_len= random() % (extra_data_max_len_/2);
+  random_extra_.clear();
+  random_extra_.append(prefix_);
+  while(name_len) {
+    random_extra_.append(&symbols[random() % 51], 1);
+    --name_len;
+  }
+  random_extra_.append(separator_);
+  while(value_len) {    
+    random_extra_.append(&symbols[random() % 51], 1);  
+    --value_len;
+  }
+  if(postfix_) {
+    random_extra_.append(postfix_);
+  }
+  return random_extra_.c_str();
+}
 bool SlowHTTPTest::fillRandomData(char * random_string, const size_t len) {
   if(len > 0) {
     size_t pos = 0;
     while(pos < len) {
-      random_string[pos++] = symbols[rand() % 51];
+      random_string[pos++] = symbols[random() % 51];
   }
 
     random_string[len] = '\0';
@@ -136,11 +175,18 @@ bool SlowHTTPTest::init(const char* url) {
     return false;
   }
 
-  user_agent_.append(USER_AGENT);
+  srandom(time(NULL)); // set random seed
+  user_agent_.append(user_agents[random() % sizeof(user_agents)/sizeof(*user_agents)]);
   request_.clear();
   if(eHeader == type_) {
+    separator_ = header_separator;
+    prefix_ = header_prefix;
+    postfix_ = crlf;
     request_.append("GET ");
   } else {
+    separator_ = body_separator;
+    prefix_ = body_prefix;
+    postfix_ = 0;
     request_.append("POST ");
   }
 
@@ -239,12 +285,6 @@ bool SlowHTTPTest::run_test() {
   timerclear(&connect_end);
   timerclear(&connect_result);
   gettimeofday(&start, 0);
-
-  if(eHeader == type_) {
-    extra_data = header_extra;
-  } else {
-    extra_data = post_extra;
-  }
 
   sock_.resize(num_connections_);
 
@@ -374,6 +414,7 @@ bool SlowHTTPTest::run_test() {
             } else if(sock_[i]->get_followups_to_send() > 0
                 && (seconds_passed > 0
                     && seconds_passed % followup_timing_ == 0)) {
+              extra_data = get_random_extra();
               ret = sock_[i]->send_slow(extra_data,
                   strlen(extra_data), eFollowUpSend);
               if(ret <= 0 && errno != EAGAIN) {

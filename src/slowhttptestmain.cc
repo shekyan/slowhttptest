@@ -48,7 +48,8 @@ static void usage() {
       "-l,          target test length in seconds\n\t"
       "-r,          connection rate(connections per seconds)\n\t"
       "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
-      "-v,          verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n"
+      "-v,          verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
+      "-x,          max length of randomized followup data per tick\n"
       , PACKAGE
       , VERSION
       );
@@ -73,11 +74,12 @@ int main(int argc, char **argv) {
   int duration = 240;
   int interval = 10;
   int debug_level = LOG_INFO;
+  int max_random_data_len = 128;
   SlowTestType type = slowhttptest::eHeader;
   
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:")) != -1) {
+  while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:x:")) != -1) {
     switch (o) {
     case 'c':
       tmp = strtol(optarg, 0, 10);
@@ -134,6 +136,15 @@ int main(int argc, char **argv) {
         debug_level = LOG_FATAL;
       }
       break;
+    case 'x':
+      tmp = strtol(optarg, 0, 10);
+      if(tmp && tmp <= INT_MAX) {
+        max_random_data_len = static_cast<int>(tmp);
+      } else {
+        usage();
+        return -1;
+      }
+      break;
     case '?':
       printf("Illegal option\n");
       usage();
@@ -146,7 +157,8 @@ int main(int argc, char **argv) {
   }
   signal(SIGPIPE, SIG_IGN);
   slowlog_init(debug_level, NULL);
-  std::auto_ptr<SlowHTTPTest> slow_test(new SlowHTTPTest(rate, duration, interval, conn_cnt, type));
+  std::auto_ptr<SlowHTTPTest> slow_test(
+   new SlowHTTPTest(rate, duration, interval, conn_cnt, max_random_data_len, type));
   if(!slow_test->init(url)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
