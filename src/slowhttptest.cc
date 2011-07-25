@@ -70,7 +70,7 @@ static const char body_prefix[] = "&";
 static const char body_separator[] = "=";
 static const char crlf[] = "\r\n";
 static const char symbols[] =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 }  // namespace
 
 namespace slowhttptest {
@@ -119,17 +119,17 @@ const char* SlowHTTPTest::get_random_extra() {
   size_t name_len = 0;
   size_t value_len = 0;
 
-  while(name_len == 0) name_len= random() % (extra_data_max_len_/2);
-  while(value_len == 0) value_len= random() % (extra_data_max_len_/2);
+  while(name_len == 0) name_len= rand() % (extra_data_max_len_/2);
+  while(value_len == 0) value_len= rand() % (extra_data_max_len_/2);
   random_extra_.clear();
   random_extra_.append(prefix_);
   while(name_len) {
-    random_extra_.push_back(symbols[random() % (sizeof(symbols)/sizeof(*symbols))]);
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols))]);
     --name_len;
   }
   random_extra_.append(separator_);
   while(value_len) {    
-    random_extra_.push_back(symbols[random() % (sizeof(symbols)/sizeof(*symbols))]);  
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols))]);  
     --value_len;
   }
   if(postfix_) {
@@ -159,8 +159,7 @@ bool SlowHTTPTest::init(const char* url) {
     return false;
   }
 
-  srandom(time(NULL)); // set random seed
-  user_agent_.append(user_agents[random() % sizeof(user_agents)/sizeof(*user_agents)]);
+  user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
   request_.clear();
   if(eHeader == type_) {
     separator_ = header_separator;
