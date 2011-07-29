@@ -29,6 +29,8 @@
 #ifndef _SLOWSOCKET_H_
 #define _SLOWSOCKET_H_
 
+#include <sys/time.h>
+
 #include <string>
 #include <openssl/ssl.h>
 
@@ -39,6 +41,10 @@ class Url;
 
 enum SendType {
   eInitialSend = 0, eFollowUpSend
+};
+
+enum SocketState {
+  eInit = 0, eError, eConnecting, eConnected, eActive, eClosed
 };
 
 class SlowSocket {
@@ -74,6 +80,41 @@ class SlowSocket {
     last_followup_timing_ = timing;
   }
 
+  void set_start(const timeval* t) {
+    t_start_.tv_sec = t->tv_sec;
+    t_start_.tv_usec = t->tv_usec;
+  }
+
+  const timeval& get_start() const {
+    return t_start_ ;
+  }
+
+  void set_connected(const timeval* t) {
+    t_connected_.tv_sec = t->tv_sec;
+    t_connected_.tv_usec = t->tv_usec;
+  }
+
+  const timeval& get_connected() const {
+    return t_connected_ ;
+  }
+
+  void set_stop(const timeval* t) {
+    t_stop_.tv_sec = t->tv_sec;
+    t_stop_.tv_usec = t->tv_usec;
+  }
+
+  const timeval& get_stop() const {
+    return t_stop_ ;
+  }
+
+  void set_state(SocketState state) {
+    state_ = state;
+  }
+
+  const SocketState& get_state() const {
+    return state_;
+  }
+
  private:
   bool connect_plain(addrinfo* addr);
   bool connect_ssl(addrinfo* addr);
@@ -87,6 +128,10 @@ class SlowSocket {
   int offset_;
   SSL* ssl_;
   const void* buf_;
+  timeval t_start_;
+  timeval t_connected_;
+  timeval t_stop_;
+  SocketState state_;
 };
 
 }  // namespace slowhttptest

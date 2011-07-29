@@ -251,7 +251,8 @@ bool SlowHTTPTest::run_test() {
   int result = 0;
   int ret = 0;
   timeval now, timeout, start, progress_timer, 
-          connect_start, connect_end, connect_result, tv_delay;
+          tv_delay, sock_start_time, sock_connected_time,
+          sock_stop_time;
 
   // connection rate per second
   tv_delay.tv_sec = 0;
@@ -264,9 +265,9 @@ bool SlowHTTPTest::run_test() {
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
-  timerclear(&connect_start);
-  timerclear(&connect_end);
-  timerclear(&connect_result);
+  timerclear(&sock_start_time);
+  timerclear(&sock_connected_time);
+  timerclear(&sock_stop_time);
   gettimeofday(&start, 0);
 
   sock_.resize(num_connections_);
@@ -281,20 +282,19 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_usec = 0; //microseconds
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
-      gettimeofday(&connect_start, 0);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           followup_cnt_)) {
+        sock_[num_connected]->set_state(eError);
         slowlog(LOG_ERROR, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);
         num_connections_ = num_connected;
       } else {
+        sock_[num_connected]->set_state(eInit);
+        gettimeofday(&sock_start_time, 0);
+        sock_[num_connected]->set_start(&sock_start_time);
         ++num_connected;
-        gettimeofday(&connect_end, 0);
-        timersub(&connect_end, &connect_start, &connect_result);
-        // throttle down conenction rate if connect took less than delay we need
-        if((connect_result.tv_sec == 0) && 
-         tv_delay.tv_usec > connect_result.tv_usec) {
-          usleep(tv_delay.tv_usec - connect_result.tv_usec);        }
+        // throttle down conenction rate, assume connect() returned immediately
+        usleep(tv_delay.tv_usec);
       }
     }
     seconds_passed = progress_timer.tv_sec;
@@ -353,6 +353,9 @@ bool SlowHTTPTest::run_test() {
             ret = sock_[i]->recv_slow(buf, kBufSize);
             buf[ret] = '\0';
             if(ret <= 0 && errno != EAGAIN) {
+              sock_[i]->set_state(eClosed);
+              gettimeofday(&sock_stop_time, 0);
+              sock_[i]->set_stop(&sock_stop_time);
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
                   sock_[i]->get_sockfd(),
                   strerror(errno));
@@ -374,6 +377,7 @@ bool SlowHTTPTest::run_test() {
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {
+                sock_[i]->set_state(eClosed);
                 slowlog(LOG_DEBUG,
                     "%s:error sending initial slow request on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
@@ -382,6 +386,9 @@ bool SlowHTTPTest::run_test() {
                 continue;
               } else {
                 if(ret > 0) { //actual data was sent
+                  sock_[i]->set_state(eConnected);
+                  gettimeofday(&sock_connected_time, 0);
+                  sock_[i]->set_connected(&sock_connected_time);
                   slowlog(LOG_DEBUG,
                       "%s:initial %d of %d bytes sent on socket %d:\n%s\n",
                       __FUNCTION__, ret,
@@ -401,6 +408,7 @@ bool SlowHTTPTest::run_test() {
               ret = sock_[i]->send_slow(extra_data,
                   strlen(extra_data), eFollowUpSend);
               if(ret <= 0 && errno != EAGAIN) {
+                sock_[i]->set_state(eClosed);
                 slowlog(LOG_DEBUG,
                     "%s:error sending follow up data on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
