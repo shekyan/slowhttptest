@@ -195,31 +195,6 @@ bool SlowHTTPTest::init(const char* url) {
   return true;
 }
 
-bool SlowHTTPTest::grabResponseCode(const char* buf, int& code) {
-
-  if(!buf) return false;
-
-  const char *s = strstr(buf, "HTTP/");
-  if(s) {
-    while(*s && !isspace(*s))
-      ++s;
-    const char* e = s;
-    while(*e && isspace(*e))
-      ++e;
-    s = e;
-    while(*e && isdigit(*e))
-      ++e;
-    char codeStr[4];
-    strncpy(codeStr, s, e - s);
-    codeStr[3] = '\0';
-    code = atoi(codeStr);
-  }
-  if(code)
-    return true;
-  else
-    return false;
-}
-
 void SlowHTTPTest::report_parameters() {
 
   slowlog(LOG_INFO, "\nUsing:\n"

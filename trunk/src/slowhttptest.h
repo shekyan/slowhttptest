@@ -50,7 +50,6 @@ class SlowHTTPTest {
   bool init(const char* url);
   void report_parameters();
   bool run_test();
-  static bool grabResponseCode(const char *buf, int& code);
 
  private:
   void remove_sock(int id);
