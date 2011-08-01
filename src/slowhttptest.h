@@ -40,6 +40,12 @@ enum SlowTestType {
   ePost
 };
 
+enum ExitStatusType {
+  eTimeLimit = 0,
+  eAllClosed,
+  eHostNotAlive
+};
+
 class SlowSocket;
 class SlowHTTPTest {
  public:
@@ -49,10 +55,12 @@ class SlowHTTPTest {
 
   bool init(const char* url);
   void report_parameters();
+  void report_status();
+  void report_final();
   bool run_test();
 
  private:
-  void remove_sock(int id);
+  void close_sock(int id);
   bool change_fd_limits();
   const char* get_random_extra();
 
@@ -71,8 +79,16 @@ class SlowHTTPTest {
   int followup_cnt_;
   int num_connections_;
   int extra_data_max_len_;
-
+  int seconds_passed_;
   SlowTestType type_;
+  int initializing_;
+  int connecting_; 
+  int connected_; 
+  int errored_; 
+  int closed_;
+
+
+  ExitStatusType exit_status_;
 };
 
 }  // namespace slowhttptest

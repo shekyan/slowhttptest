@@ -41,6 +41,12 @@
 
 namespace {
 static const int kBufSize = 65537;
+// update ExitStatusTupe too
+static const char* exit_status_msg[] = {
+  "Hit test time limit",
+  "No open connections left",
+  "Cannot esatblish connection"
+};
 static const char* user_agents[] = {
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
    "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
@@ -81,6 +87,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration, int interval,
   ,followup_cnt_(duration_ / followup_timing_)
   ,num_connections_(con_cnt)
   ,extra_data_max_len_(max_random_data_len)
+  ,seconds_passed_(0)
   ,type_(type)
 {
 }
@@ -118,17 +125,18 @@ const char* SlowHTTPTest::get_random_extra() {
   size_t name_len = 0;
   size_t value_len = 0;
 
-  while(name_len == 0) name_len= rand() % (extra_data_max_len_/2);
-  while(value_len == 0) value_len= rand() % (extra_data_max_len_/2);
+  while(name_len == 0) name_len= rand() % ((extra_data_max_len_ - 1)/2);
+  while(value_len == 0) value_len= rand() % ((extra_data_max_len_ -1)/2);
   random_extra_.clear();
   random_extra_.append(prefix_);
   while(name_len) {
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols))]);
+    // -1 is for not including trailing \0 in symbols
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols) - 1)]); 
     --name_len;
   }
   random_extra_.append(separator_);
   while(value_len) {    
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols))]);  
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols) - 1)]);  
     --value_len;
   }
   if(postfix_) {
@@ -157,7 +165,7 @@ bool SlowHTTPTest::init(const char* url) {
     slowlog(LOG_FATAL, "Error in getaddrinfo: %s\n", gai_strerror(error));
     return false;
   }
-
+  random_extra_.resize(extra_data_max_len_);
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
   request_.clear();
   if(eHeader == type_) {
@@ -195,6 +203,10 @@ bool SlowHTTPTest::init(const char* url) {
   return true;
 }
 
+void SlowHTTPTest::close_sock(int id) {
+  sock_[id]->close();
+}
+
 void SlowHTTPTest::report_parameters() {
 
   slowlog(LOG_INFO, "\nUsing:\n"
@@ -203,8 +215,8 @@ void SlowHTTPTest::report_parameters() {
     "number of connections:            %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
-    "test duration:                    %d seconds\n",
-     type_?"POST":"headers"
+    "test duration:                    %d seconds\n"
+    , type_?"POST":"headers"
     , base_uri_.getData()
     , num_connections_
     , followup_timing_
@@ -213,11 +225,59 @@ void SlowHTTPTest::report_parameters() {
   );
 }
 
-void SlowHTTPTest::remove_sock(int id) {
-  delete sock_[id];
-  sock_[id] = 0;
-}
+void SlowHTTPTest::report_status() {
+  initializing_ = 0;
+  connecting_ = 0; 
+  connected_ = 0; 
+  errored_ = 0; 
+  closed_ = 0;
 
+  std::vector<SlowSocket*>::iterator it;
+  SocketState state;
+  for(it = sock_.begin(); it < sock_.end(); ++it) {
+    if((*it)) {
+      state = (*it)->get_state();
+      switch(state) {
+        case eInit:
+          ++initializing_;
+          break;
+        case eConnecting:
+          ++connecting_;
+          break;
+        case eConnected:
+          ++connected_;
+          break;
+        case eError:
+          ++errored_;
+          break;
+        case eClosed:
+          ++closed_;
+          break;
+        default:
+          break;
+       }
+    }
+  }
+
+  slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
+   "inititalizing       %d\n"
+   "connecting          %d\n"
+   "connected           %d\n"
+   "error               %d\n"
+   "closed              %d\n"
+   , seconds_passed_
+   , initializing_
+   , connecting_
+   , connected_
+   , errored_
+   , closed_);
+
+}
+void SlowHTTPTest::report_final() {
+
+  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n",
+    seconds_passed_, exit_status_msg[exit_status_]);
+}
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
   fd_set readfds, writefds;
@@ -231,7 +291,6 @@ bool SlowHTTPTest::run_test() {
   // connection rate per second
   tv_delay.tv_sec = 0;
   tv_delay.tv_usec = 1000000 / delay_; 
-  int seconds_passed = 0; //stores seconds passed since we started
   int active_sock_num;
   char buf[kBufSize];
   const char* extra_data;
@@ -248,14 +307,11 @@ bool SlowHTTPTest::run_test() {
 
   // select loop
   while(true) {
-    //slowlog("%s:while loop %d, %d seconds_passed %d\n", __FUNCTION__,
-    //    (int) active_sock_num, (int) sock_.size(), seconds_passed);
     int wr = 0;
     active_sock_num = 0;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0; //microseconds
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
+      sock_[num_connected]->set_state(eInit);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           followup_cnt_)) {
         sock_[num_connected]->set_state(eError);
@@ -263,7 +319,7 @@ bool SlowHTTPTest::run_test() {
             (int) num_connected);
         num_connections_ = num_connected;
       } else {
-        sock_[num_connected]->set_state(eInit);
+        sock_[num_connected]->set_state(eConnecting);
         gettimeofday(&sock_start_time, 0);
         sock_[num_connected]->set_start(&sock_start_time);
         ++num_connected;
@@ -271,7 +327,7 @@ bool SlowHTTPTest::run_test() {
         usleep(tv_delay.tv_usec);
       }
     }
-    seconds_passed = progress_timer.tv_sec;
+    seconds_passed_ = progress_timer.tv_sec;
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
     for(int i = 0; i < num_connected; ++i) {
@@ -282,41 +338,46 @@ bool SlowHTTPTest::run_test() {
           ++wr;
           FD_SET(sock_[i]->get_sockfd(), &writefds);
         } else if(sock_[i]->get_followups_to_send() > 0
-            && (seconds_passed > 0 && seconds_passed % followup_timing_ == 0)) {
-          if(sock_[i]->get_last_followup_timing() != seconds_passed) {
-            sock_[i]->set_last_followup_timing(seconds_passed);
+            && (seconds_passed_ > 0 && seconds_passed_ % followup_timing_ == 0)) {
+          if(sock_[i]->get_last_followup_timing() != seconds_passed_) {
+            sock_[i]->set_last_followup_timing(seconds_passed_);
             ++wr;
             FD_SET(sock_[i]->get_sockfd(), &writefds);
           }
         }
       }
     }
-    if(seconds_passed % 5 == 0) { //printing heartbeat
-      if(heartbeat_reported != seconds_passed) { //not so precise
-        slowlog(LOG_INFO, "slow HTTP test status: %d open connection(s) on %dth second\n",
-            (int)active_sock_num, seconds_passed);
-        heartbeat_reported = seconds_passed;
-      }
-      else { // more precise
-        slowlog(LOG_DEBUG, "slow HTTP test status: %d open connection(s) on %dth second\n",
-            (int)active_sock_num, seconds_passed);
+    if(seconds_passed_ % 5 == 0) { // printing heartbeat
+      if(heartbeat_reported != seconds_passed_) { // once
+        report_status();
+        heartbeat_reported = seconds_passed_;
       }
     }
-    if(seconds_passed > duration_) { // hit time limit
-      slowlog(LOG_INFO, "hit the time limit, ending the test\n");
+    if(seconds_passed_ > duration_) { // hit time limit
+      exit_status_ = eTimeLimit;
       break;
     }
+    // rude way to detect host not alive
+    if(seconds_passed_ > 10 && connecting_ > 0 &&
+     connected_ == 0 && closed_ == 0) {
+      exit_status_ = eHostNotAlive;
+      break;
+    }
+    // no open connections
     if(active_sock_num == 0) {
-      slowlog(LOG_INFO, "host is probably not alive, ending the test\n");
+      exit_status_ = eAllClosed;
       break;
     }
 
-    result = select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL
-        , &timeout);
+    timeout.tv_sec = (num_connected < num_connections_)?0 : 1;
+    timeout.tv_usec = 0; //microseconds
+
+    result = select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
+     &timeout);
     gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
-      slowlog(LOG_FATAL, "%s: select() error: %s\n", __FUNCTION__, strerror(errno));
+      slowlog(LOG_FATAL, "%s: selecd < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
       continue;
@@ -333,7 +394,7 @@ bool SlowHTTPTest::run_test() {
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
                   sock_[i]->get_sockfd(),
                   strerror(errno));
-              remove_sock(i);
+              close_sock(i);
               continue;
             } else {
               if(ret > 0) {// actual data recieved
@@ -356,7 +417,7 @@ bool SlowHTTPTest::run_test() {
                     "%s:error sending initial slow request on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
-                remove_sock(i);
+                close_sock(i);
                 continue;
               } else {
                 if(ret > 0) { //actual data was sent
@@ -376,8 +437,8 @@ bool SlowHTTPTest::run_test() {
                 }
               }
             } else if(sock_[i]->get_followups_to_send() > 0
-                && (seconds_passed > 0
-                    && seconds_passed % followup_timing_ == 0)) {
+                && (seconds_passed_ > 0
+                    && seconds_passed_ % followup_timing_ == 0)) {
               extra_data = get_random_extra();
               ret = sock_[i]->send_slow(extra_data,
                   strlen(extra_data), eFollowUpSend);
@@ -387,7 +448,7 @@ bool SlowHTTPTest::run_test() {
                     "%s:error sending follow up data on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
-                remove_sock(i);
+                close_sock(i);
                 continue;
               } else {
                 if(ret > 0) { //actual data was sent
@@ -415,9 +476,7 @@ bool SlowHTTPTest::run_test() {
       }
     }
   }
-
-  slowlog(LOG_INFO, "%d active sockets left by the end of the test on %dth second\n",
-   active_sock_num, seconds_passed);
+  report_final();
   for(int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {
       delete sock_[i];

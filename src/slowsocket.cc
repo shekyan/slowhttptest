@@ -41,7 +41,7 @@ namespace slowhttptest {
 SlowSocket::SlowSocket()
     : sockfd_(-1), requests_to_send_(0),
       followups_to_send_(0), last_followup_timing_(0),
-      offset_(0), ssl_(0), buf_(0) {
+      offset_(0), ssl_(0), buf_(0), state_(eInit) {
 }
 
 SlowSocket::~SlowSocket() {

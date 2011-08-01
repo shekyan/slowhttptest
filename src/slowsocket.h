@@ -44,7 +44,7 @@ enum SendType {
 };
 
 enum SocketState {
-  eInit = 0, eError, eConnecting, eConnected, eActive, eClosed
+  eInit = 0, eError, eConnecting, eConnected, eClosed
 };
 
 class SlowSocket {
