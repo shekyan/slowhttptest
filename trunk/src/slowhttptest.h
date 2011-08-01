@@ -50,7 +50,7 @@ class SlowSocket;
 class SlowHTTPTest {
  public:
   SlowHTTPTest(int delay, int duration, int interval, int con_cnt,
-    int max_random_data_len, SlowTestType type);
+    int max_random_data_len, int content_length, SlowTestType type);
   ~SlowHTTPTest();
 
   bool init(const char* url);
@@ -80,6 +80,7 @@ class SlowHTTPTest {
   int num_connections_;
   int extra_data_max_len_;
   int seconds_passed_;
+  int content_length_;
   SlowTestType type_;
   int initializing_;
   int connecting_; 
