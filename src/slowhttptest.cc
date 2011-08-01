@@ -29,6 +29,7 @@
 
 #include <string>
 #include <vector>
+#include <sstream>
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -63,7 +64,6 @@ static const char* user_agents[] = {
 static const char post_request[] = "Connection: close\r\n"
     "Referer: http://code.google.com/p/slowhttptest/\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
-    "Content-Length: 8192\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
     "foo=bar";
 // per RFC 2616 section 4.2, header can be any US_ASCII character (0-127),
@@ -79,8 +79,9 @@ static const char symbols[] =
 }  // namespace
 
 namespace slowhttptest {
-SlowHTTPTest::SlowHTTPTest(int delay, int duration, int interval,
- int con_cnt, int max_random_data_len, SlowTestType type) :
+SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
+ int interval, int con_cnt, int max_random_data_len,
+ int content_length, SlowTestType type) :
   delay_(delay)
   ,duration_(duration)
   ,followup_timing_(interval)
@@ -88,6 +89,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration, int interval,
   ,num_connections_(con_cnt)
   ,extra_data_max_len_(max_random_data_len)
   ,seconds_passed_(0)
+  ,content_length_(content_length)
   ,type_(type)
 {
 }
@@ -197,6 +199,11 @@ bool SlowHTTPTest::init(const char* url) {
   request_.append(user_agent_);
   request_.append("\r\n");
   if(ePost == type_) {
+    request_.append("Content-Length: ");
+    std::stringstream ss;
+    ss << content_length_;
+    request_.append(ss.str());
+    request_.append("\r\n");
     request_.append(post_request);
   }
   report_parameters();
@@ -213,12 +220,14 @@ void SlowHTTPTest::report_parameters() {
     "test mode:                        %s\n"
     "URL:                              %s\n"
     "number of connections:            %d\n"
+    "Content-Length header value       %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n"
     , type_?"POST":"headers"
     , base_uri_.getData()
     , num_connections_
+    , content_length_
     , followup_timing_
     , delay_
     , duration_
@@ -368,7 +377,7 @@ bool SlowHTTPTest::run_test() {
       exit_status_ = eAllClosed;
       break;
     }
-
+    // do not block if have new connections to establish
     timeout.tv_sec = (num_connected < num_connections_)?0 : 1;
     timeout.tv_usec = 0; //microseconds
 
