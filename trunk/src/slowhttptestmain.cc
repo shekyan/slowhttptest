@@ -80,78 +80,78 @@ int main(int argc, char **argv) {
   char o;
   while((o = getopt(argc, argv, ":hpc:i:l:r:u:v:x:")) != -1) {
     switch (o) {
-    case 'c':
-      tmp = strtol(optarg, 0, 10);
-      if(tmp && tmp <= INT_MAX) {
-        conn_cnt = static_cast<int>(tmp);
-      }
-      else {
+      case 'c':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          conn_cnt = static_cast<int>(tmp);
+        }
+        else {
+          usage();
+          return -1;
+        }
+        break;
+      case 'h':
+        type = slowhttptest::eHeader;
+        break;
+      case 'i':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          interval = static_cast<int>(tmp);
+        } else {
+          usage();
+          return -1;
+        }
+        break;
+      case 'l':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          duration = static_cast<int>(tmp);
+        } else {
+          usage();
+          return -1;
+        }
+        break;
+      case 'p':
+        type = slowhttptest::ePost;
+        break;
+      case 'r':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          rate = static_cast<int>(tmp);
+        } else {
+          usage();
+          return -1;
+        }
+        break;
+      case 'u':
+        strncpy(url, optarg, 1024);
+        break;
+      case 'v':
+        tmp = strtol(optarg, 0, 10);
+        if(0 <= tmp && tmp <= 4) {
+          debug_level = static_cast<int>(tmp);
+        }
+        else {
+          debug_level = LOG_FATAL;
+        }
+        break;
+      case 'x':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          max_random_data_len = static_cast<int>(tmp);
+        } else {
+          usage();
+          return -1;
+        }
+        break;
+      case '?':
+        printf("Illegal option\n");
         usage();
         return -1;
-      }
-      break;
-    case 'h':
-      type = slowhttptest::eHeader;
-      break;
-    case 'i':
-      tmp = strtol(optarg, 0, 10);
-      if(tmp && tmp <= INT_MAX) {
-        interval = static_cast<int>(tmp);
-      } else {
+        break;
+      default:
         usage();
         return -1;
-      }
-      break;
-    case 'l':
-      tmp = strtol(optarg, 0, 10);
-      if(tmp && tmp <= INT_MAX) {
-        duration = static_cast<int>(tmp);
-      } else {
-        usage();
-        return -1;
-      }
-      break;
-    case 'p':
-      type = slowhttptest::ePost;
-      break;
-    case 'r':
-      tmp = strtol(optarg, 0, 10);
-      if(tmp && tmp <= INT_MAX) {
-        rate = static_cast<int>(tmp);
-      } else {
-        usage();
-        return -1;
-      }
-      break;
-    case 'u':
-      strncpy(url, optarg, 1024);
-      break;
-    case 'v':
-      tmp = strtol(optarg, 0, 10);
-      if(0 <= tmp && tmp <= 4) {
-        debug_level = static_cast<int>(tmp);
-      }
-      else {
-        debug_level = LOG_FATAL;
-      }
-      break;
-    case 'x':
-      tmp = strtol(optarg, 0, 10);
-      if(tmp && tmp <= INT_MAX) {
-        max_random_data_len = static_cast<int>(tmp);
-      } else {
-        usage();
-        return -1;
-      }
-      break;
-    case '?':
-      printf("Illegal option\n");
-      usage();
-      return -1;
-      break;
-    default:
-      usage();
-      return -1;
     }
   }
   signal(SIGPIPE, SIG_IGN);
