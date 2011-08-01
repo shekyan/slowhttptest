@@ -14,12 +14,13 @@ Due to implementation differences among various HTTP servers, two main attack ve
   * slowing down HTTP message body;
 
 slowhhtptest tool accepts the following arguments: 
-  * -c: maximum number of connections tool would try to esatblish
-  * -r: connection rate(connections per second), to bypass throttling down mechanisms, if any
-  * -u: full URL to request, e.g. https://127.0.0.1:8888/foo/index.php
-  * -h or -p: specifies which part of HTTP request, headears or POST body  you want to slow down.
-  * -l: length of test is seconds, if server doesn't close all connections first
+  * -c: maximum number of connections tool would try to establish
+  * -h or -p: specifies which part of HTTP request, headers or POST body  you want to slow down.
   * -i: interval in seconds between slowed down data chunks. Should be less than connection timeout on the server
+  * -l: length of test is seconds, if server doesn't close all connections first
+  * -r: connection rate(connections per second), to bypass throttling down mechanisms, if any
+  * -s: value of Content-Length header for POST requests, servers tend to limit message body
+  * -u: full URL to request, e.g. https://127.0.0.1:8888/foo/index.php
   * -v: verbosity level 0-4. 0 - minimum information, 4 - everything including debug information
   * -x: maximum length of random followup data. E.g. every interval specified by -i, header or body data would be generated. Both name and value of header or message body are random US-ASCII characters.
 
@@ -30,7 +31,7 @@ slowhttptest tool supports
   * will try to change the limit for max open file descriptors for current process if requested number of connections is greater than current limit
 
 == Usage example ==
-./slowhttptest -c 800 -p -i 10 -l 300 -r 100 -u http://127.0.0.1/ -v 1 -x 256
+./slowhttptest -c 800 -p -i 10 -l 300 -r 100 -s 8192 -u http://127.0.0.1/ -v 1 -x 256
 
 == Installation == 
 
