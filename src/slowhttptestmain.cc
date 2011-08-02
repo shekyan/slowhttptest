@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
+        if(tmp && tmp <= 1024) {
           conn_cnt = static_cast<int>(tmp);
         }
         else {

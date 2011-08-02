@@ -46,7 +46,8 @@ static const int kBufSize = 65537;
 static const char* exit_status_msg[] = {
   "Hit test time limit",
   "No open connections left",
-  "Cannot esatblish connection"
+  "Cannot esatblish connection",
+  "Connection refused"
 };
 static const char* user_agents[] = {
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
@@ -311,7 +312,6 @@ bool SlowHTTPTest::run_test() {
   timerclear(&sock_connected_time);
   timerclear(&sock_stop_time);
   gettimeofday(&start, 0);
-
   sock_.resize(num_connections_);
 
   // select loop
@@ -332,8 +332,6 @@ bool SlowHTTPTest::run_test() {
         gettimeofday(&sock_start_time, 0);
         sock_[num_connected]->set_start(&sock_start_time);
         ++num_connected;
-        // throttle down conenction rate, assume connect() returned immediately
-        usleep(tv_delay.tv_usec);
       }
     }
     seconds_passed_ = progress_timer.tv_sec;
@@ -366,10 +364,13 @@ bool SlowHTTPTest::run_test() {
       exit_status_ = eTimeLimit;
       break;
     }
-    // rude way to detect host not alive
-    if(seconds_passed_ > 10 && connecting_ > 0 &&
-     connected_ == 0 && closed_ == 0) {
-      exit_status_ = eHostNotAlive;
+    // rude way to detect if something is wrong after 10 seconds
+    if(seconds_passed_ > 10 && connected_ == 0) {
+      if(connecting_ > 0 && closed_ == 0) {
+        exit_status_ = eHostNotAlive;
+      } else if (closed_ > 0 && connecting_ >=0) {
+        exit_status_ = eConnectionRefused;
+      }
       break;
     }
     // no open connections
@@ -378,7 +379,7 @@ bool SlowHTTPTest::run_test() {
       break;
     }
     // do not block if have new connections to establish
-    timeout.tv_sec = (num_connected < num_connections_)?0 : 1;
+    timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
 
     result = select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
@@ -389,7 +390,8 @@ bool SlowHTTPTest::run_test() {
       slowlog(LOG_FATAL, "%s: selecd < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
-      continue;
+      // nothing to monitor
+      //continue;
     } else {
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
@@ -410,9 +412,10 @@ bool SlowHTTPTest::run_test() {
                 slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
                     sock_[i]->get_sockfd(), buf);
               } else {
-                slowlog(LOG_DEBUG, "socket %d rd status:%s\n",
-                    (int)sock_[i]->get_sockfd(),
-                    strerror(errno));
+                // still in connect phase
+                //slowlog(LOG_DEBUG, "socket %d rd status:%s\n",
+                //    (int)sock_[i]->get_sockfd(),
+                //    strerror(errno));
               }
             }
           }
@@ -440,9 +443,10 @@ bool SlowHTTPTest::run_test() {
                       (int) sock_[i]->get_sockfd(),
                       request_.c_str());
                 } else {
-                  slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
-                      (int)sock_[i]->get_sockfd(),
-                      strerror(errno));
+                  // still in connect phase
+                  //slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
+                  //    (int)sock_[i]->get_sockfd(),
+                  //    strerror(errno));
                 }
               }
             } else if(sock_[i]->get_followups_to_send() > 0
@@ -469,20 +473,26 @@ bool SlowHTTPTest::run_test() {
                         extra_data,
                         sock_[i]->get_followups_to_send());
                 } else {
-                    slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
-                        (int)sock_[i]->get_sockfd(),
-                        strerror(errno));
+                  // still in connect phase
+                  // slowlog(LOG_DEBUG, "socket %d wr status:%s\n",
+                  //     (int)sock_[i]->get_sockfd(),
+                  //     strerror(errno));
                 }
               }
             }
           } else {
-            if(sock_[i] && sock_[i]->get_requests_to_send() > 0) {
+            // if(sock_[i] && sock_[i]->get_requests_to_send() > 0) {
               // trying to connect, server slowing down probably
-              slowlog(LOG_WARN, "pending connection on socket %d\n", sock_[i]->get_sockfd());
-            }
+            //  slowlog(LOG_WARN, "pending connection on socket %d\n", sock_[i]->get_sockfd());
+            //}
           }
         }
       }
+    }
+    
+    if(num_connected < num_connections_) {
+      // throttle down conenction rate, assume connect() returned immediately
+      usleep(tv_delay.tv_usec);
     }
   }
   report_final();
