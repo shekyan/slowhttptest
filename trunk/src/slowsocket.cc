@@ -231,4 +231,29 @@ void SlowSocket::close() {
   sockfd_ = -1;
 }
 
+void SlowSocket::set_state(SocketState state) {
+  timeval t;
+  gettimeofday(&t, 0);
+  switch(state) {
+    case eInit:
+      break;
+    case eConnecting:
+      set_start(&t);
+      break;
+    case eConnected:
+      set_connected(&t);
+      break;
+    case eError:
+      break;
+    case eClosed:
+      set_stop(&t);
+      break;
+    default:
+      break;
+  } 
+  state_ = state;
+}
+
+
+
 }  // namespace slowhttptest
