@@ -27,6 +27,7 @@
 #include <cmath>
 #include <stdio.h>
 
+#include <numeric>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -291,6 +292,8 @@ void SlowHTTPTest::report_final() {
   // if socket still open, set close time to now
   timeval t;
   gettimeofday(&t, 0);
+  std::vector<long> connect_times;
+  std::vector<long> life_times;
   long n = (t.tv_sec * 1000) + (t.tv_usec / 1000);
   std::vector<SlowSocket*>::iterator it;
   for(it = sock_.begin(); it < sock_.end(); ++it) {
@@ -299,15 +302,22 @@ void SlowHTTPTest::report_final() {
     c = (*it)->get_stop() ? (*it)->get_stop() : n;
     if(a && b) {
       res = b - a;
-      slowlog(LOG_INFO, "CONNECT TIME IS %ld\n", res);
+      connect_times.push_back(res);
+      slowlog(LOG_DEBUG, "CONNECT TIME IS %ld\n", res);
     }
     if(c && a) {
       res = c - a;
-      slowlog(LOG_INFO, "LIFE TIME IS %ld\n", res);
+      life_times.push_back(res);
+      slowlog(LOG_DEBUG, "LIFE TIME IS %ld\n", res);
     }
-  }   
-  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n",
-    seconds_passed_, exit_status_msg[exit_status_]);
+  }
+
+  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
+   "average connect time:     %ld\naverage lifetime:    %ld\n",
+    seconds_passed_, exit_status_msg[exit_status_],
+    std::accumulate(connect_times.begin(), connect_times.end(), 0) / connect_times.size(), 
+    std::accumulate(life_times.begin(), life_times.end(), 0) / life_times.size() 
+);
 }
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
