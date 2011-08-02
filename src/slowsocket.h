@@ -80,31 +80,31 @@ class SlowSocket {
     last_followup_timing_ = timing;
   }
 
-  void set_start(const timeval* t) {
-    t_start_.tv_sec = t->tv_sec;
-    t_start_.tv_usec = t->tv_usec;
-  }
-
-  const timeval& get_start() const {
-    return t_start_ ;
-  }
-
   void set_connected(const timeval* t) {
-    t_connected_.tv_sec = t->tv_sec;
-    t_connected_.tv_usec = t->tv_usec;
+    connected_in_millisecs_ = t->tv_sec * 1000;
+    connected_in_millisecs_ += t->tv_usec / 1000;
   }
 
-  const timeval& get_connected() const {
-    return t_connected_ ;
+  const long get_connected() const {
+    return connected_in_millisecs_ ;
+  }
+
+  void set_start(const timeval* t) {
+    start_in_millisecs_ = t->tv_sec * 1000;
+    start_in_millisecs_ += t->tv_usec / 1000;
+  }
+
+  const long get_start() const {
+    return start_in_millisecs_ ;
   }
 
   void set_stop(const timeval* t) {
-    t_stop_.tv_sec = t->tv_sec;
-    t_stop_.tv_usec = t->tv_usec;
+    stop_in_millisecs_ = t->tv_sec * 1000;
+    stop_in_millisecs_ += t->tv_usec / 1000;
   }
 
-  const timeval& get_stop() const {
-    return t_stop_ ;
+  const long get_stop() const {
+    return stop_in_millisecs_ ;
   }
 
   void set_state(SocketState state) {
@@ -128,9 +128,9 @@ class SlowSocket {
   int offset_;
   SSL* ssl_;
   const void* buf_;
-  timeval t_start_;
-  timeval t_connected_;
-  timeval t_stop_;
+  long start_in_millisecs_;
+  long connected_in_millisecs_;
+  long stop_in_millisecs_;
   SocketState state_;
 };
 
