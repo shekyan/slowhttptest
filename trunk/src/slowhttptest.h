@@ -43,7 +43,8 @@ enum SlowTestType {
 enum ExitStatusType {
   eTimeLimit = 0,
   eAllClosed,
-  eHostNotAlive
+  eHostNotAlive,
+  eConnectionRefused
 };
 
 class SlowSocket;

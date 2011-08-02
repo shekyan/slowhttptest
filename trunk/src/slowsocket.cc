@@ -65,14 +65,16 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     sockfd_ = socket(res->ai_family, res->ai_socktype,
      res->ai_protocol);
     if(-1 == sockfd_) {
-      slowlog(LOG_ERROR, "Failed to create socket\n");
+      slowlog(LOG_ERROR, "failed to create socket\n");
       return false;
     }
 
     if(-1 == set_nonblocking()) {
-      slowlog(LOG_ERROR, "Failed to set socket %d to non-blocking \n", sockfd_);
+      slowlog(LOG_ERROR, "failed to set socket %d to non-blocking \n", sockfd_);
       return false;
     }
+
+    slowlog(LOG_DEBUG, "non-blocking socket fd = %d created\n", sockfd_);
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
@@ -94,7 +96,7 @@ bool SlowSocket::connect_plain(addrinfo* addr) {
 
   if (connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0
       && EINPROGRESS != errno) {
-    slowlog(LOG_ERROR, "Cannot connect socket %d: %s\n", sockfd_, strerror(errno));
+    slowlog(LOG_ERROR, "cannot connect socket %d: %s\n", sockfd_, strerror(errno));
     close();
     return false;
   }
@@ -117,13 +119,13 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   method = (SSL_METHOD*)SSLv23_client_method();
   ssl_ctx = SSL_CTX_new(method);
   if(!ssl_ctx) {
-    slowlog(LOG_ERROR, "Cannot create new SSL context\n");
+    slowlog(LOG_ERROR, "cannot create new SSL context\n");
     close();
     return false;
   }
   ssl_ = SSL_new(ssl_ctx);
   if(!ssl_) {
-    slowlog(LOG_ERROR, "Cannot create SSL structure for a connection\n");
+    slowlog(LOG_ERROR, "cannot create SSL structure for a connection\n");
     close();
     return false;
   }
@@ -131,19 +133,30 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   int ret = SSL_connect(ssl_);
   if(ret <= 0) {
     int err = SSL_get_error(ssl_, ret);
-    slowlog(LOG_ERROR, "socket %d: SSL connect error: %d\n", sockfd_, err);
+    //slowlog(LOG_ERROR, "socket %d: SSL connect error: %d\n", sockfd_, err);
     if(SSL_ERROR_WANT_READ != err && SSL_ERROR_WANT_WRITE != err) {
       close();
       return false;
     }
   }
-  slowlog(LOG_DEBUG, "SSL connection is using %s\n", SSL_get_cipher(ssl_));
   return true;
 }
 
 int SlowSocket::recv_slow(void *buf, size_t len) {
-  return ssl_ ? SSL_read(ssl_, buf, len)
-              : recv(sockfd_, buf, len, 0);
+  int ret=ssl_ ? SSL_read(ssl_, buf, len)
+    : recv(sockfd_, buf, len, 0);
+  if(ssl_) {
+    if(ret <0) { 
+      int err = SSL_get_error(ssl_, ret);
+      if(err == SSL_ERROR_WANT_WRITE) {
+        requests_to_send_ = 1;
+      }
+    } 
+    if(SSL_is_init_finished(ssl_) && (state_ == eConnecting)) {
+      requests_to_send_ = 1;
+    }
+  } 
+  return ret;
 }
 
 int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
@@ -158,14 +171,23 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
           close();
           return -1;
         } else {
+          if(SSL_ERROR_WANT_READ == err) {
+            requests_to_send_=0;
+          }
+          else {
+            requests_to_send_=1;
+          }
           errno = EAGAIN;
           return -1;
         }
+      } else { //connected and handhsake finished
+        requests_to_send_=1;
       }
-    } else { //connected and handhsake finished
-      slowlog(LOG_DEBUG, "SSL connection is using %s\n", SSL_get_cipher(ssl_));
-  }
-
+    } else {
+      if(requests_to_send_ > 0) { //report for initial data only
+        slowlog(LOG_DEBUG, "SSL connection is using %s\n", SSL_get_cipher(ssl_));
+      }
+    }
   }
   // VA: this is not good. create a "prepare" method.
   // initial send
