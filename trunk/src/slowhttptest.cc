@@ -284,7 +284,28 @@ void SlowHTTPTest::report_status() {
 
 }
 void SlowHTTPTest::report_final() {
-
+  long res = 0;
+  long a = 0;
+  long b = 0;
+  long c = 0;
+  // if socket still open, set close time to now
+  timeval t;
+  gettimeofday(&t, 0);
+  long n = (t.tv_sec * 1000) + (t.tv_usec / 1000);
+  std::vector<SlowSocket*>::iterator it;
+  for(it = sock_.begin(); it < sock_.end(); ++it) {
+    a = (*it)->get_start();
+    b = (*it)->get_connected();
+    c = (*it)->get_stop() ? (*it)->get_stop() : n;
+    if(a && b) {
+      res = b - a;
+      slowlog(LOG_INFO, "CONNECT TIME IS %ld\n", res);
+    }
+    if(c && a) {
+      res = c - a;
+      slowlog(LOG_INFO, "LIFE TIME IS %ld\n", res);
+    }
+  }   
   slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n",
     seconds_passed_, exit_status_msg[exit_status_]);
 }
@@ -425,6 +446,8 @@ bool SlowHTTPTest::run_test() {
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {
                 sock_[i]->set_state(eClosed);
+                gettimeofday(&sock_stop_time, 0);
+                sock_[i]->set_stop(&sock_stop_time);
                 slowlog(LOG_DEBUG,
                     "%s:error sending initial slow request on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
@@ -457,6 +480,8 @@ bool SlowHTTPTest::run_test() {
                   strlen(extra_data), eFollowUpSend);
               if(ret <= 0 && errno != EAGAIN) {
                 sock_[i]->set_state(eClosed);
+                gettimeofday(&sock_stop_time, 0);
+                sock_[i]->set_stop(&sock_stop_time);
                 slowlog(LOG_DEBUG,
                     "%s:error sending follow up data on socket %d:\n%s\n",
                     __FUNCTION__, sock_[i]->get_sockfd(),
