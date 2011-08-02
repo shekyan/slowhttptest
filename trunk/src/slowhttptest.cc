@@ -303,12 +303,12 @@ void SlowHTTPTest::report_final() {
     if(a && b) {
       res = b - a;
       connect_times.push_back(res);
-      slowlog(LOG_DEBUG, "CONNECT TIME IS %ld\n", res);
+      slowlog(LOG_DEBUG, "connect time %ld\n", res);
     }
     if(c && a) {
       res = c - a;
       life_times.push_back(res);
-      slowlog(LOG_DEBUG, "LIFE TIME IS %ld\n", res);
+      slowlog(LOG_DEBUG, "life time %ld\n", res);
     }
   }
 
