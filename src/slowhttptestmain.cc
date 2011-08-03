@@ -17,7 +17,7 @@
 /*****
  * Author: Sergey Shekyan sshekyan@qualys.com
  *
- * Slow HTTP attack  vulnerability test tool
+ * Slow HTTP attack vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *****/
 #include "config.h"
@@ -41,18 +41,19 @@ static void usage() {
       "slowtest [-c <number of connections>] [-<h|b>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "[-r <connections per second>] [-u <URL>]\n"
-      "[-s <value of Content-Length header>]\n"
+      "[-s <value of Content-Length header>] [-t <verb>]\n"
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
-      "-c,          target number of connections\n\t"
-      "-h or -p,    specifies test mode (either slow headers or POST)\n\t"
-      "-i,          interval between followup data in seconds\n\t"
-      "-l,          target test length in seconds\n\t"
-      "-r,          connection rate (connections per seconds)\n\t"
-      "-s,          value of Content-Length header for POST request\n\t"
-      "-u,          absolute URL to target, e.g http(s)://foo/bar\n\t"
-      "-v,          verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
-      "-x,          max length of randomized followup data per tick\n"
+      "-c,        target number of connections\n\t"
+      "-h or -b,  specifies test mode (either slow down headers or body)\n\t"
+      "-i,        interval between followup data in seconds\n\t"
+      "-l,        target test length in seconds\n\t"
+      "-r,        connection rate (connections per seconds)\n\t"
+      "-s,        value of Content-Length header for POST request\n\t"
+      "-t         verb to use (defalut to GET for headers and POST for body)\n"
+      "-u,        absolute URL to target, e.g http(s)://foo/bar\n\t"
+      "-v,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
+      "-x,        max length of randomized followup data per tick\n"
       , PACKAGE
       , VERSION
       );
@@ -71,6 +72,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   char url[1024] = { 0 };
+  char verb[16] = { 0 };
   // default vaules
   int conn_cnt = 50;
   int rate = 50;
@@ -82,7 +84,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hpc:i:l:r:s:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":hpc:i:l:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -136,8 +138,11 @@ int main(int argc, char **argv) {
           return -1;
         }
         break;
+      case 't':
+        strncpy(verb, optarg, 15);
+        break;
       case 'u':
-        strncpy(url, optarg, 1024);
+        strncpy(url, optarg, 1023);
         break;
       case 'v':
         tmp = strtol(optarg, 0, 10);
@@ -172,7 +177,7 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
     max_random_data_len, content_length, type));
-  if(!slow_test->init(url)) {
+  if(!slow_test->init(url, verb)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {

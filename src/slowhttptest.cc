@@ -45,23 +45,23 @@ namespace {
 static const int kBufSize = 65537;
 // update ExitStatusTupe too
 static const char* exit_status_msg[] = {
-  "Hit test time limit",
-  "No open connections left",
-  "Cannot esatblish connection",
-  "Connection refused"
+    "Hit test time limit",
+    "No open connections left",
+    "Cannot esatblish connection",
+    "Connection refused"
 };
 static const char* user_agents[] = {
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
-   "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
-  "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) "
-   "AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.7; rv:5.0.1) "
-   "Gecko/20100101 Firefox/5.0.1",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) "
-   "AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.122 Safari/534.30",
-  "Opera/9.80 (Macintosh; Intel Mac OS X 10.7.0; U; Edition MacAppStore; en) "
-   "Presto/2.9.168 Version/11.50",
-  "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
+    "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
+    "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) "
+    "AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.7; rv:5.0.1) "
+    "Gecko/20100101 Firefox/5.0.1",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) "
+    "AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.122 Safari/534.30",
+    "Opera/9.80 (Macintosh; Intel Mac OS X 10.7.0; U; Edition MacAppStore; en) "
+    "Presto/2.9.168 Version/11.50",
+    "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
 };
 static const char post_request[] = "Connection: close\r\n"
     "Referer: http://code.google.com/p/slowhttptest/\r\n"
@@ -149,7 +149,7 @@ const char* SlowHTTPTest::get_random_extra() {
   return random_extra_.c_str();
 }
 
-bool SlowHTTPTest::init(const char* url) {
+bool SlowHTTPTest::init(const char* url, const char* verb) {
   if(!change_fd_limits()) {
     slowlog(LOG_ERROR, "error setting open file limits\n");
   }
@@ -176,12 +176,22 @@ bool SlowHTTPTest::init(const char* url) {
     separator_ = header_separator;
     prefix_ = header_prefix;
     postfix_ = crlf;
-    request_.append("GET ");
+    if(strlen(verb)) {
+      request_.append(verb);
+      request_.append(" ");
+    } else {
+      request_.append("GET ");
+    }
   } else {
     separator_ = body_separator;
     prefix_ = body_prefix;
     postfix_ = 0;
-    request_.append("POST ");
+    if(strlen(verb)) {
+      request_.append(verb);
+      request_.append(" ");
+    } else {
+      request_.append("POST ");
+    }
   }
 
   request_.append(base_uri_.getPath());
@@ -313,7 +323,7 @@ void SlowHTTPTest::report_final() {
   }
 
   slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
-   "average connect time:     %ld\naverage lifetime:    %ld\n",
+   "average connect time:     %ld\naverage lifetime:         %ld\n",
     seconds_passed_, exit_status_msg[exit_status_],
     std::accumulate(connect_times.begin(), connect_times.end(), 0) / connect_times.size(), 
     std::accumulate(life_times.begin(), life_times.end(), 0) / life_times.size() 
