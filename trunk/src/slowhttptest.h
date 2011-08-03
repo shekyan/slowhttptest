@@ -54,7 +54,7 @@ class SlowHTTPTest {
     int max_random_data_len, int content_length, SlowTestType type);
   ~SlowHTTPTest();
 
-  bool init(const char* url);
+  bool init(const char* url, const char* verb);
   void report_parameters();
   void report_status();
   void report_final();
