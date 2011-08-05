@@ -270,7 +270,8 @@ void SlowHTTPTest::report_final() {
     }
   }
 
-  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
+  slowlog(LOG_INFO, "Test ended on %dth second\n"
+    "status:                           %s\n"
     "average connect time:             %ld milliseconds\n"
     "average lifetime:                 %ld milliseconds\n"
     , seconds_passed_
