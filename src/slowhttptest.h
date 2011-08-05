@@ -68,6 +68,7 @@ class SlowHTTPTest {
   addrinfo* addr_;
   std::string request_;
   std::string random_extra_;
+  std::string verb_;
   std::string user_agent_;
   Url base_uri_;
   const char* separator_;
