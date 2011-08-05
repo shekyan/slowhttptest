@@ -289,7 +289,7 @@ void SlowHTTPTest::report_parameters() {
     "number of connections:            %d\n"
     "URL:                              %s\n"
     "verb:                             %s\n"
-    "Content-Length header value       %d\n"
+    "Content-Length header value:      %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n"
