@@ -45,7 +45,7 @@ static void usage() {
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
       "-c,        target number of connections\n\t"
-      "-h or -b,  specifies test mode (either slow down headers or body)\n\t"
+      "-h or -b,  specifies test mode (slow down either headers or body)\n\t"
       "-i,        interval between followup data in seconds\n\t"
       "-l,        target test length in seconds\n\t"
       "-r,        connection rate (connections per seconds)\n\t"
@@ -184,5 +184,6 @@ int main(int argc, char **argv) {
     slowlog(LOG_FATAL, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
+  slow_test->report_final();
   return 0;
 }

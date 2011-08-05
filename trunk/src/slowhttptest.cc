@@ -99,6 +99,13 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
 
 SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
+  for(int i = 0; i < num_connections_; ++i) {
+    if(sock_[i]) {
+      delete sock_[i];
+    }
+  }
+  sock_.clear();
+
 }
 
 bool SlowHTTPTest::change_fd_limits() {
@@ -173,29 +180,33 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
   }
   random_extra_.resize(extra_data_max_len_);
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
-  request_.clear();
+
   if(eHeader == type_) {
+    // setup follow up data pattern
     separator_ = header_separator;
     prefix_ = header_prefix;
     postfix_ = crlf;
+    // setup verb
     if(strlen(verb)) {
-      request_.append(verb);
-      request_.append(" ");
+      verb_.append(verb);
     } else {
-      request_.append("GET ");
+      verb_.append("GET");
     }
   } else {
+    // setup follow up data pattern
     separator_ = body_separator;
     prefix_ = body_prefix;
     postfix_ = 0;
     if(strlen(verb)) {
-      request_.append(verb);
-      request_.append(" ");
+      verb_.append(verb);
     } else {
-      request_.append("POST ");
+      verb_.append("POST");
     }
   }
-
+  // srtat building request
+  request_.clear();
+  request_.append(verb_);
+  request_.append(" ");
   request_.append(base_uri_.getPath());
   request_.append(" HTTP/1.1\r\n");
   request_.append("Host: ");
@@ -228,19 +239,63 @@ void SlowHTTPTest::close_sock(int id) {
   sock_[id]->close();
 }
 
+void SlowHTTPTest::report_final() {
+
+  // report parameters once more
+  report_parameters();
+  long res = 0;
+  long a = 0;
+  long b = 0;
+  long c = 0;
+  // if socket still open, set close time to now
+  timeval t;
+  gettimeofday(&t, 0);
+  std::vector<long> connect_times;
+  std::vector<long> life_times;
+  long n = (t.tv_sec * 1000) + (t.tv_usec / 1000);
+  std::vector<SlowSocket*>::iterator it;
+  for(it = sock_.begin(); it < sock_.end(); ++it) {
+    a = (*it)->get_start();
+    b = (*it)->get_connected();
+    c = (*it)->get_stop() ? (*it)->get_stop() : n;
+    if(a && b) {
+      res = b - a;
+      connect_times.push_back(res);
+      slowlog(LOG_DEBUG, "connect time %ld\n", res);
+    }
+    if(c && a) {
+      res = c - a;
+      life_times.push_back(res);
+      slowlog(LOG_DEBUG, "life time %ld\n", res);
+    }
+  }
+
+  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
+    "average connect time:             %ld\n"
+    "average lifetime:                 %ld\n"
+    , seconds_passed_
+    , exit_status_msg[exit_status_]
+    , std::accumulate(connect_times.begin(),
+      connect_times.end(), 0) / connect_times.size()
+    , std::accumulate(life_times.begin(),
+      life_times.end(), 0) / life_times.size());
+}
+
 void SlowHTTPTest::report_parameters() {
 
   slowlog(LOG_INFO, "\nUsing:\n"
     "test mode:                        %s\n"
-    "URL:                              %s\n"
     "number of connections:            %d\n"
+    "URL:                              %s\n"
+    "verb:                             %s\n"
     "Content-Length header value       %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n"
     , type_?"POST":"headers"
-    , base_uri_.getData()
     , num_connections_
+    , base_uri_.getData()
+    , verb_.c_str()
     , content_length_
     , followup_timing_
     , delay_
@@ -283,54 +338,20 @@ void SlowHTTPTest::report_status() {
   }
 
   slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-   "inititalizing       %d\n"
-   "connecting          %d\n"
-   "connected           %d\n"
-   "error               %d\n"
-   "closed              %d\n"
-   , seconds_passed_
-   , initializing_
-   , connecting_
-   , connected_
-   , errored_
-   , closed_);
+    "inititalizing       %d\n"
+    "connecting          %d\n"
+    "connected           %d\n"
+    "error               %d\n"
+    "closed              %d\n"
+    , seconds_passed_
+    , initializing_
+    , connecting_
+    , connected_
+    , errored_
+    , closed_);
 
 }
-void SlowHTTPTest::report_final() {
-  long res = 0;
-  long a = 0;
-  long b = 0;
-  long c = 0;
-  // if socket still open, set close time to now
-  timeval t;
-  gettimeofday(&t, 0);
-  std::vector<long> connect_times;
-  std::vector<long> life_times;
-  long n = (t.tv_sec * 1000) + (t.tv_usec / 1000);
-  std::vector<SlowSocket*>::iterator it;
-  for(it = sock_.begin(); it < sock_.end(); ++it) {
-    a = (*it)->get_start();
-    b = (*it)->get_connected();
-    c = (*it)->get_stop() ? (*it)->get_stop() : n;
-    if(a && b) {
-      res = b - a;
-      connect_times.push_back(res);
-      slowlog(LOG_DEBUG, "connect time %ld\n", res);
-    }
-    if(c && a) {
-      res = c - a;
-      life_times.push_back(res);
-      slowlog(LOG_DEBUG, "life time %ld\n", res);
-    }
-  }
 
-  slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
-   "average connect time:     %ld\naverage lifetime:         %ld\n",
-    seconds_passed_, exit_status_msg[exit_status_],
-    std::accumulate(connect_times.begin(), connect_times.end(), 0) / connect_times.size(), 
-    std::accumulate(life_times.begin(), life_times.end(), 0) / life_times.size() 
-);
-}
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
   fd_set readfds, writefds;
@@ -528,14 +549,6 @@ bool SlowHTTPTest::run_test() {
       usleep(tv_delay.tv_usec);
     }
   }
-  report_final();
-  for(int i = 0; i < num_connections_; ++i) {
-    if(sock_[i]) {
-      delete sock_[i];
-    }
-  }
-  sock_.clear();
-
   return true;
 }
 }  // namespace slowhttptest
