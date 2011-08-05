@@ -271,8 +271,8 @@ void SlowHTTPTest::report_final() {
   }
 
   slowlog(LOG_INFO, "Test ended on %dth second with status: %s\n"
-    "average connect time:             %ld\n"
-    "average lifetime:                 %ld\n"
+    "average connect time:             %ld milliseconds\n"
+    "average lifetime:                 %ld milliseconds\n"
     , seconds_passed_
     , exit_status_msg[exit_status_]
     , std::accumulate(connect_times.begin(),
