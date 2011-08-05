@@ -76,6 +76,7 @@ static const char header_separator[] = ": ";
 static const char body_prefix[] = "&";
 static const char body_separator[] = "=";
 static const char crlf[] = "\r\n";
+static const char peer_closed[] = "Peer closed connection";
 static const char symbols[] =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 }  // namespace
@@ -106,14 +107,15 @@ bool SlowHTTPTest::change_fd_limits() {
     slowlog(LOG_ERROR, "error getting limits for open files: %s\n", strerror(errno));
     return false;
   }
-  // +3 is stdin, stdout, stderr  
-  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 3)) { //extend limits
-    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 3)) {
-      fd_limit.rlim_cur = num_connections_ + 3;
+  // +3 is stdin, stdout, stderr + 1 spare
+  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 4)) { //extend limits
+    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 4)) {
+      fd_limit.rlim_cur = num_connections_ + 4;
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
-      num_connections_ = fd_limit.rlim_max - 3;
-      slowlog(LOG_WARN, "decreasing target connection number to %d\n", num_connections_);
+      num_connections_ = fd_limit.rlim_max - 4;
+      slowlog(LOG_WARN, "hit system limit. Decreasing target connection number to %d\n",
+        num_connections_);
     }
     if(setrlimit(RLIMIT_NOFILE, &fd_limit)) {
       slowlog(LOG_ERROR, "error setting limits for open files: %s\n", strerror(errno));
@@ -437,7 +439,7 @@ bool SlowHTTPTest::run_test() {
               sock_[i]->set_state(eClosed);
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
                   sock_[i]->get_sockfd(),
-                  strerror(errno));
+                  ret?strerror(errno):peer_closed);
               close_sock(i);
               continue;
             } else {
