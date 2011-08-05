@@ -68,7 +68,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     sockfd_ = socket(res->ai_family, res->ai_socktype,
      res->ai_protocol);
     if(-1 == sockfd_) {
-      slowlog(LOG_ERROR, "failed to create socket\n");
+      slowlog(LOG_ERROR, "failed to create socket: %s\n", strerror(errno));
       return false;
     }
 
