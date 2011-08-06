@@ -48,7 +48,8 @@ static const char* exit_status_msg[] = {
     "Hit test time limit",
     "No open connections left",
     "Cannot esatblish connection",
-    "Connection refused"
+    "Connection refused",
+    "Unexpected error"
 };
 static const char* user_agents[] = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
@@ -94,6 +95,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
   ,seconds_passed_(0)
   ,content_length_(content_length)
   ,type_(type)
+  ,exit_status_(eUnexpectedError)
 {
 }
 
@@ -422,6 +424,9 @@ bool SlowHTTPTest::run_test() {
     if(seconds_passed_ > duration_) { // hit time limit
       exit_status_ = eTimeLimit;
       break;
+    } else if(active_sock_num == 0) { //no open connections left
+      exit_status_ = eAllClosed;
+      break;
     }
     // rude way to detect if something is wrong after 10 seconds
     if(seconds_passed_ > 10 && connected_ == 0) {
@@ -430,11 +435,6 @@ bool SlowHTTPTest::run_test() {
       } else if (closed_ > 0 && connecting_ >=0) {
         exit_status_ = eConnectionRefused;
       }
-      break;
-    }
-    // no open connections
-    if(active_sock_num == 0) {
-      exit_status_ = eAllClosed;
       break;
     }
     // do not block if have new connections to establish

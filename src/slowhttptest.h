@@ -44,7 +44,8 @@ enum ExitStatusType {
   eTimeLimit = 0,
   eAllClosed,
   eHostNotAlive,
-  eConnectionRefused
+  eConnectionRefused,
+  eUnexpectedError
 };
 
 class SlowSocket;
@@ -84,14 +85,12 @@ class SlowHTTPTest {
   int seconds_passed_;
   int content_length_;
   SlowTestType type_;
+  ExitStatusType exit_status_;
   int initializing_;
   int connecting_; 
   int connected_; 
   int errored_; 
   int closed_;
-
-
-  ExitStatusType exit_status_;
 };
 
 }  // namespace slowhttptest
