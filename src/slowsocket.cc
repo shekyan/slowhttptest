@@ -26,7 +26,9 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
-#include <cmath>
+#include <math.h>
+
+#include <algorithm>
 #include <string>
 
 #include <openssl/ssl.h>
@@ -87,7 +89,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
   followups_to_send_ = followups_to_send;
   requests_to_send_ = 1;
 
-  maxdf = max(sockfd_, maxfd);
+  maxfd = std::max(sockfd_, maxfd);
   return true;
 }
 
@@ -142,7 +144,7 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   return true;
 }
 
-int SlowSocket::recv_slow(void *buf, size_t len) {
+int SlowSocket::recv_slow(void* buf, size_t len) {
   int ret = ssl_ ? SSL_read(ssl_, buf, len)
                  : recv(sockfd_, buf, len, 0);
   if(ssl_) {

@@ -24,13 +24,13 @@
 #include "slowhttptest.h"
 
 #include <errno.h>
-#include <cmath>
+#include <math.h>
 #include <stdio.h>
 
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -86,17 +86,16 @@ namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
  int interval, int con_cnt, int max_random_data_len,
  int content_length, SlowTestType type) :
-  delay_(delay)
-  ,duration_(duration)
-  ,followup_timing_(interval)
-  ,followup_cnt_(duration_ / followup_timing_)
-  ,num_connections_(con_cnt)
-  ,extra_data_max_len_(max_random_data_len)
-  ,seconds_passed_(0)
-  ,content_length_(content_length)
-  ,type_(type)
-  ,exit_status_(eUnexpectedError)
-{
+  delay_(delay),
+  duration_(duration),
+  followup_timing_(interval),
+  followup_cnt_(duration_ / followup_timing_),
+  num_connections_(con_cnt),
+  extra_data_max_len_(max_random_data_len),
+  seconds_passed_(0),
+  content_length_(content_length),
+  type_(type),
+  exit_status_(eUnexpectedError) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
@@ -133,25 +132,25 @@ bool SlowHTTPTest::change_fd_limits() {
       slowlog(LOG_INFO, "set open files limit to %d\n", fd_limit.rlim_cur);
     }
   }
-  
   return true;
 }
+
 const char* SlowHTTPTest::get_random_extra() {
   size_t name_len = 0;
   size_t value_len = 0;
 
-  while(name_len == 0) name_len= rand() % ((extra_data_max_len_ - 1)/2);
-  while(value_len == 0) value_len= rand() % ((extra_data_max_len_ -1)/2);
+  name_len = rand() % ((extra_data_max_len_ - 1) / 2 - 1) + 1;
+  value_len = rand() % ((extra_data_max_len_ - 1) / 2 - 1) + 1;
   random_extra_.clear();
   random_extra_.append(prefix_);
   while(name_len) {
     // -1 is for not including trailing \0 in symbols
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols) - 1)]); 
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols) / sizeof(*symbols) - 1)]); 
     --name_len;
   }
   random_extra_.append(separator_);
   while(value_len) {    
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols)/sizeof(*symbols) - 1)]);  
+    random_extra_.push_back(symbols[rand() % (sizeof(symbols) / sizeof(*symbols) - 1)]);  
     --value_len;
   }
   if(postfix_) {
@@ -189,7 +188,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
     prefix_ = header_prefix;
     postfix_ = crlf;
     // setup verb
-    if(strlen(verb)) {
+    if(verb != 0 && strlen(verb)) {
       verb_.append(verb);
     } else {
       verb_.append("GET");
