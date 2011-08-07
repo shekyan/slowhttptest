@@ -287,7 +287,7 @@ void SlowHTTPTest::report_final() {
 void SlowHTTPTest::report_parameters() {
 
   slowlog(LOG_INFO, "\nUsing:\n"
-    "test mode:                        %s\n"
+    "slow section:                     %s\n"
     "number of connections:            %d\n"
     "URL:                              %s\n"
     "verb:                             %s\n"
@@ -295,7 +295,7 @@ void SlowHTTPTest::report_parameters() {
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n"
-    , type_?"POST":"headers"
+    , type_?"body":"headers"
     , num_connections_
     , base_uri_.getData()
     , verb_.c_str()
