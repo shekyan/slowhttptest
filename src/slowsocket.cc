@@ -66,7 +66,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
   bool connect_initiated_ = false;
   for (res = addr; !connect_initiated_ && res; res = res->ai_next) {
     sockfd_ = socket(res->ai_family, res->ai_socktype,
-     res->ai_protocol);
+                     res->ai_protocol);
     if(-1 == sockfd_) {
       slowlog(LOG_ERROR, "failed to create socket: %s\n", strerror(errno));
       return false;
@@ -81,16 +81,13 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
-      
   }
 
 
   followups_to_send_ = followups_to_send;
   requests_to_send_ = 1;
 
-  if(sockfd_ > maxfd) {
-    maxfd = sockfd_;
-  }
+  maxdf = max(sockfd_, maxfd);
   return true;
 }
 
@@ -146,10 +143,10 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
 }
 
 int SlowSocket::recv_slow(void *buf, size_t len) {
-  int ret=ssl_ ? SSL_read(ssl_, buf, len)
-    : recv(sockfd_, buf, len, 0);
+  int ret = ssl_ ? SSL_read(ssl_, buf, len)
+                 : recv(sockfd_, buf, len, 0);
   if(ssl_) {
-    if(ret <0) { 
+    if(ret < 0) { 
       int err = SSL_get_error(ssl_, ret);
       if(err == SSL_ERROR_WANT_WRITE) {
         requests_to_send_ = 1;
