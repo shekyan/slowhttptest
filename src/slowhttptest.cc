@@ -40,6 +40,7 @@
 #include "slowlog.h"
 #include "slowsocket.h"
 #include "slowhttptest.h"
+#include "text-generator.h"
 
 namespace {
 static const int kBufSize = 65537;
@@ -143,16 +144,9 @@ const char* SlowHTTPTest::get_random_extra() {
   value_len = rand() % (extra_data_max_len_ / 2) + 1;
   random_extra_.clear();
   random_extra_.append(prefix_);
-  while(name_len) {
-    // -1 is for not including trailing \0 from symbols
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols) / sizeof(*symbols) - 1)]); 
-    --name_len;
-  }
+  random_extra_.append(textgen_.GetText(extra_data_max_len_));
   random_extra_.append(separator_);
-  while(value_len) {    
-    random_extra_.push_back(symbols[rand() % (sizeof(symbols) / sizeof(*symbols) - 1)]);  
-    --value_len;
-  }
+  random_extra_.append(textgen_.GetText(extra_data_max_len_));
   if(postfix_) {
     random_extra_.append(postfix_);
   }
