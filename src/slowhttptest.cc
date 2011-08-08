@@ -80,6 +80,7 @@ static const char crlf[] = "\r\n";
 static const char peer_closed[] = "Peer closed connection";
 static const char symbols[] =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+
 }  // namespace
 
 namespace slowhttptest {

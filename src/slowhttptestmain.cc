@@ -51,7 +51,7 @@ static void usage() {
       "-r,        connection rate (connections per seconds)\n\t"
       "-s,        value of Content-Length header for POST request\n\t"
       "-t         verb to use (defalut to GET for headers and POST for body)\n\t"
-      "-u,        absolute URL to target, e.g http(s)://foo/bar\n\t"
+      "-u,        absolute URL to target, e.g http[s]://foo/bar\n\t"
       "-v,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "-x,        max length of randomized followup data per tick\n"
       , PACKAGE
