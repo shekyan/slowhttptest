@@ -32,7 +32,7 @@
 #include <vector>
 
 #include "slowurl.h"
-
+#include "text-generator.h"
 namespace slowhttptest {
 
 enum SlowTestType {
@@ -48,6 +48,7 @@ enum ExitStatusType {
   eUnexpectedError
 };
 
+class RandomTextGenerator;
 class SlowSocket;
 class SlowHTTPTest {
  public:
@@ -66,6 +67,7 @@ class SlowHTTPTest {
   bool change_fd_limits();
   const char* get_random_extra();
 
+  RandomTextGenerator textgen_;
   addrinfo* addr_;
   std::string request_;
   std::string random_extra_;
