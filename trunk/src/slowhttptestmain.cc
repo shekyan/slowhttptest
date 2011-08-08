@@ -90,8 +90,7 @@ int main(int argc, char **argv) {
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= 1024) {
           conn_cnt = static_cast<int>(tmp);
-        }
-        else {
+        } else {
           usage();
           return -1;
         }
@@ -157,6 +156,7 @@ int main(int argc, char **argv) {
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= INT_MAX) {
           max_random_data_len = static_cast<int>(tmp);
+          if(max_random_data_len < 2) max_random_data_len = 2;
         } else {
           usage();
           return -1;

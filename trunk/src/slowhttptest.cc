@@ -138,13 +138,12 @@ bool SlowHTTPTest::change_fd_limits() {
 const char* SlowHTTPTest::get_random_extra() {
   size_t name_len = 0;
   size_t value_len = 0;
-
-  name_len = rand() % ((extra_data_max_len_ - 1) / 2 - 1) + 1;
-  value_len = rand() % ((extra_data_max_len_ - 1) / 2 - 1) + 1;
+  name_len = rand() % (extra_data_max_len_ / 2) + 1;
+  value_len = rand() % (extra_data_max_len_ / 2) + 1;
   random_extra_.clear();
   random_extra_.append(prefix_);
   while(name_len) {
-    // -1 is for not including trailing \0 in symbols
+    // -1 is for not including trailing \0 from symbols
     random_extra_.push_back(symbols[rand() % (sizeof(symbols) / sizeof(*symbols) - 1)]); 
     --name_len;
   }
@@ -179,7 +178,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
     slowlog(LOG_FATAL, "Error in getaddrinfo: %s\n", gai_strerror(error));
     return false;
   }
-  random_extra_.resize(extra_data_max_len_);
+  random_extra_.resize(extra_data_max_len_ + 1);
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
 
   if(eHeader == type_) {
@@ -520,7 +519,7 @@ bool SlowHTTPTest::run_test() {
               } else {
                 if(ret > 0) { //actual data was sent
                   slowlog(LOG_DEBUG,
-                      "%s:%d of %d follow up data sent on socket %d:\n%s\n%d follow ups left\n",
+                      "%s:%d of %d bytes of follow up data sent on socket %d:\n%s\n%d follow ups left\n",
                         __FUNCTION__, ret,
                         (int) strlen(extra_data),
                         (int) sock_[i]->get_sockfd(),
