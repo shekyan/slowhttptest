@@ -8,7 +8,7 @@ using std::generate;
 
 namespace {
   const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-                          "0123456789 ,.;:'";
+                          "0123456789";
   const int alphabet_size = sizeof(alphabet) / sizeof(alphabet[0]) - 1;
   
   char gen_from_alphabet() {
