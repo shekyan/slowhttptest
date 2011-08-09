@@ -144,9 +144,9 @@ const char* SlowHTTPTest::get_random_extra() {
   value_len = rand() % (extra_data_max_len_ / 2) + 1;
   random_extra_.clear();
   random_extra_.append(prefix_);
-  random_extra_.append(textgen_.GetText(extra_data_max_len_));
+  random_extra_.append(textgen_.get_text(extra_data_max_len_));
   random_extra_.append(separator_);
-  random_extra_.append(textgen_.GetText(extra_data_max_len_));
+  random_extra_.append(textgen_.get_text(extra_data_max_len_));
   if(postfix_) {
     random_extra_.append(postfix_);
   }
