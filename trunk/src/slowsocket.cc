@@ -79,7 +79,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
       return false;
     }
 
-    slowlog(LOG_DEBUG, "non-blocking socket fd = %d created\n", sockfd_);
+    slowlog(LOG_DEBUG, "non-blocking socket %d created\n", sockfd_);
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
