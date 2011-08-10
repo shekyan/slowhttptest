@@ -59,6 +59,7 @@ class SlowHTTPTest {
   bool init(const char* url, const char* verb);
   void report_parameters();
   void report_status();
+  void report_csv();
   void report_final();
   bool run_test();
 

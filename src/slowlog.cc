@@ -34,11 +34,15 @@
 
 namespace {
 static FILE* log_file = NULL;
+static FILE* csv_file = NULL;
 int current_log_level;
 
 void dispose_of_log() {
-  if (log_file != stdout) {
+  if (log_file && log_file != stdout) {
     fclose(log_file);
+  }
+  if(csv_file) {
+    fclose(csv_file);
   }
 }
 
@@ -54,8 +58,25 @@ void print_call_stack() {
 }
 
 namespace slowhttptest {
-void slowlog_init(int debug_level, const char* file_name) {
+void slowlog_init(int debug_level, const char* file_name, bool need_csv) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
+  if(!log_file) {
+    printf("Unable to open log file %s for writing: %s", file_name,
+      strerror(errno));
+  }
+  if(need_csv) {
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    char csv_file_name[23] = {0};
+    strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
+    csv_file = fopen(csv_file_name , "w");
+    if(!csv_file) {
+      printf("Unable to open csv file %s for writing: %s", csv_file_name,
+        strerror(errno));
+    }
+  }
   atexit(&dispose_of_log);
   current_log_level = debug_level;
 }
@@ -98,7 +119,13 @@ void slowlog(int lvl, const char* format, ...) {
     va_start(va, format);
     vfprintf(log_file, format, va);
     va_end(va);
-  }
+  } else 
+    if(lvl == LOG_CSV) {
+      va_list va;
+      va_start(va, format);
+      vfprintf(log_file, format, va);
+      va_end(va);
+    }
 }
 
 }  // namespace slowhttptest
