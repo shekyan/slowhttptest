@@ -339,8 +339,8 @@ void SlowHTTPTest::report_status(bool to_csv) {
     dump_csv("%d,%d,%d,%d\n",
       connecting_,
       connected_,
-      errored_,
-      closed_); 
+      closed_,
+      errored_); 
   } else {
     slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
       "inititalizing:       %d\n"

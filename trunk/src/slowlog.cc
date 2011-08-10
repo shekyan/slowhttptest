@@ -76,6 +76,8 @@ void slowlog_init(int debug_level, const char* file_name, bool need_csv) {
       printf("Unable to open csv file %s for writing: %s\n",
              csv_file_name,
              strerror(errno));
+    } else {
+      fprintf(csv_file, "Pending,Connected,Closed,Error\n");
     }
   }
   atexit(&dispose_of_log);
