@@ -38,7 +38,7 @@ static void usage() {
       "%s v.%s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-c <number of connections>] [-<h|b>]\n"
+      "slowtest [-c <number of connections>] [-<h|b>] [-g <generate csv>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "[-r <connections per second>] [-u <URL>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
@@ -46,6 +46,7 @@ static void usage() {
       "Options:\n\t"
       "-c,        target number of connections\n\t"
       "-h or -b,  specifies test mode (slow down either headers or body)\n\t"
+      "-g,        generate csv file with socket state changes\n\t"
       "-i,        interval between followup data in seconds\n\t"
       "-l,        target test length in seconds\n\t"
       "-r,        connection rate (connections per seconds)\n\t"
@@ -75,6 +76,7 @@ int main(int argc, char **argv) {
   char verb[16] = { 0 };
   // default vaules
   int conn_cnt = 50;
+  bool  need_csv = false;
   int rate = 50;
   int duration = 240;
   int interval = 10;
@@ -84,7 +86,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hbc:i:l:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":hbc:g:i:l:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -97,6 +99,9 @@ int main(int argc, char **argv) {
         break;
       case 'h':
         type = slowhttptest::eHeader;
+        break;
+      case 'g':
+        need_csv = true;
         break;
       case 'i':
         tmp = strtol(optarg, 0, 10);
@@ -173,7 +178,7 @@ int main(int argc, char **argv) {
     }
   }
   signal(SIGPIPE, SIG_IGN);
-  slowlog_init(debug_level, NULL);
+  slowlog_init(debug_level, NULL, need_csv);
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
     max_random_data_len, content_length, type));
