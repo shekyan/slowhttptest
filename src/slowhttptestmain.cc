@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hbc:g:i:l:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":hbgc:i:l:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
   slowlog_init(debug_level, NULL, need_csv);
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
-    max_random_data_len, content_length, type));
+    max_random_data_len, content_length, type, need_csv));
   if(!slow_test->init(url, verb)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;

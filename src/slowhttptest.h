@@ -52,13 +52,14 @@ class RandomTextGenerator;
 class SlowSocket;
 class SlowHTTPTest {
  public:
-  SlowHTTPTest(int delay, int duration, int interval, int con_cnt,
-    int max_random_data_len, int content_length, SlowTestType type);
+  SlowHTTPTest(int delay, int duration, int interval,
+   int con_cnt, int max_random_data_len, int content_length,
+   SlowTestType type, bool need_csv);
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb);
   void report_parameters();
-  void report_status();
+  void report_status(bool to_csv);
   void report_csv();
   void report_final();
   bool run_test();
@@ -67,7 +68,7 @@ class SlowHTTPTest {
   void close_sock(int id);
   bool change_fd_limits();
   const char* get_random_extra();
-
+  
   RandomTextGenerator textgen_;
   addrinfo* addr_;
   std::string request_;
@@ -88,6 +89,7 @@ class SlowHTTPTest {
   int seconds_passed_;
   int content_length_;
   SlowTestType type_;
+  bool need_csv_;
   ExitStatusType exit_status_;
   int initializing_;
   int connecting_; 

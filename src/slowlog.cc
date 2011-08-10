@@ -119,11 +119,10 @@ void slowlog(int lvl, const char* format, ...) {
     va_start(va, format);
     vfprintf(log_file, format, va);
     va_end(va);
-  } else 
-    if(lvl == LOG_CSV) {
+  } else if(LOG_CSV == lvl) {
       va_list va;
       va_start(va, format);
-      vfprintf(log_file, format, va);
+      vfprintf(csv_file, format, va);
       va_end(va);
     }
 }

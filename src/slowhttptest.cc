@@ -87,7 +87,7 @@ static const char symbols[] =
 namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
  int interval, int con_cnt, int max_random_data_len,
- int content_length, SlowTestType type) :
+ int content_length, SlowTestType type, bool need_csv) :
   delay_(delay),
   duration_(duration),
   followup_timing_(interval),
@@ -97,6 +97,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
   seconds_passed_(0),
   content_length_(content_length),
   type_(type),
+  need_csv_(need_csv),
   exit_status_(eUnexpectedError) {
 }
 
@@ -299,7 +300,7 @@ void SlowHTTPTest::report_parameters() {
   );
 }
 
-void SlowHTTPTest::report_status() {
+void SlowHTTPTest::report_status(bool to_csv) {
   initializing_ = 0;
   connecting_ = 0; 
   connected_ = 0; 
@@ -332,19 +333,27 @@ void SlowHTTPTest::report_status() {
        }
     }
   }
-
-  slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-    "inititalizing       %d\n"
-    "connecting          %d\n"
-    "connected           %d\n"
-    "error               %d\n"
-    "closed              %d\n"
-    , seconds_passed_
-    , initializing_
-    , connecting_
-    , connected_
-    , errored_
-    , closed_);
+  if(to_csv) {
+    slowlog(LOG_CSV, "%d,%d,%d,%d\n"
+      , connecting_
+      , connected_
+      , errored_
+      , closed_); 
+  }
+  else {
+    slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
+      "inititalizing       %d\n"
+      "connecting          %d\n"
+      "connected           %d\n"
+      "error               %d\n"
+      "closed              %d\n"
+      , seconds_passed_
+      , initializing_
+      , connecting_
+      , connected_
+      , errored_
+      , closed_);
+  }
 
 }
 
@@ -363,7 +372,8 @@ bool SlowHTTPTest::run_test() {
   int active_sock_num;
   char buf[kBufSize];
   const char* extra_data;
-  int heartbeat_reported = 1; //trick to print 0 sec hb  
+  int heartbeat_reported = 1; //trick to print 0 sec hb
+  int csv_reported = 1; //trick to print 0 sec hb
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
@@ -408,9 +418,15 @@ bool SlowHTTPTest::run_test() {
         }
       }
     }
+    if(need_csv_) {
+      if(csv_reported != seconds_passed_) {
+        report_status(true);
+        csv_reported = seconds_passed_;
+      }
+    }
     if(seconds_passed_ % 5 == 0) { // printing heartbeat
       if(heartbeat_reported != seconds_passed_) { // once
-        report_status();
+        report_status(false);
         heartbeat_reported = seconds_passed_;
       }
     }
