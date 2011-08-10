@@ -118,13 +118,13 @@ bool SlowHTTPTest::change_fd_limits() {
     slowlog(LOG_ERROR, "error getting limits for open files: %s\n", strerror(errno));
     return false;
   }
-  // +3 is stdin, stdout, stderr + 1 spare
-  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 4)) { //extend limits
-    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 4)) {
-      fd_limit.rlim_cur = num_connections_ + 4;
+  // +3 is stdin, stdout, stderr + 1 + for csv fd + 1 spare
+  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 5)) { //extend limits
+    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 5)) {
+      fd_limit.rlim_cur = num_connections_ + 5;
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
-      num_connections_ = fd_limit.rlim_max - 4;
+      num_connections_ = fd_limit.rlim_max - 5;
       slowlog(LOG_WARN, "hit system limit. Decreasing target connection number to %d\n",
         num_connections_);
     }
