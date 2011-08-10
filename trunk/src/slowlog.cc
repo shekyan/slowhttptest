@@ -36,6 +36,7 @@ namespace {
 static FILE* log_file = NULL;
 static FILE* csv_file = NULL;
 int current_log_level;
+int seconds = 0;
 
 void dispose_of_log() {
   if (log_file && log_file != stdout) {
@@ -77,7 +78,7 @@ void slowlog_init(int debug_level, const char* file_name, bool need_csv) {
              csv_file_name,
              strerror(errno));
     } else {
-      fprintf(csv_file, "Pending,Connected,Closed,Error\n");
+      fprintf(csv_file, "Seconds,Pending,Connected,Closed,Error\n");
     }
   }
   atexit(&dispose_of_log);
@@ -110,6 +111,8 @@ void log_fatal(const char* format, ...) {
 }
 
 void dump_csv(const char* format, ...) {
+  fprintf(csv_file, "%d,", seconds);
+  ++seconds;
   va_list va;
   va_start(va, format);
   vfprintf(csv_file, format, va);
