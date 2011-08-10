@@ -329,32 +329,32 @@ void SlowHTTPTest::report_status(bool to_csv) {
           ++closed_;
           break;
         default:
+          slowlog(LOG_ERROR, "Unknown socket state: %d", state);
           break;
        }
     }
   }
-  if(to_csv) {
-    slowlog(LOG_CSV, "%d,%d,%d,%d\n"
-      , connecting_
-      , connected_
-      , errored_
-      , closed_); 
-  }
-  else {
-    slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-      "inititalizing       %d\n"
-      "connecting          %d\n"
-      "connected           %d\n"
-      "error               %d\n"
-      "closed              %d\n"
-      , seconds_passed_
-      , initializing_
-      , connecting_
-      , connected_
-      , errored_
-      , closed_);
-  }
 
+  if(to_csv) {
+    dump_csv("%d,%d,%d,%d\n",
+      connecting_,
+      connected_,
+      errored_,
+      closed_); 
+  } else {
+    slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
+      "inititalizing:       %d\n"
+      "connecting:          %d\n"
+      "connected:           %d\n"
+      "error:               %d\n"
+      "closed:              %d\n",
+      seconds_passed_,
+      initializing_,
+      connecting_,
+      connected_,
+      errored_,
+      closed_);
+  }
 }
 
 bool SlowHTTPTest::run_test() {
@@ -418,17 +418,15 @@ bool SlowHTTPTest::run_test() {
         }
       }
     }
-    if(need_csv_) {
-      if(csv_reported != seconds_passed_) {
-        report_status(true);
-        csv_reported = seconds_passed_;
-      }
+    // Print every second.
+    if(need_csv_ && csv_reported != seconds_passed_) {
+      report_status(true /*print_csv*/);
+      csv_reported = seconds_passed_;
     }
-    if(seconds_passed_ % 5 == 0) { // printing heartbeat
-      if(heartbeat_reported != seconds_passed_) { // once
-        report_status(false);
-        heartbeat_reported = seconds_passed_;
-      }
+    // Print every 5 seconds.
+    if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
+      report_status(false /*print_csv*/);
+      heartbeat_reported = seconds_passed_;
     }
     if(seconds_passed_ > duration_) { // hit time limit
       exit_status_ = eTimeLimit;
@@ -450,9 +448,9 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
 
-    result = select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
+    result = ::select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
      &timeout);
-    gettimeofday(&now, 0);
+    ::gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
       slowlog(LOG_FATAL, "%s: selecd < num_connections_error: %s\n", __FUNCTION__, strerror(errno));

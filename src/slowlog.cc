@@ -62,19 +62,20 @@ void slowlog_init(int debug_level, const char* file_name, bool need_csv) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   if(!log_file) {
     printf("Unable to open log file %s for writing: %s", file_name,
-      strerror(errno));
+           strerror(errno));
   }
   if(need_csv) {
     time_t rawtime;
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    char csv_file_name[23] = {0};
+    char csv_file_name[32] = {0};
     strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
     csv_file = fopen(csv_file_name , "w");
     if(!csv_file) {
-      printf("Unable to open csv file %s for writing: %s", csv_file_name,
-        strerror(errno));
+      printf("Unable to open csv file %s for writing: %s\n",
+             csv_file_name,
+             strerror(errno));
     }
   }
   atexit(&dispose_of_log);
@@ -90,11 +91,10 @@ void check(bool f, const char* message) {
   }   
 }
 
-
 void log_fatal(const char* format, ...) {
-  time_t  now = time(NULL);
-  char    ctimebuf[32],
-          *buf = ctime_r(&now, ctimebuf);
+  const time_t  now = time(NULL);
+  char ctimebuf[32];
+  const char* buf = ctime_r(&now, ctimebuf);
 
   fprintf(log_file, "%-.24s FATAL:", buf);
 
@@ -107,11 +107,19 @@ void log_fatal(const char* format, ...) {
   exit(1);
 }
 
+void dump_csv(const char* format, ...) {
+  va_list va;
+  va_start(va, format);
+  vfprintf(csv_file, format, va);
+  fflush(csv_file);
+  va_end(va);
+}
+
 void slowlog(int lvl, const char* format, ...) {
   if(lvl <= current_log_level) {
-    time_t  now = time(NULL);
-    char    ctimebuf[32],
-            *buf = ctime_r(&now, ctimebuf);
+    const time_t now = time(NULL);
+    char ctimebuf[32];
+    const char* buf = ctime_r(&now, ctimebuf);
 
     fprintf(log_file, "%-.24s:", buf);
 
@@ -119,12 +127,7 @@ void slowlog(int lvl, const char* format, ...) {
     va_start(va, format);
     vfprintf(log_file, format, va);
     va_end(va);
-  } else if(LOG_CSV == lvl) {
-      va_list va;
-      va_start(va, format);
-      vfprintf(csv_file, format, va);
-      va_end(va);
-    }
+  }
 }
 
 }  // namespace slowhttptest

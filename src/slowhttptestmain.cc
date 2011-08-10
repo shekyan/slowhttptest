@@ -152,8 +152,7 @@ int main(int argc, char **argv) {
         tmp = strtol(optarg, 0, 10);
         if(0 <= tmp && tmp <= 4) {
           debug_level = static_cast<int>(tmp);
-        }
-        else {
+        } else {
           debug_level = LOG_FATAL;
         }
         break;

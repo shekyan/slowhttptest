@@ -31,11 +31,11 @@
 #define LOG_ERROR   2
 #define LOG_WARN    3
 #define LOG_DEBUG   4
-#define LOG_CSV     9
 
 namespace slowhttptest {
 void slowlog_init(int debug_level, const char* file_name, bool need_csv);
 void slowlog(int lvl, const char* format, ...);
+void dump_csv(const char* format, ...);
 void log_fatal(const char* format, ...);
 
 void check(bool f, const char* message);
