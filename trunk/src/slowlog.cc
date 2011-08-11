@@ -36,27 +36,18 @@
 
 namespace {
 static FILE* log_file = NULL;
-static FILE* csv_file = NULL;
-static FILE* html_file = NULL;
 int current_log_level;
 
-void dispose_of_log(int param) {
+void dispose_of_log() {
   if (log_file && log_file != stdout) {
     fclose(log_file);
-  }
-  if(csv_file) {
-    fclose(csv_file);
-  }
-  if(html_file) {
-    fclose(html_file);
   }
   exit(1);
 }
 
-void wrapper_dispose_of_log() {
-  dispose_of_log(0);
+void dummy_f(int param) {
+  exit(1);
 }
-
 void print_call_stack() {
   static void* buf[64];
   const int depth = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
@@ -74,34 +65,8 @@ void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
     printf("Unable to open log file %s for writing: %s", file_name,
            strerror(errno));
   }
-  if(need_stats) {
-    time_t rawtime;
-    struct tm * timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    char csv_file_name[32] = {0};
-    char html_file_name[32] = {0};
-    strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
-    strftime(html_file_name, 22, "slow_%H%M%Y%m%d.html", timeinfo);
-    csv_file = fopen(csv_file_name , "w");
-    if(!csv_file) {
-      printf("Unable to open csv file %s for writing: %s\n",
-             csv_file_name,
-             strerror(errno));
-    } else {
-      fprintf(csv_file, "Seconds,Error,Closed,Pending,Connected\n");
-    }
-    html_file = fopen(html_file_name , "w");
-    if(!html_file) {
-      printf("Unable to open html file %s for writing: %s\n",
-          html_file_name,
-          strerror(errno));
-    } else {
-      //print_html_header(); 
-    }
-  }
-  atexit(&wrapper_dispose_of_log);
-  signal(SIGINT, &dispose_of_log);
+  atexit(&dispose_of_log);
+  signal(SIGINT, &dummy_f);
   current_log_level = debug_level;
 }
 
@@ -128,22 +93,6 @@ void log_fatal(const char* format, ...) {
   fflush(log_file);
   print_call_stack();
   exit(1);
-}
-
-void dump_csv(const char* format, ...) {
-  va_list va;
-  va_start(va, format);
-  vfprintf(csv_file, format, va);
-  fflush(csv_file);
-  va_end(va);
-} 
-
-void dump_html(const char* format, ...) {
-  va_list va;
-  va_start(va, format);
-  vfprintf(html_file, format, va);
-  fflush(html_file);
-  va_end(va);
 }
 
 void slowlog(int lvl, const char* format, ...) {

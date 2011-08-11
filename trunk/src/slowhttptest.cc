@@ -40,6 +40,7 @@
 #include "slowlog.h"
 #include "slowsocket.h"
 #include "slowhttptest.h"
+#include "slowstats.h"
 #include "text-generator.h"
 
 namespace {
@@ -87,7 +88,7 @@ static const char symbols[] =
 namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
  int interval, int con_cnt, int max_random_data_len,
- int content_length, SlowTestType type, bool need_csv) :
+ int content_length, SlowTestType type, bool need_stats) :
   delay_(delay),
   duration_(duration),
   followup_timing_(interval),
@@ -97,18 +98,24 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
   seconds_passed_(0),
   content_length_(content_length),
   type_(type),
-  need_csv_(need_csv),
+  need_stats_(need_stats),
   exit_status_(eUnexpectedError) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
+
   for(int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {
       delete sock_[i];
     }
   }
   sock_.clear();
+  
+  for (int i = 0; i < dumpers_.size(); ++i) {
+    delete dumpers_[i];
+  }
+  dumpers_.clear();
 
 }
 
@@ -118,13 +125,13 @@ bool SlowHTTPTest::change_fd_limits() {
     slowlog(LOG_ERROR, "error getting limits for open files: %s\n", strerror(errno));
     return false;
   }
-  // +3 is stdin, stdout, stderr + 1 + for csv fd + 1 spare
-  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 5)) { //extend limits
-    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 5)) {
-      fd_limit.rlim_cur = num_connections_ + 5;
+  // +3 is stdin, stdout, stderr + 2 for stat fds + 1 spare
+  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 6)) { //extend limits
+    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 6)) {
+      fd_limit.rlim_cur = num_connections_ + 6;
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
-      num_connections_ = fd_limit.rlim_max - 5;
+      num_connections_ = fd_limit.rlim_max - 6;
       slowlog(LOG_WARN, "hit system limit. Decreasing target connection number to %d\n",
         num_connections_);
     }
@@ -227,6 +234,25 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
     request_.append("\r\n");
     request_.append(post_request);
   }
+  time_t rawtime;
+  struct tm * timeinfo;
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+  char csv_file_name[32] = {0};
+  char html_file_name[32] = {0};
+  strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
+  strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+
+  dumpers_.push_back(new HTMLDumper(html_file_name));
+  dumpers_.push_back(new CSVDumper(csv_file_name,
+      "Seconds,Error,Closed,Pending,Connected\n"));
+  for (int i = 0; i < dumpers_.size(); ++i) {
+    if (!dumpers_[i]->Initialize()) {
+      slowlog(LOG_ERROR, "Stat files cannot be opened for writing");
+      return false;
+    }
+  }
+
   report_parameters();
   return true;
 }
@@ -336,20 +362,14 @@ void SlowHTTPTest::report_status(bool to_stats) {
   }
 
   if(to_stats) {
-    dump_csv("%d,%d,%d,%d,%d\n",
-        seconds_passed_, 
-        errored_,
-        closed_,
-        connecting_,
-        connected_);
-   
-    dump_html("['%d',%d,%d,%d,%d],\n",
-        seconds_passed_, 
-        errored_,
-        closed_,
-        connecting_,
-        connected_); 
-
+    for (int i = 0; i < dumpers_.size(); ++i) {
+      dumpers_[i]->WriteStats("%d,%d,%d,%d,%d",
+          seconds_passed_, 
+          errored_,
+          closed_,
+          connecting_,
+          connected_);
+    }
   } else {
     slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
         "inititalizing:       %d\n"
@@ -382,7 +402,7 @@ bool SlowHTTPTest::run_test() {
   char buf[kBufSize];
   const char* extra_data;
   int heartbeat_reported = 1; //trick to print 0 sec hb
-  int csv_reported = 1; //trick to print 0 sec hb
+  int stats_reported = 1; //trick to print 0 sec hb
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
@@ -428,9 +448,9 @@ bool SlowHTTPTest::run_test() {
       }
     }
     // Print every second.
-    if(need_csv_ && csv_reported != seconds_passed_) {
+    if(need_stats_ && stats_reported != seconds_passed_) {
       report_status(true /*print_csv*/);
-      csv_reported = seconds_passed_;
+      stats_reported = seconds_passed_;
     }
     // Print every 5 seconds.
     if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
