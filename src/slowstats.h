@@ -26,8 +26,6 @@
  *  based javascript.
  *****/
 
-
-
 #ifndef __SLOW_HTTP_TEST_STATS_H_
 #define __SLOW_HTTP_TEST_STATS_H_
 
@@ -74,22 +72,23 @@ class StatsDumper {
   FILE* file_;
 };
 
-
 class HTMLDumper : public StatsDumper {
  public:
-  HTMLDumper(const std::string& file_name, const char* test_info);
+  HTMLDumper(const std::string& file_name, const std::string& test_info);
   virtual ~HTMLDumper();
 
   virtual bool Initialize();
 
  private:
-  const std::string test_info_;
+  // Writes HTML report specific data before stats.
   virtual void PreWrite();
   virtual void PostWrite();
-  // We need to escap with ' the first parameter.
+  // We need to escapе with ' the first parameter.
   virtual std::string ModifyFormatString(const char* format);
   void WriteHeader();
   void WriteFooter();
+
+  const std::string test_info_;
 };
 
 class CSVDumper : public StatsDumper {

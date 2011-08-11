@@ -128,6 +128,7 @@ class SlowSocket {
   int last_followup_timing_;
   int offset_;
   SSL* ssl_;
+  SSL_CTX* ssl_ctx_;
   const void* buf_;
   long start_in_millisecs_;
   long connected_in_millisecs_;
