@@ -1,3 +1,5 @@
+// None of the rights are reserved.
+// (C) by Victor Agababov (vagababov@gmail.com) 2011
 #include "slowstats.h"
 #include <stdio.h>
 #include <vector>
@@ -11,8 +13,8 @@ using std::vector;
 int main() {
   vector<StatsDumper*> dumpers;
   dumpers.push_back(new HTMLDumper("test.html"));
-  //dumpers.push_back(new CSVDumper("test.csv", "Seconds,Error,Closed,Pending,Connected\n"));
-  dumpers.push_back(new CSVDumper("test.csv"));
+  dumpers.push_back(new CSVDumper("test.csv", "Seconds,Error,Closed,Pending,Connected\n"));
+  //dumpers.push_back(new CSVDumper("test.csv"));
   for (int i = 0; i < dumpers.size(); ++i) {
     if (!dumpers[i]->Initialize()) {
       fprintf(stderr, "ERROR ERROR ERROR. File cannot be opened");
