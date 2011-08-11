@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   char verb[16] = { 0 };
   // default vaules
   int conn_cnt = 50;
-  bool  need_csv = false;
+  bool  need_stats = false;
   int rate = 50;
   int duration = 240;
   int interval = 10;
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
         type = slowhttptest::eHeader;
         break;
       case 'g':
-        need_csv = true;
+        need_stats = true;
         break;
       case 'i':
         tmp = strtol(optarg, 0, 10);
@@ -177,10 +177,10 @@ int main(int argc, char **argv) {
     }
   }
   signal(SIGPIPE, SIG_IGN);
-  slowlog_init(debug_level, NULL, need_csv);
+  slowlog_init(debug_level, NULL, need_stats);
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
-    max_random_data_len, content_length, type, need_csv));
+    max_random_data_len, content_length, type, need_stats));
   if(!slow_test->init(url, verb)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
