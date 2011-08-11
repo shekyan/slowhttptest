@@ -181,8 +181,6 @@ void dump_html(const char* format, ...) {
   vfprintf(html_file, format, va);
   fflush(html_file);
   va_end(va);
-
-
 }
 
 void slowlog(int lvl, const char* format, ...) {
