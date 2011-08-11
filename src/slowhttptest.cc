@@ -343,7 +343,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
         connecting_,
         connected_);
    
-    dump_html("[\'%d\',%d,%d,%d,%d],\n",
+    dump_html("['%d',%d,%d,%d,%d],\n",
         seconds_passed_, 
         errored_,
         closed_,
