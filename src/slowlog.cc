@@ -62,7 +62,7 @@ void print_html_footer() {
   fprintf(html_file,
       "        ]);\r\n \
       var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\r\n \
-      chart.draw(data, {width: 400, height: 240, title: 'Company Performance',\r\n \
+      chart.draw(data, {width: 400, height: 240, title: 'BLABLA, here goes test parameters',\r\n \
       hAxis: {title: 'Seconds', titleTextStyle: {color: '#FF0000'}},\r\n \
       vAxis: {title: 'Connections', titleTextStyle: {color: '#FF0000'}}\r\n \
       });\r\n \
@@ -74,7 +74,6 @@ void print_html_footer() {
       </body>\r\n \
       </html>"); 
 }
-
 
 void dispose_of_log(int param) {
   if (log_file && log_file != stdout) {
@@ -89,6 +88,10 @@ void dispose_of_log(int param) {
     fclose(html_file);
   }
   exit(1);
+}
+
+void wrapper_dispose_of_log() {
+  dispose_of_log(0);
 }
 
 void print_call_stack() {
@@ -134,6 +137,7 @@ void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
       print_html_header(); 
     }
   }
+  atexit(&wrapper_dispose_of_log);
   signal(SIGINT, &dispose_of_log);
   current_log_level = debug_level;
 }
