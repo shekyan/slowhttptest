@@ -2,7 +2,7 @@
 
 #include "slowstats.h"
 #include "slowlog.h"
-
+#include <stdarg.h>
 #include <string>
 
 using std::string;
