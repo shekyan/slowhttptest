@@ -22,13 +22,15 @@
  *****/
 
 
+#include <ctime>
 #include <errno.h>
+#include <execinfo.h>
 #include <stdarg.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctime>
 #include <string.h>
-#include <execinfo.h>
+
 
 #include "slowlog.h"
 
@@ -74,7 +76,7 @@ void print_html_footer() {
 }
 
 
-void dispose_of_log() {
+void dispose_of_log(int param) {
   if (log_file && log_file != stdout) {
     fclose(log_file);
   }
@@ -86,6 +88,7 @@ void dispose_of_log() {
     fflush(html_file);
     fclose(html_file);
   }
+  exit(1);
 }
 
 void print_call_stack() {
@@ -131,7 +134,7 @@ void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
       print_html_header(); 
     }
   }
-  atexit(&dispose_of_log);
+  signal(SIGINT, &dispose_of_log);
   current_log_level = debug_level;
 }
 
