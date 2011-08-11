@@ -15,7 +15,7 @@
 * *****************************************************************************/
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
@@ -42,6 +42,9 @@
 #include "slowhttptest.h"
 #include "slowstats.h"
 #include "text-generator.h"
+
+// global flag to indicite if we need to run
+extern int g_running;
 
 namespace {
 static const int kBufSize = 65537;
@@ -105,18 +108,17 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
 SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
 
+  for (int i = 0; i < dumpers_.size(); ++i) {
+    delete dumpers_[i];
+  }
+  dumpers_.clear();
+
   for(int i = 0; i < num_connections_; ++i) {
     if(sock_[i]) {
       delete sock_[i];
     }
   }
   sock_.clear();
-  
-  for (int i = 0; i < dumpers_.size(); ++i) {
-    delete dumpers_[i];
-  }
-  dumpers_.clear();
-
 }
 
 bool SlowHTTPTest::change_fd_limits() {
@@ -243,7 +245,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
   strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
   strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
 
-  dumpers_.push_back(new HTMLDumper(html_file_name));
+  dumpers_.push_back(new HTMLDumper(html_file_name, "blabla"));
   dumpers_.push_back(new CSVDumper(csv_file_name,
       "Seconds,Error,Closed,Pending,Connected\n"));
   for (int i = 0; i < dumpers_.size(); ++i) {
@@ -410,7 +412,7 @@ bool SlowHTTPTest::run_test() {
   sock_.resize(num_connections_);
 
   // select loop
-  while(true) {
+  while(g_running) {
     int wr = 0;
     active_sock_num = 0;
     if(num_connected < num_connections_) {

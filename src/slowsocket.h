@@ -16,7 +16,8 @@
 
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
+ *         Tigran Gevorgyan
  *
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/

@@ -1,4 +1,32 @@
-// Copyright, yo by Victor Agababov (vagababov@gmail.com) 2011
+/*****************************************************************************
+*  Copyright 2011 Victor Agababov, Sergey Shekyan
+*
+*  Licensed under the Apache License, Version 2.0 (the "License");
+*  you may not use this file except in compliance with the License.
+*  You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+* *****************************************************************************/
+
+/*****
+ * Authors: Victor Agababov vagababov@gmail.com
+ *          Sergey Shekyan shekyan@gmail.com
+ *
+ * Slow HTTP attack  vulnerability test tool
+ *  http://code.google.com/p/slowhttptest/
+ *
+ *  class StatsDumper and derived classes help to generate
+ *  statistics of the test in CSV and Google Chart Tools
+ *  based javascript.
+ *****/
+
+
 
 #ifndef __SLOW_HTTP_TEST_STATS_H_
 #define __SLOW_HTTP_TEST_STATS_H_
@@ -27,6 +55,7 @@ class StatsDumper {
  protected:
   // If derived classes need to write anything.
   void WriteString(const char* str);
+  void WriteFormattedString(const char* fmt, const char* str);
   bool IsOpen() const { return file_ != NULL; }
   // If subclass needs to write something before stats, that's where 
   // it should go.
@@ -48,14 +77,13 @@ class StatsDumper {
 
 class HTMLDumper : public StatsDumper {
  public:
-  HTMLDumper(const std::string& file_name)
-    : StatsDumper(file_name) {
-  }
+  HTMLDumper(const std::string& file_name, const char* test_info);
   virtual ~HTMLDumper();
 
   virtual bool Initialize();
 
  private:
+  const std::string test_info_;
   virtual void PreWrite();
   virtual void PostWrite();
   // We need to escap with ' the first parameter.
@@ -67,7 +95,8 @@ class HTMLDumper : public StatsDumper {
 class CSVDumper : public StatsDumper {
  public:
   CSVDumper(const std::string& file_name);
-  CSVDumper(const std::string& file_name, const std::string& header);
+  CSVDumper(const std::string& file_name,
+      const std::string& header);
 
   virtual ~CSVDumper() {}  
   virtual bool Initialize();
