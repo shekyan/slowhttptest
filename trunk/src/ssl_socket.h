@@ -19,7 +19,7 @@ class SSLSocket : public Socket {
   // Factory method to create a SSL Socket
   // Will return NULL if initialization of the socket fails.
   static SSLSocket* Create(const addrinfo* addr);
-  ~SSLSocket();
+  virtual ~SSLSocket();
 
   int Send(const char* data, const int size);
   int Recv(char* data, const int size);

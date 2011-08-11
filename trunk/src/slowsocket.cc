@@ -42,11 +42,18 @@
 
 namespace slowhttptest {
 SlowSocket::SlowSocket()
-    : sockfd_(-1), requests_to_send_(0),
-      followups_to_send_(0), last_followup_timing_(0),
-      offset_(0), ssl_(0), buf_(0), 
-      start_in_millisecs_(0), connected_in_millisecs_(0),
-      stop_in_millisecs_(0), state_(eInit) {
+    : sockfd_(-1),
+      requests_to_send_(0),
+      followups_to_send_(0),
+      last_followup_timing_(0),
+      offset_(0),
+      ssl_(0),
+      ssl_ctx_(0),
+      buf_(0),
+      start_in_millisecs_(0),
+      connected_in_millisecs_(0),
+      stop_in_millisecs_(0),
+      state_(eInit) {
 }
 
 SlowSocket::~SlowSocket() {
@@ -85,7 +92,6 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     }
   }
 
-
   followups_to_send_ = followups_to_send;
   requests_to_send_ = 1;
 
@@ -98,7 +104,8 @@ bool SlowSocket::connect_plain(addrinfo* addr) {
 
   if (connect(sockfd_, addr->ai_addr, addr->ai_addrlen) < 0
       && EINPROGRESS != errno) {
-    slowlog(LOG_ERROR, "cannot connect socket %d: %s\n", sockfd_, strerror(errno));
+    slowlog(LOG_ERROR, "cannot connect socket %d: %s\n", sockfd_,
+            strerror(errno));
     close();
     return false;
   }
@@ -107,7 +114,7 @@ bool SlowSocket::connect_plain(addrinfo* addr) {
 
 bool SlowSocket::connect_ssl(addrinfo* addr) {
   // Establish regular connection.
-  if(!connect_plain(addr))  return false;
+  if(!connect_plain(addr)) return false;
    
   // Init SSL related stuff.
   // TODO(vagababov): this is not thread safe of pretty.
@@ -117,16 +124,16 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
     ssl_is_initialized = true;
   }
   SSL_METHOD* method = NULL;
-  SSL_CTX* ssl_ctx = NULL;
   method = (SSL_METHOD*)SSLv23_client_method();
-  ssl_ctx = SSL_CTX_new(method);
-  if(!ssl_ctx) {
+  ssl_ctx_ = SSL_CTX_new(method);
+  if(!ssl_ctx_) {
     slowlog(LOG_ERROR, "cannot create new SSL context\n");
     close();
     return false;
   }
-  ssl_ = SSL_new(ssl_ctx);
+  ssl_ = SSL_new(ssl_ctx_);
   if(!ssl_) {
+    SSL_CTX_free(ssl_ctx_);
     slowlog(LOG_ERROR, "cannot create SSL structure for a connection\n");
     close();
     return false;
@@ -223,7 +230,9 @@ void SlowSocket::close() {
   slowlog(LOG_DEBUG, "closing slow, sock is %d\n", sockfd_);
   if(ssl_) {
     SSL_free(ssl_);
+    SSL_CTX_free(ssl_ctx_);
     ssl_ = NULL;
+    ssl_ctx_ = NULL;
   }
   requests_to_send_ = 0;
   followups_to_send_ = 0;

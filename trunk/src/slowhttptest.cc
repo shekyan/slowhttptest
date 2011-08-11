@@ -17,9 +17,10 @@
 /*****
  * Author: Sergey Shekyan shekyan@gmail.com
  *
- * Slow HTTP attack  vulnerability test tool
+ * Slow HTTP attack vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *****/
+
 #include "config.h"
 #include "slowhttptest.h"
 
@@ -43,7 +44,7 @@
 #include "slowstats.h"
 #include "text-generator.h"
 
-// global flag to indicite if we need to run
+// Global flag to indicate if we need to run.
 extern int g_running;
 
 namespace {
@@ -90,33 +91,33 @@ static const char symbols[] =
 
 namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
- int interval, int con_cnt, int max_random_data_len,
- int content_length, SlowTestType type, bool need_stats) :
-  delay_(delay),
-  duration_(duration),
-  followup_timing_(interval),
-  followup_cnt_(duration_ / followup_timing_),
-  num_connections_(con_cnt),
-  extra_data_max_len_(max_random_data_len),
-  seconds_passed_(0),
-  content_length_(content_length),
-  type_(type),
-  need_stats_(need_stats),
-  exit_status_(eUnexpectedError) {
+                           int interval, int con_cnt, int max_random_data_len,
+                           int content_length, SlowTestType type,
+                           bool need_stats)
+    : delay_(delay),
+      duration_(duration),
+      followup_timing_(interval),
+      followup_cnt_(duration_ / followup_timing_),
+      num_connections_(con_cnt),
+      extra_data_max_len_(max_random_data_len),
+      seconds_passed_(0),
+      content_length_(content_length),
+      type_(type),
+      need_stats_(need_stats),
+      exit_status_(eUnexpectedError) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
 
-  for (int i = 0; i < dumpers_.size(); ++i) {
-    delete dumpers_[i];
+  for (std::vector<StatsDumper*>::iterator i = dumpers_.begin();
+       i != dumpers_.end(); ++i) {
+    delete *i;
   }
   dumpers_.clear();
 
   for(int i = 0; i < num_connections_; ++i) {
-    if(sock_[i]) {
-      delete sock_[i];
-    }
+    delete sock_[i];
   }
   sock_.clear();
 }
@@ -247,7 +248,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
 
   dumpers_.push_back(new HTMLDumper(html_file_name, "blabla"));
   dumpers_.push_back(new CSVDumper(csv_file_name,
-      "Seconds,Error,Closed,Pending,Connected\n"));
+                                   "Seconds,Error,Closed,Pending,Connected\n"));
   for (int i = 0; i < dumpers_.size(); ++i) {
     if (!dumpers_[i]->Initialize()) {
       slowlog(LOG_ERROR, "Stat files cannot be opened for writing");
@@ -316,15 +317,15 @@ void SlowHTTPTest::report_parameters() {
     "Content-Length header value:      %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
-    "test duration:                    %d seconds\n"
-    , type_?"body":"headers"
-    , num_connections_
-    , base_uri_.getData()
-    , verb_.c_str()
-    , content_length_
-    , followup_timing_
-    , delay_
-    , duration_
+    "test duration:                    %d seconds\n",
+    type_? "body" : "headers",
+    num_connections_,
+    base_uri_.getData(),
+    verb_.c_str(),
+    content_length_,
+    followup_timing_,
+    delay_,
+    duration_
   );
 }
 

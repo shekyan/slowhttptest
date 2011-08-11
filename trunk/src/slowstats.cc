@@ -109,7 +109,7 @@ void StatsDumper::WriteString(const char* str) {
 
 CSVDumper::CSVDumper(const string& file_name, const string& header)
     : StatsDumper(file_name),
-      header_(header){
+      header_(header) {
 }
 
 CSVDumper::CSVDumper(const string& file_name)
@@ -124,9 +124,9 @@ bool CSVDumper::Initialize() {
   return false;
 }
 
-HTMLDumper::HTMLDumper(const std::string& file_name, const char* test_info)
+HTMLDumper::HTMLDumper(const std::string& file_name, const string& test_info)
     : StatsDumper(file_name),
-      test_info_(test_info){
+      test_info_(test_info) {
 }
 
 bool HTMLDumper::Initialize() {

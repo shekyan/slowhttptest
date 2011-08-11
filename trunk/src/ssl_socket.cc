@@ -83,7 +83,7 @@ bool SSLSocket::Init(const addrinfo* addr) {
   const int ret = SSL_connect(ssl_);
   if (ret != 1) {
     const int err = SSL_get_error(ssl_, ret);
-    slowlog(eLogError, "%s: SSL connect error: %d\n", __FUNCTION__, err);
+    slowlog(LOG_ERROR, "%s: SSL connect error: %d\n", __FUNCTION__, err);
   }
   return ret == 1;
 }
