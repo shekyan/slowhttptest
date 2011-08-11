@@ -35,8 +35,44 @@
 namespace {
 static FILE* log_file = NULL;
 static FILE* csv_file = NULL;
+static FILE* html_file = NULL;
 int current_log_level;
-int seconds = 0;
+
+void print_html_header() {
+  fprintf(html_file,
+      "<html>\r\n \
+      <head>\r\n \
+      <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\r\n \
+      <script type=\"text/javascript\">\r\n \
+      google.load(\"visualization\", \"1\", {packages:[\"corechart\"]});\r\n \
+      google.setOnLoadCallback(drawChart);\r\n \
+      function drawChart() {\r\n \
+      var data = new google.visualization.DataTable();\r\n \
+      data.addColumn('string', 'Seconds');\r\n \
+      data.addColumn('number', 'Error');\r\n \
+      data.addColumn('number', 'Closed');\r\n \
+      data.addColumn('number', 'Pending');\r\n \
+      data.addColumn('number', 'Connected');\r\n \
+      data.addRows([\r\n");
+}
+
+void print_html_footer() {
+  fprintf(html_file,
+      "        ]);\r\n \
+      var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\r\n \
+      chart.draw(data, {width: 400, height: 240, title: 'Company Performance',\r\n \
+      hAxis: {title: 'Seconds', titleTextStyle: {color: '#FF0000'}},\r\n \
+      vAxis: {title: 'Connections', titleTextStyle: {color: '#FF0000'}}\r\n \
+      });\r\n \
+      }\r\n \
+      </script>\r\n \
+      </head>\r\n \
+      <body>\r\n \
+      <div id=\"chart_div\"></div>\r\n \
+      </body>\r\n \
+      </html>"); 
+}
+
 
 void dispose_of_log() {
   if (log_file && log_file != stdout) {
@@ -45,8 +81,12 @@ void dispose_of_log() {
   if(csv_file) {
     fclose(csv_file);
   }
+  if(html_file) {
+    print_html_footer();
+    fflush(html_file);
+    fclose(html_file);
+  }
 }
-
 
 void print_call_stack() {
   static void* buf[64];
@@ -59,26 +99,36 @@ void print_call_stack() {
 }
 
 namespace slowhttptest {
-void slowlog_init(int debug_level, const char* file_name, bool need_csv) {
+void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   if(!log_file) {
     printf("Unable to open log file %s for writing: %s", file_name,
            strerror(errno));
   }
-  if(need_csv) {
+  if(need_stats) {
     time_t rawtime;
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     char csv_file_name[32] = {0};
+    char html_file_name[32] = {0};
     strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
+    strftime(html_file_name, 22, "slow_%H%M%Y%m%d.html", timeinfo);
     csv_file = fopen(csv_file_name , "w");
     if(!csv_file) {
       printf("Unable to open csv file %s for writing: %s\n",
              csv_file_name,
              strerror(errno));
     } else {
-      fprintf(csv_file, "Seconds,Pending,Connected,Closed,Error\n");
+      fprintf(csv_file, "Seconds,Error,Closed,Pending,Connected\n");
+    }
+    html_file = fopen(html_file_name , "w");
+    if(!html_file) {
+      printf("Unable to open html file %s for writing: %s\n",
+          html_file_name,
+          strerror(errno));
+    } else {
+      print_html_header(); 
     }
   }
   atexit(&dispose_of_log);
@@ -111,13 +161,21 @@ void log_fatal(const char* format, ...) {
 }
 
 void dump_csv(const char* format, ...) {
-  fprintf(csv_file, "%d,", seconds);
-  ++seconds;
   va_list va;
   va_start(va, format);
   vfprintf(csv_file, format, va);
   fflush(csv_file);
   va_end(va);
+} 
+
+void dump_html(const char* format, ...) {
+  va_list va;
+  va_start(va, format);
+  vfprintf(html_file, format, va);
+  fflush(html_file);
+  va_end(va);
+
+
 }
 
 void slowlog(int lvl, const char* format, ...) {

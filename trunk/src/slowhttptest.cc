@@ -300,7 +300,7 @@ void SlowHTTPTest::report_parameters() {
   );
 }
 
-void SlowHTTPTest::report_status(bool to_csv) {
+void SlowHTTPTest::report_status(bool to_stats) {
   initializing_ = 0;
   connecting_ = 0; 
   connected_ = 0; 
@@ -335,25 +335,34 @@ void SlowHTTPTest::report_status(bool to_csv) {
     }
   }
 
-  if(to_csv) {
-    dump_csv("%d,%d,%d,%d\n",
-      connecting_,
-      connected_,
-      closed_,
-      errored_); 
+  if(to_stats) {
+    dump_csv("%d,%d,%d,%d,%d\n",
+        seconds_passed_, 
+        errored_,
+        closed_,
+        connecting_,
+        connected_);
+   
+    dump_html("[\'%d\',%d,%d,%d,%d],\n",
+        seconds_passed_, 
+        errored_,
+        closed_,
+        connecting_,
+        connected_); 
+
   } else {
     slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-      "inititalizing:       %d\n"
-      "connecting:          %d\n"
-      "connected:           %d\n"
-      "error:               %d\n"
-      "closed:              %d\n",
-      seconds_passed_,
-      initializing_,
-      connecting_,
-      connected_,
-      errored_,
-      closed_);
+        "inititalizing:       %d\n"
+        "pending:             %d\n"
+        "connected:           %d\n"
+        "error:               %d\n"
+        "closed:              %d\n",
+        seconds_passed_,
+        initializing_,
+        connecting_,
+        connected_,
+        errored_,
+        closed_);
   }
 }
 
