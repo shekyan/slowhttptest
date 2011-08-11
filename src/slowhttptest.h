@@ -48,6 +48,7 @@ enum ExitStatusType {
   eUnexpectedError
 };
 
+class StatsDumper;
 class RandomTextGenerator;
 class SlowSocket;
 class SlowHTTPTest {
@@ -89,7 +90,8 @@ class SlowHTTPTest {
   int seconds_passed_;
   int content_length_;
   SlowTestType type_;
-  bool need_csv_;
+  bool need_stats_;
+  std::vector<StatsDumper*> dumpers_;
   ExitStatusType exit_status_;
   int initializing_;
   int connecting_; 

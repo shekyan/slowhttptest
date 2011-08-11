@@ -46,8 +46,9 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_slowhttptest_OBJECTS = slowhttptestmain.$(OBJEXT) \
-	slowhttptest.$(OBJEXT) slowsocket.$(OBJEXT) slowurl.$(OBJEXT) \
-	slowlog.$(OBJEXT) text-generator.$(OBJEXT)
+	slowhttptest.$(OBJEXT) slowsocket.$(OBJEXT) \
+	slowstats.$(OBJEXT) slowurl.$(OBJEXT) slowlog.$(OBJEXT) \
+	text-generator.$(OBJEXT)
 slowhttptest_OBJECTS = $(am_slowhttptest_OBJECTS)
 slowhttptest_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
@@ -159,7 +160,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign
-slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowurl.cc slowlog.cc text-generator.cc slowhttptest.h slowsocket.h slowurl.h slowlog.h text-generator.h
+slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowstats.cc slowurl.cc slowlog.cc text-generator.cc slowhttptest.h slowsocket.h slowstats.h slowurl.h slowlog.h text-generator.h
 all: all-am
 
 .SUFFIXES:
@@ -245,6 +246,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowhttptestmain.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowlog.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowsocket.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowstats.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowurl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/text-generator.Po@am__quote@
 
