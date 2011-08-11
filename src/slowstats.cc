@@ -11,35 +11,35 @@ namespace {
 
 const char* HTML_HEADER =
       "<!-- SlowHTTPTestAnalysys chart (c) Sergey Shekyan, Victor Agababov 2011  -->\
-      <html>\r\n \
-      <head>\r\n \
-      <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\r\n \
-      <script type=\"text/javascript\">\r\n \
-      google.load(\"visualization\", \"1\", {packages:[\"corechart\"]});\r\n \
-      google.setOnLoadCallback(drawChart);\r\n \
-      function drawChart() {\r\n \
-        var data = new google.visualization.DataTable();\r\n \
-        data.addColumn('string', 'Seconds');\r\n \
-        data.addColumn('number', 'Error');\r\n \
-        data.addColumn('number', 'Closed');\r\n \
-        data.addColumn('number', 'Pending');\r\n \
-        data.addColumn('number', 'Connected');\r\n \
-        data.addRows([\r\n";
+      <html>\n \
+      <head>\n \
+      <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\n \
+      <script type=\"text/javascript\">\n \
+      google.load(\"visualization\", \"1\", {packages:[\"corechart\"]});\n \
+      google.setOnLoadCallback(drawChart);\n \
+      function drawChart() {\n \
+        var data = new google.visualization.DataTable();\n \
+        data.addColumn('string', 'Seconds');\n \
+        data.addColumn('number', 'Error');\n \
+        data.addColumn('number', 'Closed');\n \
+        data.addColumn('number', 'Pending');\n \
+        data.addColumn('number', 'Connected');\n \
+        data.addRows([\n";
 
 const char* HTML_FOOTER = 
-      "        ]);\r\n \
-      var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\r\n \
-      chart.draw(data, {'width': 400, 'height': 240, 'title': 'Company Performance',\r\n \
-      hAxis: {'title': 'Seconds', 'titleTextStyle': {color: '#FF0000'}},\r\n \
-      vAxis: {'title': 'Connections', 'titleTextStyle': {color: '#FF0000'}}\r\n \
-      });\r\n \
-      }\r\n \
-      </script>\r\n \
+      "        ]);\n \
+      var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\n \
+      chart.draw(data, {'width': 400, 'height': 240, 'title': 'Company Performance',\n \
+      hAxis: {'title': 'Seconds', 'titleTextStyle': {color: '#FF0000'}},\n \
+      vAxis: {'title': 'Connections', 'titleTextStyle': {color: '#FF0000'}}\n \
+      });\n \
+      }\n \
+      </script>\n \
       <title>SlowHTTPTest(tm) Connection Results</title>\
-      </head>\r\n \
-      <body>\r\n \
-      <div id=\"chart_div\"></div>\r\n \
-      </body>\r\n \
+      </head>\n \
+      <body>\n \
+      <div id=\"chart_div\"></div>\n \
+      </body>\n \
       </html>\n";
 }
 

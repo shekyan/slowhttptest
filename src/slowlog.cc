@@ -40,41 +40,6 @@ static FILE* csv_file = NULL;
 static FILE* html_file = NULL;
 int current_log_level;
 
-void print_html_header() {
-  fprintf(html_file,
-      "<html>\r\n \
-      <head>\r\n \
-      <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\r\n \
-      <script type=\"text/javascript\">\r\n \
-      google.load(\"visualization\", \"1\", {packages:[\"corechart\"]});\r\n \
-      google.setOnLoadCallback(drawChart);\r\n \
-      function drawChart() {\r\n \
-      var data = new google.visualization.DataTable();\r\n \
-      data.addColumn('string', 'Seconds');\r\n \
-      data.addColumn('number', 'Error');\r\n \
-      data.addColumn('number', 'Closed');\r\n \
-      data.addColumn('number', 'Pending');\r\n \
-      data.addColumn('number', 'Connected');\r\n \
-      data.addRows([\r\n");
-}
-
-void print_html_footer() {
-  fprintf(html_file,
-      "        ]);\r\n \
-      var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\r\n \
-      chart.draw(data, {width: 400, height: 240, title: 'BLABLA, here goes test parameters',\r\n \
-      hAxis: {title: 'Seconds', titleTextStyle: {color: '#FF0000'}},\r\n \
-      vAxis: {title: 'Connections', titleTextStyle: {color: '#FF0000'}}\r\n \
-      });\r\n \
-      }\r\n \
-      </script>\r\n \
-      </head>\r\n \
-      <body>\r\n \
-      <div id=\"chart_div\"></div>\r\n \
-      </body>\r\n \
-      </html>"); 
-}
-
 void dispose_of_log(int param) {
   if (log_file && log_file != stdout) {
     fclose(log_file);
@@ -83,8 +48,6 @@ void dispose_of_log(int param) {
     fclose(csv_file);
   }
   if(html_file) {
-    print_html_footer();
-    fflush(html_file);
     fclose(html_file);
   }
   exit(1);
@@ -134,7 +97,7 @@ void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
           html_file_name,
           strerror(errno));
     } else {
-      print_html_header(); 
+      //print_html_header(); 
     }
   }
   atexit(&wrapper_dispose_of_log);
