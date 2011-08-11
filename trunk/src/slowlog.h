@@ -15,7 +15,7 @@
 * *****************************************************************************/
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
  *         Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool

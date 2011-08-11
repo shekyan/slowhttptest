@@ -15,12 +15,12 @@
 * *****************************************************************************/
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *
- *  class URL parses URI and store URI components. 
+ *  class that parses URI and store URI components. 
  *****/
 
 #ifndef _SLOWURL_H_

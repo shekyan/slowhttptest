@@ -1,5 +1,5 @@
 /*****************************************************************************
-*  Copyright 2011 Sergey Shekyan
+*  Copyright 2011 Sergey Shekya,n Victor Agababov
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -15,7 +15,8 @@
 * *****************************************************************************/
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
+ *         Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
@@ -60,6 +61,12 @@ static void usage() {
       );
 }
 
+// global flag to indicite if we need to run
+int g_running = true;
+
+void int_handler(int param) {
+  g_running = false;  
+}
 
 using slowhttptest::slowlog_init;
 using slowhttptest::slowlog;
@@ -177,6 +184,7 @@ int main(int argc, char **argv) {
     }
   }
   signal(SIGPIPE, SIG_IGN);
+  signal(SIGINT, &int_handler);
   slowlog_init(debug_level, NULL, need_stats);
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
@@ -188,6 +196,6 @@ int main(int argc, char **argv) {
     slowlog(LOG_FATAL, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
-  slow_test->report_final();
+//  slow_test->report_final();
   return 0;
 }

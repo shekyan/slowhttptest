@@ -15,7 +15,8 @@
 * *****************************************************************************/
 
 /*****
- * Author: Sergey Shekyan sshekyan@qualys.com
+ * Author: Sergey Shekyan shekyan@gmail.com
+ *         Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
@@ -26,7 +27,6 @@
 #include <errno.h>
 #include <execinfo.h>
 #include <stdarg.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,16 +38,6 @@ namespace {
 static FILE* log_file = NULL;
 int current_log_level;
 
-void dispose_of_log() {
-  if (log_file && log_file != stdout) {
-    fclose(log_file);
-  }
-  exit(1);
-}
-
-void dummy_f(int param) {
-  exit(1);
-}
 void print_call_stack() {
   static void* buf[64];
   const int depth = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
@@ -65,8 +55,6 @@ void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
     printf("Unable to open log file %s for writing: %s", file_name,
            strerror(errno));
   }
-  atexit(&dispose_of_log);
-  signal(SIGINT, &dummy_f);
   current_log_level = debug_level;
 }
 
