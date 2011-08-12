@@ -196,6 +196,6 @@ int main(int argc, char **argv) {
     slowlog(LOG_FATAL, "%s: error running slow HTTP test\n", __FUNCTION__);
     return -1;
   }
-//  slow_test->report_final();
+  slow_test->report_final();
   return 0;
 }
