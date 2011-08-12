@@ -40,4 +40,5 @@ slowhttptest tool supports
 
   * download the tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads section]
   * unpack
+  * you need libssl-dev to be installed
   * ./configure && make && make install
