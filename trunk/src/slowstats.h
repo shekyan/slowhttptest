@@ -53,7 +53,8 @@ class StatsDumper {
  protected:
   // If derived classes need to write anything.
   void WriteString(const char* str);
-  void WriteFormattedString(const char* fmt, const char* str);
+  void WriteFormattedString(const char* fmt, const char* str1,
+      const char* str2);
   bool IsOpen() const { return file_ != NULL; }
   // If subclass needs to write something before stats, that's where 
   // it should go.
@@ -74,7 +75,8 @@ class StatsDumper {
 
 class HTMLDumper : public StatsDumper {
  public:
-  HTMLDumper(const std::string& file_name, const std::string& test_info);
+  HTMLDumper(const std::string& file_name, const std::string& url,
+      const std::string& test_info);
   virtual ~HTMLDumper();
 
   virtual bool Initialize();
@@ -88,6 +90,7 @@ class HTMLDumper : public StatsDumper {
   void WriteHeader();
   void WriteFooter();
 
+  const std::string url_;
   const std::string test_info_;
 };
 

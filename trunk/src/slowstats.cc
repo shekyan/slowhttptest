@@ -37,7 +37,7 @@ using std::string;
 namespace {
 
 const char* HTML_HEADER =
-"<!-- SlowHTTPTest Analysys chart (c) Sergey Shekyan, Victor Agababov 2011  -->\n \
+"<!-- SlowHTTPTest Analysis chart (c) Sergey Shekyan, Victor Agababov 2011  -->\n \
 <html>\n \
   <head>\n \
     <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\n \
@@ -56,7 +56,7 @@ const char* HTML_HEADER =
 const char* HTML_FOOTER = 
       "        ]);\n \
         var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\n \
-        chart.draw(data, {'width': 400, 'height': 240, 'title': '%s', isStacked: true,\n \
+        chart.draw(data, {'width': 600, 'height': 360, 'title': 'Test results against %s', isStacked: true,\n \
           hAxis: {'title': 'Seconds', 'titleTextStyle': {color: '#FF0000'}},\n \
           vAxis: {'title': 'Connections', 'titleTextStyle': {color: '#FF0000'}}\n \
     });\n \
@@ -65,6 +65,7 @@ const char* HTML_FOOTER =
     <title>SlowHTTPTest(tm) Connection Results</title>\n \
   </head>\n \
   <body>\n \
+  <p>%s</p>\n \
     <div id=\"chart_div\"></div>\n \
   </body>\n \
 </html>\n";
@@ -124,8 +125,10 @@ bool CSVDumper::Initialize() {
   return false;
 }
 
-HTMLDumper::HTMLDumper(const std::string& file_name, const string& test_info)
+HTMLDumper::HTMLDumper(const std::string& file_name,
+    const string& url, const string& test_info)
     : StatsDumper(file_name),
+      url_(url),
       test_info_(test_info) {
 }
 
@@ -143,12 +146,14 @@ HTMLDumper::~HTMLDumper() {
   }
 }
 
-void StatsDumper::WriteFormattedString(const char* fmt, const char* str) {
+void StatsDumper::WriteFormattedString(const char* fmt, 
+ const char* str1, const char* str2) {
   CHECK_NOTNULL(file_);
-  CHECK_NOTNULL(str);
+  CHECK_NOTNULL(str1);
+  CHECK_NOTNULL(str2);
   CHECK_NOTNULL(fmt);
-  if (*str) {
-    fprintf(file_, fmt, str);
+  if (*str1 && *str2) {
+    fprintf(file_, fmt, str1, str2);
   }
 }
 
@@ -157,7 +162,7 @@ void HTMLDumper::WriteHeader() {
 }
 
 void HTMLDumper::WriteFooter() {
-  WriteFormattedString(HTML_FOOTER, test_info_.c_str());
+  WriteFormattedString(HTML_FOOTER, url_.c_str(), test_info_.c_str());
 }
 
 void HTMLDumper::PreWrite() {
