@@ -55,6 +55,7 @@ static const char* exit_status_msg[] = {
     "No open connections left",
     "Cannot esatblish connection",
     "Connection refused",
+    "Cancelled by user",
     "Unexpected error"
 };
 static const char* user_agents[] = {
@@ -105,20 +106,21 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       content_length_(content_length),
       type_(type),
       need_stats_(need_stats),
-      exit_status_(eUnexpectedError) {
+      exit_status_(eCancelledByUser) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
   freeaddrinfo(addr_);
 
-  for (std::vector<StatsDumper*>::iterator i = dumpers_.begin();
+  for(std::vector<StatsDumper*>::iterator i = dumpers_.begin();
        i != dumpers_.end(); ++i) {
     delete *i;
   }
   dumpers_.clear();
-
-  for(int i = 0; i < num_connections_; ++i) {
-    delete sock_[i];
+  if(sock_.size() > 0) {
+    for(int i = 0; i < num_connections_; ++i) {
+      delete sock_[i];
+    }
   }
   sock_.clear();
 }
@@ -165,7 +167,8 @@ const char* SlowHTTPTest::get_random_extra() {
   return random_extra_.c_str();
 }
 
-bool SlowHTTPTest::init(const char* url, const char* verb) {
+bool SlowHTTPTest::init(const char* url, const char* verb,
+    const char* path) {
   if(!change_fd_limits()) {
     slowlog(LOG_ERROR, "error setting open file limits\n");
   }
@@ -238,14 +241,20 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
     request_.append("\r\n");
     request_.append(post_request);
   }
-  time_t rawtime;
-  struct tm * timeinfo;
-  time(&rawtime);
-  timeinfo = localtime(&rawtime);
-  char csv_file_name[32] = {0};
-  char html_file_name[32] = {0};
-  strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
-  strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+
+  char csv_file_name[1024] = {0};
+  char html_file_name[1024] = {0};
+  if(path && strlen(path)) {
+    sprintf(csv_file_name, "%s.csv", path);  
+    sprintf(html_file_name, "%s.html", path);  
+  } else {
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
+    strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+  }
   char test_info[512];
   sprintf(test_info,"<table border='0'>"
       "<tr><th>Test parameters</th></tr>"
@@ -401,7 +410,7 @@ bool SlowHTTPTest::run_test() {
   sock_.resize(num_connections_);
 
   // select loop
-  while(g_running) {
+  while(true) {
     int wr = 0;
     active_sock_num = 0;
     if(num_connected < num_connections_) {
@@ -447,6 +456,10 @@ bool SlowHTTPTest::run_test() {
     if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
       report_status(false /*print_csv*/);
       heartbeat_reported = seconds_passed_;
+    }
+    if(!g_running) {
+      exit_status_ = eCancelledByUser;
+      break;
     }
     if(seconds_passed_ > duration_) { // hit time limit
       exit_status_ = eTimeLimit;

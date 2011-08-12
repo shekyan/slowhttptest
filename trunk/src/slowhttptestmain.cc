@@ -41,21 +41,24 @@ static void usage() {
       "Usage:\n"
       "slowtest [-c <number of connections>] [-<h|b>] [-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
-      "[-r <connections per second>] [-u <URL>]\n"
+      "-o <output file path and/or name>\n"
+      "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
+      "[-u <URL>]\n"
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
-      "-c,        target number of connections\n\t"
-      "-h or -b,  specify test mode (slow down either headers or body)\n\t"
-      "-g,        generate statistics with socket state changes\n\t"
-      "-i,        interval between followup data in seconds\n\t"
-      "-l,        target test length in seconds\n\t"
-      "-r,        connection rate (connections per seconds)\n\t"
-      "-s,        value of Content-Length header for POST request\n\t"
-      "-t         verb to use (defalut to GET for headers and POST for body)\n\t"
-      "-u,        absolute URL to target, e.g http[s]://foo/bar\n\t"
-      "-v,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
-      "-x,        max length of randomized followup data per tick\n"
+      "-c connections,  target number of connections\n\t"
+      "-h or -b,        specify test mode (slow headers or body)\n\t"
+      "-g,              generate statistics with socket state changes\n\t"
+      "-i seconds,      interval between followup data in seconds\n\t"
+      "-l seconds,      target test length in seconds\n\t"
+      "-o file,         place statistics output in file.html and file.csv\n\t"
+      "-r num,          connection rate (connections per seconds)\n\t"
+      "-s bytes,        value of Content-Length header for POST request\n\t"
+      "-t verb          verb to use (defalut to GET for headers and POST for body)\n\t"
+      "-u URL,          absolute URL to target, e.g http[s]://foo/bar\n\t"
+      "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
+      "-x bytes,        max length of randomized followup data per tick\n"
       , PACKAGE
       , VERSION
       );
@@ -80,6 +83,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   char url[1024] = { 0 };
+  char path[1024] = { 0 };
   char verb[16] = { 0 };
   // default vaules
   int conn_cnt = 50;
@@ -93,7 +97,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hbgc:i:l:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":hbgc:i:l:o:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -109,6 +113,9 @@ int main(int argc, char **argv) {
         break;
       case 'g':
         need_stats = true;
+        break;
+      case 'b':
+        type = slowhttptest::ePost;
         break;
       case 'i':
         tmp = strtol(optarg, 0, 10);
@@ -128,8 +135,8 @@ int main(int argc, char **argv) {
           return -1;
         }
         break;
-      case 'b':
-        type = slowhttptest::ePost;
+      case 'o':
+        strncpy(path, optarg, 1023);
         break;
       case 'r':
         tmp = strtol(optarg, 0, 10);
@@ -189,7 +196,7 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
     max_random_data_len, content_length, type, need_stats));
-  if(!slow_test->init(url, verb)) {
+  if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
