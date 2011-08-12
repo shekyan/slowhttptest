@@ -288,43 +288,11 @@ void SlowHTTPTest::report_final() {
 
   // report parameters once more
   report_parameters();
-  long res = 0;
-  long a = 0;
-  long b = 0;
-  long c = 0;
-  // if socket still open, set close time to now
-  timeval t;
-  gettimeofday(&t, 0);
-  std::vector<long> connect_times;
-  std::vector<long> life_times;
-  long n = (t.tv_sec * 1000) + (t.tv_usec / 1000);
-  std::vector<SlowSocket*>::iterator it;
-  for(it = sock_.begin(); it < sock_.end(); ++it) {
-    a = (*it)->get_start();
-    b = (*it)->get_connected();
-    c = (*it)->get_stop() ? (*it)->get_stop() : n;
-    if(a && b) {
-      res = b - a;
-      connect_times.push_back(res);
-      slowlog(LOG_DEBUG, "connect time %ld\n", res);
-    }
-    if(c && a) {
-      res = c - a;
-      life_times.push_back(res);
-      slowlog(LOG_DEBUG, "life time %ld\n", res);
-    }
-  }
-
   slowlog(LOG_INFO, "Test ended on %dth second\n"
-      "status:                           %s\n"
-      "average connect time:             %ld milliseconds\n"
-      "average lifetime:                 %ld milliseconds\n",
+      "status:                           %s\n",
       seconds_passed_,
-      exit_status_msg[exit_status_],
-      std::accumulate(connect_times.begin(),
-      connect_times.end(), 0) / connect_times.size(),
-      std::accumulate(life_times.begin(),
-      life_times.end(), 0) / life_times.size());
+      exit_status_msg[exit_status_]
+      );
 }
 
 void SlowHTTPTest::report_parameters() {
