@@ -84,7 +84,7 @@ void log_fatal(const char* format, ...) {
 }
 
 void slowlog(int lvl, const char* format, ...) {
-  if(lvl <= current_log_level) {
+  if(lvl <= current_log_level || lvl == LOG_FATAL) {
     const time_t now = time(NULL);
     char ctimebuf[32];
     const char* buf = ctime_r(&now, ctimebuf);
