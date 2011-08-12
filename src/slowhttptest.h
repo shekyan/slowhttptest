@@ -46,6 +46,7 @@ enum ExitStatusType {
   eAllClosed,
   eHostNotAlive,
   eConnectionRefused,
+  eCancelledByUser,
   eUnexpectedError
 };
 
@@ -59,7 +60,7 @@ class SlowHTTPTest {
    SlowTestType type, bool need_csv);
   ~SlowHTTPTest();
 
-  bool init(const char* url, const char* verb);
+  bool init(const char* url, const char* verb, const char* path);
   void report_parameters();
   void report_status(bool to_csv);
   void report_csv();
