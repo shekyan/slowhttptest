@@ -281,7 +281,9 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       "Seconds,Error,Closed,Pending,Connected\n"));
   for (int i = 0; i < dumpers_.size(); ++i) {
     if (!dumpers_[i]->Initialize()) {
-      slowlog(LOG_ERROR, "Stat files cannot be opened for writing");
+      slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
+          \n\t\t%s\n",
+          strerror(errno));
       return false;
     }
   }
