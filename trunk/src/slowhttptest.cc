@@ -255,7 +255,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
       "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
       "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
       "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
-      "<tr><td><b>Taret test duration</b></td><td>%d seconds</td></tr>"
+      "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
       "</table>",
     type_? "body" : "headers",
     num_connections_,
@@ -505,7 +505,7 @@ bool SlowHTTPTest::run_test() {
     ::gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
-      slowlog(LOG_FATAL, "%s: select < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
+      //slowlog(LOG_FATAL, "%s: select < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
       // nothing to monitor
