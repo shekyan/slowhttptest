@@ -246,16 +246,16 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
   strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
   strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
 
-  dumpers_.push_back(new HTMLDumper(html_file_name, "blabla"));
+  dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
+      "blabla"));
   dumpers_.push_back(new CSVDumper(csv_file_name,
-                                   "Seconds,Error,Closed,Pending,Connected\n"));
+      "Seconds,Error,Closed,Pending,Connected\n"));
   for (int i = 0; i < dumpers_.size(); ++i) {
     if (!dumpers_[i]->Initialize()) {
       slowlog(LOG_ERROR, "Stat files cannot be opened for writing");
       return false;
     }
   }
-
   report_parameters();
   return true;
 }
