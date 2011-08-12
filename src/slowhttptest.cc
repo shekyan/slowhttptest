@@ -82,6 +82,7 @@ static const char header_separator[] = ": ";
 
 static const char body_prefix[] = "&";
 static const char body_separator[] = "=";
+
 static const char crlf[] = "\r\n";
 static const char peer_closed[] = "Peer closed connection";
 static const char symbols[] =
@@ -245,9 +246,28 @@ bool SlowHTTPTest::init(const char* url, const char* verb) {
   char html_file_name[32] = {0};
   strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
   strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+  char test_info[512];
+  sprintf(test_info,"<table border='0'>"
+      "<tr><th>Test parameters</th></tr>"
+      "<tr><td><b>Slow section</b></td><td>%s</td></tr>"
+      "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
+      "<tr><td><b>Verb</b></td><td>%s</td></tr>"
+      "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
+      "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
+      "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
+      "<tr><td><b>Taret test duration</b></td><td>%d seconds</td></tr>"
+      "</table>",
+    type_? "body" : "headers",
+    num_connections_,
+    verb_.c_str(),
+    content_length_,
+    followup_timing_,
+    delay_,
+    duration_
+  );
 
   dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
-      "blabla"));
+      test_info));
   dumpers_.push_back(new CSVDumper(csv_file_name,
       "Seconds,Error,Closed,Pending,Connected\n"));
   for (int i = 0; i < dumpers_.size(); ++i) {
@@ -296,14 +316,14 @@ void SlowHTTPTest::report_final() {
   }
 
   slowlog(LOG_INFO, "Test ended on %dth second\n"
-    "status:                           %s\n"
-    "average connect time:             %ld milliseconds\n"
-    "average lifetime:                 %ld milliseconds\n"
-    , seconds_passed_
-    , exit_status_msg[exit_status_]
-    , std::accumulate(connect_times.begin(),
-      connect_times.end(), 0) / connect_times.size()
-    , std::accumulate(life_times.begin(),
+      "status:                           %s\n"
+      "average connect time:             %ld milliseconds\n"
+      "average lifetime:                 %ld milliseconds\n",
+      seconds_passed_,
+      exit_status_msg[exit_status_],
+      std::accumulate(connect_times.begin(),
+      connect_times.end(), 0) / connect_times.size(),
+      std::accumulate(life_times.begin(),
       life_times.end(), 0) / life_times.size());
 }
 
@@ -485,7 +505,7 @@ bool SlowHTTPTest::run_test() {
     ::gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
-      slowlog(LOG_FATAL, "%s: selecd < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
+      slowlog(LOG_FATAL, "%s: select < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
       // nothing to monitor
