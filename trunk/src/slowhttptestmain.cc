@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
   }
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &int_handler);
-  slowlog_init(debug_level, NULL, need_stats);
+  slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(
     new SlowHTTPTest(rate, duration, interval, conn_cnt, 
     max_random_data_len, content_length, type, need_stats));
