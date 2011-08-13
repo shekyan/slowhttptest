@@ -33,10 +33,8 @@
 #define LOG_DEBUG   4
 
 namespace slowhttptest {
-void slowlog_init(int debug_level, const char* file_name, bool need_csv);
+void slowlog_init(int debug_level, const char* file_name);
 void slowlog(int lvl, const char* format, ...);
-void dump_csv(const char* format, ...);
-void dump_html(const char* format, ...);
 void log_fatal(const char* format, ...);
 void check(bool f, const char* message);
 template <class T> T* check_not_null(T* p, const char* message) {

@@ -241,50 +241,52 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     request_.append("\r\n");
     request_.append(post_request);
   }
+  // init statistics
+  if(need_stats_) {
+    char csv_file_name[1024] = {0};
+    char html_file_name[1024] = {0};
+    if(path && strlen(path)) {
+      sprintf(csv_file_name, "%s.csv", path);  
+      sprintf(html_file_name, "%s.html", path);  
+    } else {
+      time_t rawtime;
+      struct tm * timeinfo;
+      time(&rawtime);
+      timeinfo = localtime(&rawtime);
+      strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
+      strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+    }
+    char test_info[512];
+    sprintf(test_info,"<table border='0'>"
+        "<tr><th>Test parameters</th></tr>"
+        "<tr><td><b>Slow section</b></td><td>%s</td></tr>"
+        "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
+        "<tr><td><b>Verb</b></td><td>%s</td></tr>"
+        "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
+        "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
+        "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
+        "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
+        "</table>",
+        type_? "body" : "headers",
+        num_connections_,
+        verb_.c_str(),
+        content_length_,
+        followup_timing_,
+        delay_,
+        duration_
+        );
 
-  char csv_file_name[1024] = {0};
-  char html_file_name[1024] = {0};
-  if(path && strlen(path)) {
-    sprintf(csv_file_name, "%s.csv", path);  
-    sprintf(html_file_name, "%s.html", path);  
-  } else {
-    time_t rawtime;
-    struct tm * timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
-    strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
-  }
-  char test_info[512];
-  sprintf(test_info,"<table border='0'>"
-      "<tr><th>Test parameters</th></tr>"
-      "<tr><td><b>Slow section</b></td><td>%s</td></tr>"
-      "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
-      "<tr><td><b>Verb</b></td><td>%s</td></tr>"
-      "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
-      "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
-      "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
-      "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
-      "</table>",
-    type_? "body" : "headers",
-    num_connections_,
-    verb_.c_str(),
-    content_length_,
-    followup_timing_,
-    delay_,
-    duration_
-  );
-
-  dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
-      test_info));
-  dumpers_.push_back(new CSVDumper(csv_file_name,
-      "Seconds,Error,Closed,Pending,Connected\n"));
-  for (int i = 0; i < dumpers_.size(); ++i) {
-    if (!dumpers_[i]->Initialize()) {
-      slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
-          \n\t\t%s\n",
-          strerror(errno));
-      return false;
+    dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
+        test_info));
+    dumpers_.push_back(new CSVDumper(csv_file_name,
+        "Seconds,Error,Closed,Pending,Connected\n"));
+    for (int i = 0; i < dumpers_.size(); ++i) {
+      if (!dumpers_[i]->Initialize()) {
+        slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
+            \n\t\t%s\n",
+            strerror(errno));
+        return false;
+      }
     }
   }
   report_parameters();

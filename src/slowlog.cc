@@ -49,7 +49,7 @@ void print_call_stack() {
 }
 
 namespace slowhttptest {
-void slowlog_init(int debug_level, const char* file_name, bool need_stats) {
+void slowlog_init(int debug_level, const char* file_name) {
   log_file = file_name == NULL ? stdout : fopen(file_name, "w");
   if(!log_file) {
     printf("Unable to open log file %s for writing: %s", file_name,
