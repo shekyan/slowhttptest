@@ -47,7 +47,6 @@ const char* HTML_HEADER =
       function drawChart() {\n \
         var data = new google.visualization.DataTable();\n \
         data.addColumn('string', 'Seconds');\n \
-        data.addColumn('number', 'Error');\n \
         data.addColumn('number', 'Closed');\n \
         data.addColumn('number', 'Pending');\n \
         data.addColumn('number', 'Connected');\n \

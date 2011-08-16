@@ -279,7 +279,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
         test_info));
     dumpers_.push_back(new CSVDumper(csv_file_name,
-        "Seconds,Error,Closed,Pending,Connected\n"));
+        "Seconds,Closed,Pending,Connected\n"));
     for (int i = 0; i < dumpers_.size(); ++i) {
       if (!dumpers_[i]->Initialize()) {
         slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
@@ -367,9 +367,8 @@ void SlowHTTPTest::report_status(bool to_stats) {
 
   if(to_stats) {
     for (int i = 0; i < dumpers_.size(); ++i) {
-      dumpers_[i]->WriteStats("%d,%d,%d,%d,%d",
+      dumpers_[i]->WriteStats("%d,%d,%d,%d",
           seconds_passed_, 
-          errored_,
           closed_,
           connecting_,
           connected_);
