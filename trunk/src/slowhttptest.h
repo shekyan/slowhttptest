@@ -38,7 +38,8 @@ namespace slowhttptest {
 
 enum SlowTestType {
   eHeader = 0,
-  ePost
+  ePost,
+  eSlowSend
 };
 
 enum ExitStatusType {
@@ -91,10 +92,11 @@ class SlowHTTPTest {
   int extra_data_max_len_;
   int seconds_passed_;
   int content_length_;
-  SlowTestType type_;
+  SlowTestType test_type_;
   bool need_stats_;
   std::vector<StatsDumper*> dumpers_;
   ExitStatusType exit_status_;
+  int connection_timeout_;
   int initializing_;
   int connecting_; 
   int connected_; 
