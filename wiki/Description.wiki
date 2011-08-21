@@ -32,7 +32,9 @@ slowhttptest tool supports
   * SSL connections(URLs starting with 'https://')
   * host names resolved to IPv6
   * will try to change the limit for max open file descriptors for current process if requested number of connections is greater than current limit
-  *CSV and HTML output containing socket state change information
+  * CSV and HTML output containing socket state change information
+
+Example HTML output:
 [https://lh4.googleusercontent.com/-dXGsQCH4uKg/TlCnnwbYi8I/AAAAAAAAA5Q/VbCAgNqfQPY/s288/nginx_mac_head.png]
 
 == Usage example ==
