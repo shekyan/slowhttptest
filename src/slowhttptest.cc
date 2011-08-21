@@ -104,7 +104,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       extra_data_max_len_(max_random_data_len),
       seconds_passed_(0),
       content_length_(content_length),
-      type_(type),
+      test_type_(type),
       need_stats_(need_stats),
       exit_status_(eCancelledByUser) {
 }
@@ -191,7 +191,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   random_extra_.resize(extra_data_max_len_ + 1);
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
 
-  if(eHeader == type_) {
+  if(eHeader == test_type_) {
     // setup follow up data pattern
     separator_ = header_separator;
     prefix_ = header_prefix;
@@ -233,7 +233,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   request_.append("User-Agent: ");
   request_.append(user_agent_);
   request_.append("\r\n");
-  if(ePost == type_) {
+  if(ePost == test_type_) {
     request_.append("Content-Length: ");
     std::stringstream ss;
     ss << content_length_;
@@ -267,7 +267,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
         "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
         "</table>",
-        type_? "body" : "headers",
+        test_type_? "body" : "headers",
         num_connections_,
         verb_.c_str(),
         content_length_,
@@ -319,7 +319,7 @@ void SlowHTTPTest::report_parameters() {
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n",
-    type_? "body" : "headers",
+    test_type_? "body" : "headers",
     num_connections_,
     base_uri_.getData(),
     verb_.c_str(),
@@ -402,10 +402,12 @@ bool SlowHTTPTest::run_test() {
   tv_delay.tv_sec = 0;
   tv_delay.tv_usec = 1000000 / delay_; 
   int active_sock_num;
+  bool is_any_ever_connected = false;
   char buf[kBufSize];
   const char* extra_data;
   int heartbeat_reported = 1; //trick to print 0 sec hb
   int stats_reported = 1; //trick to print 0 sec hb
+  int connection_timeout = (test_type_ == eSlowSend ? 60 : 10);
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
@@ -471,11 +473,11 @@ bool SlowHTTPTest::run_test() {
       exit_status_ = eAllClosed;
       break;
     }
-    // rude way to detect if something is wrong after 10 seconds
-    if(seconds_passed_ > 10 && connected_ == 0) {
-      if(connecting_ > 0 && closed_ == 0) {
+    // rude way to detect if something is wrong after connection_timeout
+    if(seconds_passed_ > connection_timeout && !is_any_ever_connected) {
+      if(connected_ == 0 && connecting_ > 0 && closed_ == 0) {
         exit_status_ = eHostNotAlive;
-      } else if (closed_ > 0 && connecting_ >=0) {
+      } else if (closed_ >= 0 && connecting_ >= 0) {
         exit_status_ = eConnectionRefused;
       }
       break;
@@ -534,6 +536,7 @@ bool SlowHTTPTest::run_test() {
               } else {
                 if(ret > 0) { //actual data was sent
                   sock_[i]->set_state(eConnected);
+                  is_any_ever_connected = true;
                   slowlog(LOG_DEBUG,
                       "%s:initial %d of %d bytes sent on socket %d:\n%s\n",
                       __FUNCTION__, ret,
