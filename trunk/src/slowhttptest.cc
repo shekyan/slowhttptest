@@ -466,13 +466,6 @@ bool SlowHTTPTest::run_test() {
       exit_status_ = eCancelledByUser;
       break;
     }
-    if(seconds_passed_ > duration_) { // hit time limit
-      exit_status_ = eTimeLimit;
-      break;
-    } else if(active_sock_num == 0) { //no open connections left
-      exit_status_ = eAllClosed;
-      break;
-    }
     // rude way to detect if something is wrong after connection_timeout
     if(seconds_passed_ > connection_timeout && !is_any_ever_connected) {
       if(connected_ == 0 && connecting_ > 0 && closed_ == 0) {
@@ -482,6 +475,20 @@ bool SlowHTTPTest::run_test() {
       }
       break;
     }
+    if(seconds_passed_ > duration_) { // hit time limit
+      exit_status_ = eTimeLimit;
+      break;
+    } 
+    if(active_sock_num == 0) { //no open connections left
+      if(!is_any_ever_connected) {
+        exit_status_ = eConnectionRefused;
+      }
+      else {
+        exit_status_ = eAllClosed;
+      }
+      break;
+    }
+
     // do not block if have new connections to establish
     timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
