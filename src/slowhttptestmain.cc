@@ -34,9 +34,11 @@
 #include "slowlog.h"
 #include "slowhttptest.h"
 
+#define DEFAULT_URL "http://localhost/"
+
 static void usage() {
   printf(
-      "%s v.%s, a tool to test for slow HTTP "
+      "\n%s v.%s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
       "slowtest [-c <number of connections>] [-<h|b>] [-g <generate statistics>]\n"
@@ -48,6 +50,7 @@ static void usage() {
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
       "-c connections,  target number of connections\n\t"
+      "                 if not specified\n\t"  
       "-h or -b,        specify test mode (slow headers or body)\n\t"
       "-g,              generate statistics with socket state changes\n\t"
       "-i seconds,      interval between followup data in seconds\n\t"
@@ -78,7 +81,7 @@ using slowhttptest::SlowTestType;
 
 int main(int argc, char **argv) {
 
-  if (argc < 3) {
+  if (argc < 1) {
     usage();
     return -1;
   }
@@ -87,13 +90,13 @@ int main(int argc, char **argv) {
   char verb[16] = { 0 };
   // default vaules
   int conn_cnt = 50;
-  bool  need_stats = false;
+  int content_length = 4096;
   int rate = 50;
   int duration = 240;
-  int interval = 10;
   int debug_level = LOG_INFO;
+  int interval = 10;
   int max_random_data_len = 128;
-  int content_length = 4096;
+  bool  need_stats = false;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
@@ -181,14 +184,18 @@ int main(int argc, char **argv) {
         }
         break;
       case '?':
-        printf("Illegal option\n");
+        fprintf(stderr, "Illegal option -%c\n", optopt);
         usage();
         return -1;
         break;
       default:
+        fprintf(stderr, "Option -%c requires an argument.\n", optopt);
         usage();
         return -1;
     }
+  }
+  if(!strlen(url)) {
+    strncpy(url, DEFAULT_URL, sizeof(DEFAULT_URL));
   }
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &int_handler);
