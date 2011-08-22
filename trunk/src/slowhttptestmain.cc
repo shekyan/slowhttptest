@@ -50,7 +50,6 @@ static void usage() {
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
       "-c connections,  target number of connections\n\t"
-      "                 if not specified\n\t"  
       "-h or -b,        specify test mode (slow headers or body)\n\t"
       "-g,              generate statistics with socket state changes\n\t"
       "-i seconds,      interval between followup data in seconds\n\t"
