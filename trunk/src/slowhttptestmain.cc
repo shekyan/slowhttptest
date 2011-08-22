@@ -49,18 +49,20 @@ static void usage() {
       "[-u <URL>]\n"
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
-      "-c connections,  target number of connections\n\t"
-      "-h or -b,        specify test mode (slow headers or body)\n\t"
-      "-g,              generate statistics with socket state changes\n\t"
-      "-i seconds,      interval between followup data in seconds\n\t"
-      "-l seconds,      target test length in seconds\n\t"
-      "-o file,         place statistics output in file.html and file.csv\n\t"
-      "-r num,          connection rate (connections per seconds)\n\t"
-      "-s bytes,        value of Content-Length header for POST request\n\t"
-      "-t verb          verb (defalut to GET for headers and POST for body)\n\t"
-      "-u URL,          absolute URL to target, e.g http[s]://foo/bar\n\t"
+      "-c connections,  target number of connections, default: 50\n\t"
+      "-h or -b,        specify test mode (slow headers or body), default: headers\n\t"
+      "-g,              generate statistics with socket state changes, default: off\n\t"
+      "-i seconds,      interval between followup data in seconds, default: 10\n\t"
+      "-l seconds,      target test length in seconds, default: 240\n\t"
+      "-o file,         save statistics output in file.html and file.csv,\n\t"
+      "                 -g must be specified to use this option\n\t"
+      "-r num,          connection rate (connections per seconds), default: 50\n\t"
+      "-s bytes,        value of Content-Length header if needed, default: 4096\n\t"
+      "-t verb          verb (defalut to GET for slow headers and POST for slow body)\n\t"
+      "-u URL,          absolute URL to target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
-      "-x bytes,        max length of randomized followup data per tick\n"
+      "                 default: 1 - Info\n\t"
+      "-x bytes,        max length of randomized followup data per tick, default: 128\n"
       , PACKAGE
       , VERSION
       );
@@ -183,12 +185,12 @@ int main(int argc, char **argv) {
         }
         break;
       case '?':
-        fprintf(stderr, "Illegal option -%c\n", optopt);
+        printf("Illegal option -%c\n", optopt);
         usage();
         return -1;
         break;
       default:
-        fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+        printf("Option -%c requires an argument.\n", optopt);
         usage();
         return -1;
     }
