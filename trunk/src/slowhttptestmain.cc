@@ -38,7 +38,7 @@
 
 static void usage() {
   printf(
-      "\n%s v.%s, a tool to test for slow HTTP "
+      "\n%s %s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
       "slowtest [-c <number of connections>] [-<h|b>] [-g <generate statistics>]\n"
