@@ -41,7 +41,7 @@ static void usage() {
       "\n%s %s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-c <number of connections>] [-<h|b>] [-g <generate statistics>]\n"
+      "slowtest [-c <number of connections>] [-<H|B>] [-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "-o <output file path and/or name>\n"
       "[-r <connections per second>]\n"
@@ -50,7 +50,8 @@ static void usage() {
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
-      "-h or -b,        specify test mode (slow headers or body), default: headers\n\t"
+      "-h               display this help and exit\n\t"
+      "-H or -B,        specify test mode (slow headers or body), default: headers\n\t"
       "-g,              generate statistics with socket state changes, default: off\n\t"
       "-i seconds,      interval between followup data in seconds, default: 10\n\t"
       "-l seconds,      target test length in seconds, default: 240\n\t"
@@ -101,7 +102,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":hbgc:i:l:o:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBgc:i:l:o:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -113,12 +114,16 @@ int main(int argc, char **argv) {
         }
         break;
       case 'h':
+        usage();
+        return 1;
+        break;
+      case 'H':
         type = slowhttptest::eHeader;
         break;
       case 'g':
         need_stats = true;
         break;
-      case 'b':
+      case 'B':
         type = slowhttptest::ePost;
         break;
       case 'i':
