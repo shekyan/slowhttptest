@@ -43,7 +43,7 @@ static void usage() {
       "Usage:\n"
       "slowtest [-c <number of connections>] [-<H|B>] [-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
-      "-o <output file path and/or name>\n"
+      "[-o <output file path and/or name>]\n"
       "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
       "[-u <URL>]\n"
@@ -63,7 +63,9 @@ static void usage() {
       "-u URL,          absolute URL to target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "                 default: 1 - Info\n\t"
-      "-x bytes,        max length of randomized followup data per tick, default: 128\n"
+      "-x bytes,        max length of each randomized name/value pair of\n\t"
+      "                 followup data per tick, e.g. -x 2 generates X-xx: xx for header\n\t"
+      "                 or &xx=xx for body, where x is random ASCII chars, default: 32\n"
       , PACKAGE
       , VERSION
       );
@@ -97,7 +99,7 @@ int main(int argc, char **argv) {
   int duration = 240;
   int debug_level = LOG_INFO;
   int interval = 10;
-  int max_random_data_len = 128;
+  int max_random_data_len = 32;
   bool  need_stats = false;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
