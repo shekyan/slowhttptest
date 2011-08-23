@@ -77,6 +77,11 @@ Full list of configurable options is the following:
 ||-v level||verbosity level of log 0-4||
 ||-x bytes||max length of follow up data||
 
+Actual example of usage:
+{{{
+./slowhttptest -c 1000 -B -g -o my_server_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u https://myseceureserver/resources/index.html -x 10
+}}}
+
 ==Output==
 
 Depends on verbosity level, output can be either as simple as heartbeat message generated every 5 seconds showing status of connections with verbosity level 1, or full traffic dump with verbosity level 4.
