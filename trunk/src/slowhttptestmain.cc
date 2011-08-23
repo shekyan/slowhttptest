@@ -65,7 +65,7 @@ static void usage() {
       "                 default: 1 - Info\n\t"
       "-x bytes,        max length of each randomized name/value pair of\n\t"
       "                 followup data per tick, e.g. -x 2 generates X-xx: xx for header\n\t"
-      "                 or &xx=xx for body, where x is random ASCII chars, default: 32\n"
+      "                 or &xx=xx for body, where x is random character, default: 32\n"
       , PACKAGE
       , VERSION
       );
