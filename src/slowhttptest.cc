@@ -106,7 +106,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       content_length_(content_length),
       test_type_(type),
       need_stats_(need_stats),
-      exit_status_(eCancelledByUser) {
+      exit_status_(eCancelledByUser),
+      extra_data_max_len_total_(0) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
