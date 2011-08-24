@@ -152,10 +152,6 @@ bool SlowHTTPTest::change_fd_limits() {
 }
 
 const char* SlowHTTPTest::get_random_extra() {
-  size_t name_len = 0;
-  size_t value_len = 0;
-  name_len = rand() % (extra_data_max_len_ / 2) + 1;
-  value_len = rand() % (extra_data_max_len_ / 2) + 1;
   random_extra_.clear();
   random_extra_.append(prefix_);
   random_extra_.append(textgen_.get_text(extra_data_max_len_));
@@ -188,7 +184,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     slowlog(LOG_FATAL, "Error in getaddrinfo: %s\n", gai_strerror(error));
     return false;
   }
-  random_extra_.resize(extra_data_max_len_ + 1);
+  extra_data_max_len_total_ = extra_data_max_len_ * 2 + (eHeader == test_type_ ? 4 : 2);
+  random_extra_.resize(extra_data_max_len_total_); // including separators
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
 
   if(eHeader == test_type_) {
@@ -263,6 +260,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
         "<tr><td><b>Verb</b></td><td>%s</td></tr>"
         "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
+        "<tr><td><b>Extra data max length</b></td><td>%d</td></tr>"
         "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
         "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
         "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
@@ -271,6 +269,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         num_connections_,
         verb_.c_str(),
         content_length_,
+        extra_data_max_len_total_,
         followup_timing_,
         delay_,
         duration_
@@ -283,7 +282,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     for (int i = 0; i < dumpers_.size(); ++i) {
       if (!dumpers_[i]->Initialize()) {
         slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
-            \n\t\t%s\n",
+            \n\t%s\n",
             strerror(errno));
         return false;
       }
@@ -316,6 +315,7 @@ void SlowHTTPTest::report_parameters() {
     "URL:                              %s\n"
     "verb:                             %s\n"
     "Content-Length header value:      %d\n"
+    "follow up data max size:          %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n",
@@ -324,6 +324,7 @@ void SlowHTTPTest::report_parameters() {
     base_uri_.getData(),
     verb_.c_str(),
     content_length_,
+    extra_data_max_len_total_,
     followup_timing_,
     delay_,
     duration_
