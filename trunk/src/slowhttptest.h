@@ -102,6 +102,7 @@ class SlowHTTPTest {
   int connected_; 
   int errored_; 
   int closed_;
+  int extra_data_max_len_total_;
 };
 
 }  // namespace slowhttptest
