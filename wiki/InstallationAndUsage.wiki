@@ -1,7 +1,7 @@
 #labels Featured,Phase-Deploy
 ==Installation==
 
-The tool is distributed as portable package, so just download the latest tarball from [http://code.google.com/p/slowhttptest/downloads/list], extract, configure, compile, and install:
+The tool is distributed as portable package, so just download the latest tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads section], extract, configure, compile, and install:
 {{{
 $ tar -xzvf slowhttptest-1.0.tar.gz
 
