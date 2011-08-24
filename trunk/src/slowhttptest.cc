@@ -254,7 +254,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
       strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
     }
-    char test_info[512];
+    char test_info[1024];
     sprintf(test_info,"<table border='0'>"
         "<tr><th>Test parameters</th></tr>"
         "<tr><td><b>Slow section</b></td><td>%s</td></tr>"
