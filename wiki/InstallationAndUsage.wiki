@@ -89,7 +89,9 @@ Depends on verbosity level, output can be either as simple as heartbeat message 
 -g option would generate both CSV file and HTML based on Google Chart Tools.
 
 Here is a sample screenshot of generated HTML page
+
 [https://lh4.googleusercontent.com/-dXGsQCH4uKg/TlCnnwbYi8I/AAAAAAAAA5Q/VbCAgNqfQPY/s288/nginx_mac_head.png]
+
 
 where connections states are graphically represented, and give the picture on how particular server behaves under specific load within given timeframe.
 
