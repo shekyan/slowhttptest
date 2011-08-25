@@ -90,7 +90,7 @@ Depends on verbosity level, output can be either as simple as heartbeat message 
 
 Here is a sample screenshot of generated HTML page
 
-[https://lh3.googleusercontent.com/-yxy3jrDMMZg/TlXLF1YyD6I/AAAAAAAAA5k/BGp-BpSLyjA/s800/nginx_demo.png]
+[https://lh6.googleusercontent.com/-Kt52nmRQWys/TlXLwbmjv5I/AAAAAAAAA50/k6qOYdN6GnI/s800/nginx_demo.png]
 
 
 where connections states are graphically represented, and give the picture on how particular server behaves under specific load within given timeframe.
