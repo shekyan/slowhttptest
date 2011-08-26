@@ -41,7 +41,7 @@ static void usage() {
       "\n%s %s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-a <range step>] [-b <range limit>]\n"
+      "slowtest [-a <range start>] [-b <range limit>]\n"
       "[-c <number of connections>] [-<H|B|R>]\n"
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
@@ -51,8 +51,8 @@ static void usage() {
       "[-u <URL>]\n"
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
-      "-a step,         step to use in range header values, default: 2\n\t"
-      "-b bytes,        limit for range header values, default: 2000\n\t"
+      "-a start,        left boundary of range in range header, default: 5\n\t"
+      "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
       "-h               display this help and exit\n\t"
       "-H, -B, or -R    specify test mode (slow headers,body or range),\n\t"
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
   char path[1024] = { 0 };
   char verb[16] = { 0 };
   // default vaules
-  int range_step = 2;
+  int range_start = 5;
   int range_limit = 2000;
   int conn_cnt = 50;
   int content_length = 4096;
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
       case 'a':
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= 65539) {
-          range_step = tmp;
+          range_start = tmp;
         } else {
           usage();
           return -1;
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
-      range_step, range_limit));
+      range_start, range_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
