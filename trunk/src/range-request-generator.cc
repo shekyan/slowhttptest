@@ -11,17 +11,18 @@
 using std::string;
 
 namespace {
-const char prefix[] = "HEAD / HTTP/1.1\r\nHost: ";
+const char kVersion[] = " HTTP/1.1\r\nHost: ";
 }  // namespace
 
 namespace slowhttptest {
 
-void GenerateHeadRequestWithRange(const string& path, const string& host,
+void GenerateHeadRequestWithRange(const string& verb, 
+                                  const string& path, const string& host,
                                   int start, int step, int limit,
                                   string* output) {
   CHECK_NOTNULL(output)->clear();
   std::ostringstream oss;
-  oss << prefix << host << "\r\nRange: bytes=0-,";
+  oss << verb << " " << path << kVersion << host << "\r\nRange: bytes=0-,";
   for (int i = 0; i < limit; i+= step) {
     oss << start << '-' << i << ',';
   }
