@@ -41,7 +41,9 @@ static void usage() {
       "\n%s %s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-c <number of connections>] [-<H|B|R>] [-g <generate statistics>]\n"
+      "slowtest [-a <range step>] [-b <range limit>]\n"
+      "[-c <number of connections>] [-<H|B|R>]\n"
+      "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "[-o <output file path and/or name>]\n"
       "[-r <connections per second>]\n"
@@ -49,6 +51,8 @@ static void usage() {
       "[-u <URL>]\n"
       "[-v <verbosity level>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
+      "-a step,         step to use in range header values, default: 2\n\t"
+      "-b bytes,        limit for range header values, default: 2000\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
       "-h               display this help and exit\n\t"
       "-H, -B, or -R    specify test mode (slow headers,body or range),\n\t"
@@ -97,6 +101,8 @@ int main(int argc, char **argv) {
   char path[1024] = { 0 };
   char verb[16] = { 0 };
   // default vaules
+  int range_step = 2;
+  int range_limit = 2000;
   int conn_cnt = 50;
   int content_length = 4096;
   int rate = 50;
@@ -108,8 +114,26 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRgc:i:l:o:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRga:b:c:i:l:o:r:s:t:u:v:x:")) != -1) {
     switch (o) {
+      case 'a':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= 65539) {
+          range_step = tmp;
+        } else {
+          usage();
+          return -1;
+        }
+        break;
+      case 'b':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= 524288) {
+          range_limit = tmp;
+        } else {
+          usage();
+          return -1;
+        }
+        break;
       case 'c':
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= 1024) {
@@ -216,8 +240,9 @@ int main(int argc, char **argv) {
   signal(SIGINT, &int_handler);
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(
-    new SlowHTTPTest(rate, duration, interval, conn_cnt, 
-    max_random_data_len, content_length, type, need_stats));
+      new SlowHTTPTest(rate, duration, interval, conn_cnt, 
+      max_random_data_len, content_length, type, need_stats,
+      range_step, range_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
