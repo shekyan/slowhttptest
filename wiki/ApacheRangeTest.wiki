@@ -11,3 +11,5 @@ Example:
 {{{
 slowhttptest -R -u http://127.0.1.1/ -t GET -c 1000 -a 10 -b 3000 -r 500
 }}}
+
+Test can be performed with various connection rate and number, over SSL, etc. Basically all options that make sense to use with range test are supported in -R mode and are described [InstallationAndUsage here] .
