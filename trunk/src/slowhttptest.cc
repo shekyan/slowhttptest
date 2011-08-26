@@ -102,7 +102,7 @@ namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
                            int interval, int con_cnt, int max_random_data_len,
                            int content_length, SlowTestType type,
-                           bool need_stats, int range_step, int range_limit)
+                           bool need_stats, int range_start, int range_limit)
     : delay_(delay),
       duration_(duration),
       followup_timing_(interval),
@@ -113,7 +113,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       content_length_(content_length),
       test_type_(type),
       need_stats_(need_stats),
-      range_step_(range_step),
+      range_start_(range_start),
       range_limit_(range_limit),
       exit_status_(eCancelledByUser),
       extra_data_max_len_total_(0) {
@@ -254,7 +254,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     request_.append("\r\n");
     request_.append(post_request);
   } else if(eRange == test_type_) {
-    GenerateRangeHeader(5, range_step_, range_limit_, &request_);
+    GenerateRangeHeader(range_start_, 1, range_limit_, &request_);
   }
   // init statistics
   if(need_stats_) {

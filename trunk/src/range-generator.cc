@@ -41,7 +41,7 @@ void GenerateRangeHeader(int start, int step, int limit,
                                   string* output) {
   std::ostringstream oss;
   oss << "Range: bytes=0-,";
-  for (int i = start; i < limit; i+= step) {
+  for (int i = 0; i < limit; i+= step) {
     oss << start << '-' << i << ',';
   }
   oss << start << '-' << limit << "\r\nAccept-Encoding: gzip\r\nConnection:"
