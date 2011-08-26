@@ -18,5 +18,8 @@ void GenerateHeadRequestWithRange(const std::string& verb,
                                   int start, int step, int limit,
                                   std::string* output);
 
+void GenerateRangeHeader(int start, int step, int limit,
+                                  std::string* output);
+
 
 }  // namespace slowhttptest
