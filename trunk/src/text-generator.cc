@@ -57,3 +57,4 @@ void RandomTextGenerator::get_text(int len, string* where) {
 }
 
 }  // namespace slowhttptest
+
