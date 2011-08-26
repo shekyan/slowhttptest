@@ -16,6 +16,18 @@ const char kVersion[] = " HTTP/1.1\r\nHost: ";
 
 namespace slowhttptest {
 
+
+void GenerateRangeHeader(int start, int step, int limit,
+                                  string* output) {
+  std::ostringstream oss;
+  for (int i = 0; i < limit; i+= step) {
+    oss << start << '-' << i << ',';
+  }
+  oss << start << '-' << limit << "\r\nAccept-Encoding: gzip\r\nConnection:"
+      << " close\r\n\r\n";
+  output->append(oss.str());
+
+}
 void GenerateHeadRequestWithRange(const string& verb, 
                                   const string& path, const string& host,
                                   int start, int step, int limit,
@@ -23,12 +35,7 @@ void GenerateHeadRequestWithRange(const string& verb,
   CHECK_NOTNULL(output)->clear();
   std::ostringstream oss;
   oss << verb << " " << path << kVersion << host << "\r\nRange: bytes=0-,";
-  for (int i = 0; i < limit; i+= step) {
-    oss << start << '-' << i << ',';
-  }
-  oss << start << '-' << limit << "\r\nAccept-Encoding: gzip\r\nConnection:"
-      << " close\r\n\r\n";
-  *output = oss.str();
+  GenerateRangeHeader(start, step, limit, output);
 }
 
 }  // namespace slowhttptest
