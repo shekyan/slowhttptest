@@ -58,7 +58,7 @@ class SlowHTTPTest {
  public:
   SlowHTTPTest(int delay, int duration, int interval,
    int con_cnt, int max_random_data_len, int content_length,
-   SlowTestType type, bool need_csv);
+   SlowTestType type, bool need_stats, int range_step, int range_limit);
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb, const char* path);
@@ -94,6 +94,8 @@ class SlowHTTPTest {
   int content_length_;
   SlowTestType test_type_;
   bool need_stats_;
+  int range_step_;
+  int range_limit_;
   std::vector<StatsDumper*> dumpers_;
   ExitStatusType exit_status_;
   int connection_timeout_;
