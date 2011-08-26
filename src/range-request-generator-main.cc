@@ -12,7 +12,8 @@ using slowhttptest::GenerateHeadRequestWithRange;
 
 int main(int argc, char** argv) {
   string str;
-  GenerateHeadRequestWithRange("/", "localhost", 5, 2, 2000, &str);
+  GenerateHeadRequestWithRange("GET", "/index.html", "localhost", 5, 2, 2000,
+                               &str);
   printf("Data:\n%s\n", str.c_str());
   return 0;
 }
