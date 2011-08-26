@@ -39,7 +39,8 @@ namespace slowhttptest {
 enum SlowTestType {
   eHeader = 0,
   ePost,
-  eSlowSend
+  eSlowSend,
+  eRange
 };
 
 enum ExitStatusType {

@@ -1,5 +1,8 @@
 // (c) Victor Agababov (vagababov@gmail.com) 2011
 // Not reserving most of the rights.
+#ifndef _RANGE_REQUEST_GENERATOR_H_
+#define _RANGE_REQUEST_GENERATOR_H_
+
 #include <string>
 
 namespace slowhttptest {
@@ -18,8 +21,5 @@ void GenerateHeadRequestWithRange(const std::string& verb,
                                   int start, int step, int limit,
                                   std::string* output);
 
-void GenerateRangeHeader(int start, int step, int limit,
-                                  std::string* output);
-
-
 }  // namespace slowhttptest
+#endif  // _RANGE_REQUEST_GENERATOR_H_

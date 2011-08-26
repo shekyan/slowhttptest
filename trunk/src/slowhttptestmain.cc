@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBgc:i:l:o:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRgc:i:l:o:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'c':
         tmp = strtol(optarg, 0, 10);
@@ -126,11 +126,14 @@ int main(int argc, char **argv) {
       case 'H':
         type = slowhttptest::eHeader;
         break;
-      case 'g':
-        need_stats = true;
-        break;
       case 'B':
         type = slowhttptest::ePost;
+        break;
+      case 'R':
+        type = slowhttptest::eRange;
+        break;
+      case 'g':
+        need_stats = true;
         break;
       case 'i':
         tmp = strtol(optarg, 0, 10);
