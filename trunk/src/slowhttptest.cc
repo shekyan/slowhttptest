@@ -59,6 +59,12 @@ static const char* exit_status_msg[] = {
     "Cancelled by user",
     "Unexpected error"
 };
+
+static const char* test_type_name[] = {
+    "HEADERS",
+    "BODY",
+    "RANGE"
+};
 static const char* user_agents[] = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
     "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
@@ -211,7 +217,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     } else {
       verb_.append("POST");
     }
-  } else {
+  } else if(eRange == test_type_){
     if(strlen(verb)) {
       verb_.append(verb);
     } else {
@@ -275,7 +281,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
         "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
         "</table>",
-        test_type_? "body" : "headers",
+        test_type_name[test_type_],
         num_connections_,
         verb_.c_str(),
         content_length_,
@@ -329,7 +335,7 @@ void SlowHTTPTest::report_parameters() {
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
     "test duration:                    %d seconds\n",
-    test_type_? "body" : "headers",
+    test_type_name[test_type_],
     num_connections_,
     base_uri_.getData(),
     verb_.c_str(),
@@ -418,7 +424,7 @@ bool SlowHTTPTest::run_test() {
   const char* extra_data;
   int heartbeat_reported = 1; //trick to print 0 sec hb
   int stats_reported = 1; //trick to print 0 sec hb
-  int connection_timeout = (test_type_ == eSlowSend ? 60 : 10);
+  int connection_timeout = 10;
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
