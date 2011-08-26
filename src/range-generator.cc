@@ -40,6 +40,7 @@ namespace slowhttptest {
 void GenerateRangeHeader(int start, int step, int limit,
                                   string* output) {
   std::ostringstream oss;
+  oss << "Range: bytes=0-,";
   for (int i = start; i < limit; i+= step) {
     oss << start << '-' << i << ',';
   }
