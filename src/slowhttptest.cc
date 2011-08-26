@@ -38,6 +38,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include "range-generator.h"
 #include "slowlog.h"
 #include "slowsocket.h"
 #include "slowhttptest.h"
@@ -188,7 +189,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   extra_data_max_len_total_ = extra_data_max_len_ * 2 + (eHeader == test_type_ ? 4 : 2);
   random_extra_.resize(extra_data_max_len_total_); // including separators
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
-
+  // promise to rewrite this mess in next release
   if(eHeader == test_type_) {
     // setup follow up data pattern
     separator_ = header_separator;
@@ -200,7 +201,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     } else {
       verb_.append("GET");
     }
-  } else {
+  } else if(ePost == test_type_) {
     // setup follow up data pattern
     separator_ = body_separator;
     prefix_ = body_prefix;
@@ -209,6 +210,12 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       verb_.append(verb);
     } else {
       verb_.append("POST");
+    }
+  } else {
+    if(strlen(verb)) {
+      verb_.append(verb);
+    } else {
+      verb_.append("HEAD");
     }
   }
   // srtat building request
@@ -238,6 +245,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     request_.append(ss.str());
     request_.append("\r\n");
     request_.append(post_request);
+  } else if(eRange == test_type_) {
+    GenerateRangeHeader(5, 2, 2000, &request_);
   }
   // init statistics
   if(need_stats_) {
@@ -424,7 +433,7 @@ bool SlowHTTPTest::run_test() {
       sock_[num_connected] = new SlowSocket();
       sock_[num_connected]->set_state(eInit);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
-          followup_cnt_)) {
+          eRange == test_type_ ? 0 : followup_cnt_)) {
         sock_[num_connected]->set_state(eError);
         slowlog(LOG_ERROR, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);

@@ -48,7 +48,7 @@ PROGRAMS = $(bin_PROGRAMS)
 am_slowhttptest_OBJECTS = slowhttptestmain.$(OBJEXT) \
 	slowhttptest.$(OBJEXT) slowsocket.$(OBJEXT) \
 	slowstats.$(OBJEXT) slowurl.$(OBJEXT) slowlog.$(OBJEXT) \
-	text-generator.$(OBJEXT)
+	text-generator.$(OBJEXT) range-generator.$(OBJEXT)
 slowhttptest_OBJECTS = $(am_slowhttptest_OBJECTS)
 slowhttptest_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
@@ -160,7 +160,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign
-slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowstats.cc slowurl.cc slowlog.cc text-generator.cc slowhttptest.h slowsocket.h slowstats.h slowurl.h slowlog.h text-generator.h
+slowhttptest_SOURCES = slowhttptestmain.cc slowhttptest.cc slowsocket.cc slowstats.cc slowurl.cc slowlog.cc text-generator.cc range-generator.cc slowhttptest.h slowsocket.h slowstats.h slowurl.h slowlog.h text-generator.h range-generator.h
 all: all-am
 
 .SUFFIXES:
@@ -242,6 +242,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/range-generator.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowhttptest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowhttptestmain.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slowlog.Po@am__quote@
