@@ -6,6 +6,7 @@ namespace slowhttptest {
 
 // Generates a VERB request with repeating range fields, consisting of
 // start-0, start-1, ..., start-limit blocks.
+// verb: HTTP verb (get or head are natural choices).
 // path: the path on the server to request.
 // host: server host
 // start: the start element in the range elements
