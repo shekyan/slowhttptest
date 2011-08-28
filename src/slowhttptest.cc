@@ -141,10 +141,10 @@ bool SlowHTTPTest::change_fd_limits() {
     slowlog(LOG_ERROR, "error getting limits for open files: %s\n", strerror(errno));
     return false;
   }
-  // +3 is stdin, stdout, stderr + 2 for stat fds + 1 spare
-  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 6)) { //extend limits
-    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 6)) {
-      fd_limit.rlim_cur = num_connections_ + 6;
+  // +3 is stdin, stdout, stderr + 2 for stat fds + 4 spare
+  if(fd_limit.rlim_cur != RLIM_INFINITY && fd_limit.rlim_cur < (unsigned)(num_connections_ + 10)) { //extend limits
+    if(fd_limit.rlim_max == RLIM_INFINITY || fd_limit.rlim_max > (unsigned)(num_connections_ + 10)) {
+      fd_limit.rlim_cur = num_connections_ + 10;
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
       num_connections_ = fd_limit.rlim_max - 6;
@@ -237,7 +237,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
 
   if(base_uri_.getPort() != 80 || base_uri_.getPort() != 443) {
     request_.append(":");
-    char buf[4];
+    char buf[6];
     sprintf(buf, "%d", base_uri_.getPort());
     request_.append(buf);
   }
