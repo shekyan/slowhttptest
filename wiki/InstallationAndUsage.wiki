@@ -64,6 +64,8 @@ Repeated until server closes the connection or test hits time limit, 240 seconds
 
 Full list of configurable options is the following:          
 
+||-a start||start value of ranges-specifier for range header test||
+||-b bytes||limit of range-specifier for range header test||
 ||-c number of connections||limited to 1024||
 ||-H, B, or R||specify to slow down in headers section or in message body. -R enables range test||
 ||-g||generate statistics in CSV and HTML formats, pattern is slow_xxx.csv/html, where xxx is the time and date||
