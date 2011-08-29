@@ -237,9 +237,9 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
 
   if(base_uri_.getPort() != 80 || base_uri_.getPort() != 443) {
     request_.append(":");
-    char buf[6];
-    sprintf(buf, "%d", base_uri_.getPort());
-    request_.append(buf);
+    std::stringstream ss;
+    ss << base_uri_.getPort();
+    request_.append(ss.str());
   }
 
   request_.append("\r\n");
