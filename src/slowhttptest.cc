@@ -527,7 +527,6 @@ bool SlowHTTPTest::run_test() {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
             ret = sock_[i]->recv_slow(buf, kBufSize);
-            buf[ret] = '\0';
             if(ret <= 0 && errno != EAGAIN) {
               sock_[i]->set_state(eClosed);
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
@@ -537,6 +536,7 @@ bool SlowHTTPTest::run_test() {
               continue;
             } else {
               if(ret > 0) {// actual data recieved
+                buf[ret] = '\0';
                 slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
                     sock_[i]->get_sockfd(), buf);
               } else {
