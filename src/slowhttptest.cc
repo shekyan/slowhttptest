@@ -411,14 +411,14 @@ void SlowHTTPTest::report_status(bool to_stats) {
         "connected:           %d\n"
         "error:               %d\n"
         "closed:              %d\n"
-        "DoSed:               %s\n",
+        "Service available:   %s\n",
         seconds_passed_,
         initializing_,
         connecting_,
         connected_,
         errored_,
         closed_,
-        is_dosed_ ? "YES" : "NO");
+        is_dosed_ ? "NO" : "YES");
   }
 }
 
