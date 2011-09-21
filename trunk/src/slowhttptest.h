@@ -76,6 +76,7 @@ class SlowHTTPTest {
   RandomTextGenerator textgen_;
   addrinfo* addr_;
   std::string request_;
+  std::string probe_request_;
   std::string random_extra_;
   std::string verb_;
   std::string user_agent_;
@@ -84,6 +85,7 @@ class SlowHTTPTest {
   const char* prefix_;
   const char* postfix_;
   std::vector<SlowSocket*> sock_;
+  SlowSocket* probe_socket_;
   int delay_;
   int duration_;
   int followup_timing_;
@@ -105,6 +107,7 @@ class SlowHTTPTest {
   int errored_; 
   int closed_;
   int extra_data_max_len_total_;
+  bool is_dosed_;
 };
 
 }  // namespace slowhttptest
