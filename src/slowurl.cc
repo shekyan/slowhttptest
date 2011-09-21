@@ -31,7 +31,9 @@
 #include <string>
 
 namespace slowhttptest {
-Url::Url() {
+Url::Url()
+    : port_(0),
+      is_ssl_(false) {
 }
 
 bool Url::prepare(const char* url) {

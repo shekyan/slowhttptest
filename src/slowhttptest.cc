@@ -78,8 +78,9 @@ static const char* user_agents[] = {
     "Presto/2.9.168 Version/11.50",
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
 };
+static const char referer[] = 
+    "Referer: http://code.google.com/p/slowhttptest/\r\n";
 static const char post_request[] = "Connection: close\r\n"
-    "Referer: http://code.google.com/p/slowhttptest/\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
     "foo=bar";
@@ -116,7 +117,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       range_start_(range_start),
       range_limit_(range_limit),
       exit_status_(eCancelledByUser),
-      extra_data_max_len_total_(0) {
+      extra_data_max_len_total_(0),
+      is_dosed_(false) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
@@ -126,6 +128,10 @@ SlowHTTPTest::~SlowHTTPTest() {
        i != dumpers_.end(); ++i) {
     delete *i;
   }
+  if(probe_socket_) {
+    delete probe_socket_;
+  }
+
   dumpers_.clear();
   if(sock_.size() > 0) {
     for(int i = 0; i < num_connections_; ++i) {
@@ -246,6 +252,11 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   request_.append("User-Agent: ");
   request_.append(user_agent_);
   request_.append("\r\n");
+  request_.append(referer);
+  // method for probe is always GET
+  probe_request_.append("GET");
+  probe_request_.append(request_.begin() + verb_.size(), request_.end());
+  probe_request_.append("\r\n");
   if(ePost == test_type_) {
     request_.append("Content-Length: ");
     std::stringstream ss;
@@ -398,13 +409,15 @@ void SlowHTTPTest::report_status(bool to_stats) {
         "pending:             %d\n"
         "connected:           %d\n"
         "error:               %d\n"
-        "closed:              %d\n",
+        "closed:              %d\n"
+        "DoSed:               %s\n",
         seconds_passed_,
         initializing_,
         connecting_,
         connected_,
         errored_,
-        closed_);
+        closed_,
+        is_dosed_ ? "YES" : "NO");
   }
 }
 
@@ -426,7 +439,8 @@ bool SlowHTTPTest::run_test() {
   const char* extra_data;
   int heartbeat_reported = 1; //trick to print 0 sec hb
   int stats_reported = 1; //trick to print 0 sec hb
-  int connection_timeout = 10;
+  int probe_taken = -1; // connect probe every second 
+  int connection_timeout = followup_timing_;
   timerclear(&now);
   timerclear(&timeout);
   timerclear(&progress_timer);
@@ -436,6 +450,35 @@ bool SlowHTTPTest::run_test() {
   // select loop
   while(true) {
     int wr = 0;
+
+    seconds_passed_ = progress_timer.tv_sec;
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
+    // init and connect probe socket
+    if(!probe_socket_ && probe_taken != seconds_passed_) {
+      probe_socket_ = new SlowSocket();
+      if(probe_socket_->init(addr_, &base_uri_, maxfd, 0)) {
+        probe_taken = seconds_passed_;
+      } else {
+        slowlog(LOG_ERROR, "%s: Unable to initialize probe socket.\n", __FUNCTION__);
+      }
+    } else {
+      if(probe_socket_ && probe_socket_->get_sockfd() &&
+          (seconds_passed_ - probe_taken >= followup_timing_)) {
+        delete probe_socket_;
+        probe_socket_ = NULL;
+        is_dosed_ = true;
+      }
+    }
+    if(probe_socket_ && probe_socket_->get_sockfd()) {
+      if(probe_socket_->get_requests_to_send()) {
+        FD_SET(probe_socket_->get_sockfd(), &writefds);
+        ++wr;
+      }
+      slowlog(LOG_DEBUG, "%s: probe socket created: fd = %d\n", __FUNCTION__, probe_socket_->get_sockfd());
+      FD_SET(probe_socket_->get_sockfd(), &readfds);
+    }
+
     active_sock_num = 0;
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
@@ -451,9 +494,6 @@ bool SlowHTTPTest::run_test() {
         ++num_connected;
       }
     }
-    seconds_passed_ = progress_timer.tv_sec;
-    FD_ZERO(&readfds);
-    FD_ZERO(&writefds);
     for(int i = 0; i < num_connected; ++i) {
       if(sock_[i] && sock_[i]->get_sockfd() > 0) {
         FD_SET(sock_[i]->get_sockfd(), &readfds);
@@ -473,12 +513,12 @@ bool SlowHTTPTest::run_test() {
     }
     // Print every second.
     if(need_stats_ && stats_reported != seconds_passed_) {
-      report_status(true /*print_csv*/);
+      report_status(true /*print_stats*/);
       stats_reported = seconds_passed_;
     }
     // Print every 5 seconds.
     if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
-      report_status(false /*print_csv*/);
+      report_status(false /*print_stats*/);
       heartbeat_reported = seconds_passed_;
     }
     if(!g_running) {
@@ -523,6 +563,52 @@ bool SlowHTTPTest::run_test() {
       // nothing to monitor
       //continue;
     } else {
+      if(probe_socket_ && probe_socket_->get_sockfd()) {
+        if(FD_ISSET(probe_socket_->get_sockfd(), &readfds)) {
+          ret = probe_socket_->recv_slow(buf, kBufSize);
+          buf[ret] = '\0';
+          if(ret < 0 && errno != EAGAIN) {
+            is_dosed_ = true;
+            slowlog(LOG_DEBUG, "%s: probe socket %d closed: %s\n", __FUNCTION__,
+                probe_socket_->get_sockfd(),
+                strerror(errno));
+          } else {
+            if(ret > 0) {
+              slowlog(LOG_DEBUG, "%s:probe  sock %d replied %s\n", __FUNCTION__,
+                  probe_socket_->get_sockfd(), buf);
+                  is_dosed_ = false;
+            }
+          }
+          delete probe_socket_;
+          probe_socket_ = NULL;
+        }
+      }
+      if(probe_socket_ && probe_socket_->get_sockfd()) {
+        if(FD_ISSET(probe_socket_->get_sockfd(), &writefds)) {
+          ret = probe_socket_->send_slow(probe_request_.c_str(),
+           probe_request_.size());
+          if(ret <= 0 && errno != EAGAIN) {
+            is_dosed_ = true;
+            slowlog(LOG_DEBUG,
+                "%s:error sending request on probe socket %d:\n%s\n",
+                __FUNCTION__, probe_socket_->get_sockfd(),
+                strerror(errno));
+            delete probe_socket_;
+            probe_socket_ = NULL;
+          } else {
+            if(ret > 0) { //actual data was sent
+              is_dosed_ = false;
+              slowlog(LOG_DEBUG,
+                  "%s:%d of %d bytes sent on probe socket %d:\n%s\n",
+                  __FUNCTION__, ret,
+                  (int) probe_request_.size(),
+                  (int) probe_socket_->get_sockfd(),
+                  probe_request_.c_str());
+            }
+          }
+        }
+      }
+
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read

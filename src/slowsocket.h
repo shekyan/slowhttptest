@@ -52,10 +52,9 @@ class SlowSocket {
  public:
   SlowSocket();
   ~SlowSocket();
-  bool isEmpty() {
+  const bool isEmpty() const {
     return -1 == sockfd_ && !ssl_;
   }
-  const bool is_connect_initiated() const {return connect_initiated_;};
   void close();
 
   bool init(addrinfo* addr, const Url* url, int& maxfd,
@@ -121,7 +120,6 @@ class SlowSocket {
   bool connect_ssl(addrinfo* addr);
   int set_nonblocking();
   
-  int connect_initiated_;
   int sockfd_;
   int requests_to_send_;
   int followups_to_send_;
