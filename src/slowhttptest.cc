@@ -412,7 +412,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
         "connected:           %d\n"
         "error:               %d\n"
         "closed:              %d\n"
-        "Service available:   %s\n",
+        "service available:   %s\n",
         seconds_passed_,
         initializing_,
         connecting_,
@@ -461,6 +461,8 @@ bool SlowHTTPTest::run_test() {
       probe_socket_ = new SlowSocket();
       if(probe_socket_->init(addr_, &base_uri_, maxfd, 0)) {
         probe_taken = seconds_passed_;
+      slowlog(LOG_DEBUG, "%s: created probe socket %d\n",
+          __FUNCTION__, probe_socket_->get_sockfd());
       } else {
         slowlog(LOG_ERROR, "%s: Unable to initialize probe socket.\n", __FUNCTION__);
       }
@@ -477,7 +479,6 @@ bool SlowHTTPTest::run_test() {
         FD_SET(probe_socket_->get_sockfd(), &writefds);
         ++wr;
       }
-      slowlog(LOG_DEBUG, "%s: probe socket created: fd = %d\n", __FUNCTION__, probe_socket_->get_sockfd());
       FD_SET(probe_socket_->get_sockfd(), &readfds);
     }
 
@@ -574,15 +575,22 @@ bool SlowHTTPTest::run_test() {
             slowlog(LOG_DEBUG, "%s: probe socket %d closed: %s\n", __FUNCTION__,
                 probe_socket_->get_sockfd(),
                 strerror(errno));
+            delete probe_socket_;
+            probe_socket_ = NULL;
+
           } else {
             if(ret > 0) {
-              slowlog(LOG_DEBUG, "%s:probe  sock %d replied %s\n", __FUNCTION__,
+              slowlog(LOG_DEBUG, "%s:probe socket %d replied %s\n", __FUNCTION__,
                   probe_socket_->get_sockfd(), buf);
                   is_dosed_ = false;
+                  delete probe_socket_;
+                  probe_socket_ = NULL;
+            } else {
+              slowlog(LOG_DEBUG, "%s: pending probe socket %d\n", __FUNCTION__,
+                   probe_socket_->get_sockfd());
             }
+
           }
-          delete probe_socket_;
-          probe_socket_ = NULL;
         }
       }
       if(probe_socket_ && probe_socket_->get_sockfd()) {
@@ -599,13 +607,15 @@ bool SlowHTTPTest::run_test() {
             probe_socket_ = NULL;
           } else {
             if(ret > 0) { //actual data was sent
-              is_dosed_ = false;
               slowlog(LOG_DEBUG,
                   "%s:%d of %d bytes sent on probe socket %d:\n%s\n",
                   __FUNCTION__, ret,
                   (int) probe_request_.size(),
                   (int) probe_socket_->get_sockfd(),
                   probe_request_.c_str());
+            } else {
+              slowlog(LOG_DEBUG, "%s: pending probe socket %d\n", __FUNCTION__,
+                   probe_socket_->get_sockfd());
             }
           }
         }

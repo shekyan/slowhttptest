@@ -58,7 +58,7 @@ const char* HTML_FOOTER =
         var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));\n \
         chart.draw(data, {'width': 600, 'height': 360, 'title': 'Test results against %s', \
         hAxis: {'title': 'Seconds', 'titleTextStyle': {color: '#FF0000'}},\n \
-        vAxis: {'title': 'Connections', 'titleTextStyle': {color: '#FF0000'}}\n \
+        vAxis: {'title': 'Connections', 'titleTextStyle': {color: '#FF0000'}, 'viewWindowMode':'maximized'}\n \
     });\n \
     }\n \
     </script>\n \
