@@ -227,7 +227,7 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
 void SlowSocket::close() {
   if (-1 == sockfd_) return;
 
-  slowlog(LOG_DEBUG, "closing slow, sock is %d\n", sockfd_);
+  slowlog(LOG_DEBUG, "closing slow socket %d\n", sockfd_);
   if(ssl_) {
     SSL_free(ssl_);
     SSL_CTX_free(ssl_ctx_);
