@@ -103,13 +103,15 @@ namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
                            int interval, int con_cnt, int max_random_data_len,
                            int content_length, SlowTestType type,
-                           bool need_stats, int range_start, int range_limit)
+                           bool need_stats, int probe_interval,
+                           int range_start, int range_limit)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
       followup_timing_(interval),
       followup_cnt_(duration_ / followup_timing_),
       num_connections_(con_cnt),
+      probe_timeout_(probe_interval),
       extra_data_max_len_(max_random_data_len),
       seconds_passed_(0),
       content_length_(content_length),
@@ -468,7 +470,7 @@ bool SlowHTTPTest::run_test() {
       }
     } else {
       if(probe_socket_ && probe_socket_->get_sockfd() &&
-          (seconds_passed_ - probe_taken >= followup_timing_)) {
+          (seconds_passed_ - probe_taken >= probe_timeout_)) {
         delete probe_socket_;
         probe_socket_ = NULL;
         is_dosed_ = true;

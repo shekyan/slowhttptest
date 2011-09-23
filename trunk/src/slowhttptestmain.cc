@@ -46,6 +46,7 @@ static void usage() {
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "[-o <output file path and/or name>]\n"
+      "[-p <timeout for probe connection>]\n"
       "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
       "[-u <URL>]\n"
@@ -63,6 +64,9 @@ static void usage() {
       "-l seconds,      target test length in seconds, default: 240\n\t"
       "-o file,         save statistics output in file.html and file.csv,\n\t"
       "                 -g must be specified to use this option\n\t"
+      "-p seconds,      timeout to wait for HTTP response on probe connection,\n\t"
+      "                 after which server is considered inaccessible,\n\t"
+      "                 default: 10\n\t"
       "-r num,          connection rate (connections per seconds), default: 50\n\t"
       "-s bytes,        value of Content-Length header if needed, default: 4096\n\t"
       "-t verb          verb to use in request,\n\t"
@@ -101,20 +105,21 @@ int main(int argc, char **argv) {
   char path[1024] = { 0 };
   char verb[16] = { 0 };
   // default vaules
-  int range_start = 5;
-  int range_limit = 2000;
-  int conn_cnt = 50;
-  int content_length = 4096;
-  int rate = 50;
-  int duration = 240;
-  int debug_level = LOG_INFO;
-  int interval = 10;
+  int conn_cnt            = 50;
+  int content_length      = 4096;
+  int duration            = 240;
+  int interval            = 10;
   int max_random_data_len = 32;
-  bool  need_stats = false;
+  int probe_interval      = 10;
+  int range_start         = 5;
+  int range_limit         = 2000;
+  int rate                = 50;
+  int debug_level         = LOG_INFO;
+  bool  need_stats        = false;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRga:b:c:i:l:o:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRga:b:c:i:l:o:p:r:s:t:u:v:x:")) != -1) {
     switch (o) {
       case 'a':
         tmp = strtol(optarg, 0, 10);
@@ -180,6 +185,15 @@ int main(int argc, char **argv) {
       case 'o':
         strncpy(path, optarg, 1023);
         break;
+      case 'p':
+        tmp = strtol(optarg, 0, 10);
+        if(tmp && tmp <= INT_MAX) {
+          probe_interval = static_cast<int>(tmp);
+        } else {
+          usage();
+          return -1;
+        }
+        break;
       case 'r':
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= INT_MAX) {
@@ -242,7 +256,7 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
-      range_start, range_limit));
+     probe_interval, range_start, range_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
