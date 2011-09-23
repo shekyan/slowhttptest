@@ -50,6 +50,7 @@ const char* HTML_HEADER =
         data.addColumn('number', 'Closed');\n \
         data.addColumn('number', 'Pending');\n \
         data.addColumn('number', 'Connected');\n \
+        data.addColumn('number', 'Service available');\n \
         data.addRows([\n";
 
 const char* HTML_FOOTER = 
