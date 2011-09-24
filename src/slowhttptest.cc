@@ -295,6 +295,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         "<tr><td><b>Extra data max length</b></td><td>%d</td></tr>"
         "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
         "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
+        "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
         "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
         "</table>",
         test_type_name[test_type_],
@@ -304,6 +305,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         extra_data_max_len_total_,
         followup_timing_,
         delay_,
+        probe_timeout_,
         duration_
         );
 
@@ -350,6 +352,7 @@ void SlowHTTPTest::report_parameters() {
     "follow up data max size:          %d\n"
     "interval between follow up data:  %d seconds\n"
     "connections per seconds:          %d\n"
+    "probe connection timeout:         %d seconds\n"
     "test duration:                    %d seconds\n",
     test_type_name[test_type_],
     num_connections_,
@@ -359,6 +362,7 @@ void SlowHTTPTest::report_parameters() {
     extra_data_max_len_total_,
     followup_timing_,
     delay_,
+    probe_timeout_,
     duration_
   );
 }
