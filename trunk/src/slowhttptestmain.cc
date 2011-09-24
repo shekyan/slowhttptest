@@ -66,7 +66,7 @@ static void usage() {
       "                 -g must be specified to use this option\n\t"
       "-p seconds,      timeout to wait for HTTP response on probe connection,\n\t"
       "                 after which server is considered inaccessible,\n\t"
-      "                 default: 10\n\t"
+      "                 default: 5\n\t"
       "-r num,          connection rate (connections per seconds), default: 50\n\t"
       "-s bytes,        value of Content-Length header if needed, default: 4096\n\t"
       "-t verb          verb to use in request,\n\t"
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
   int duration            = 240;
   int interval            = 10;
   int max_random_data_len = 32;
-  int probe_interval      = 10;
+  int probe_interval      = 5;
   int range_start         = 5;
   int range_limit         = 2000;
   int rate                = 50;
