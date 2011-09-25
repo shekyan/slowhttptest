@@ -480,7 +480,7 @@ bool SlowHTTPTest::run_test() {
         is_dosed_ = true;
       }
     }
-    if(probe_socket_ && probe_socket_->get_sockfd()) {
+    if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
       if(probe_socket_->get_requests_to_send()) {
         FD_SET(probe_socket_->get_sockfd(), &writefds);
         ++wr;
@@ -572,7 +572,7 @@ bool SlowHTTPTest::run_test() {
       // nothing to monitor
       //continue;
     } else {
-      if(probe_socket_ && probe_socket_->get_sockfd()) {
+      if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
         if(FD_ISSET(probe_socket_->get_sockfd(), &readfds)) {
           ret = probe_socket_->recv_slow(buf, kBufSize);
           buf[ret] = '\0';
@@ -599,7 +599,7 @@ bool SlowHTTPTest::run_test() {
           }
         }
       }
-      if(probe_socket_ && probe_socket_->get_sockfd()) {
+      if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
         if(FD_ISSET(probe_socket_->get_sockfd(), &writefds)) {
           ret = probe_socket_->send_slow(probe_request_.c_str(),
            probe_request_.size());
