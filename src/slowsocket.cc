@@ -117,7 +117,6 @@ bool SlowSocket::connect_ssl(addrinfo* addr) {
   if(!connect_plain(addr)) return false;
    
   // Init SSL related stuff.
-  // TODO(vagababov): this is not thread safe of pretty.
   static bool ssl_is_initialized = false;
   if (!ssl_is_initialized) {
     SSL_library_init();
@@ -181,20 +180,21 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
           return -1;
         } else {
           if(SSL_ERROR_WANT_READ == err) {
-            requests_to_send_=0;
+            requests_to_send_ = 0;
           }
           else {
-            requests_to_send_=1;
+            requests_to_send_ = 1;
           }
           errno = EAGAIN;
           return -1;
         }
       } else { //connected and handhsake finished
-        requests_to_send_=1;
+        requests_to_send_ = 1;
       }
     } else {
       if(requests_to_send_ > 0) { //report for initial data only
-        slowlog(LOG_DEBUG, "SSL connection is using %s\n", SSL_get_cipher(ssl_));
+        slowlog(LOG_DEBUG, "socket %d: SSL connection is using %s\n", sockfd_,
+            SSL_get_cipher(ssl_));
       }
     }
   }
@@ -211,7 +211,7 @@ int SlowSocket::send_slow(const void* buf, size_t len, const SendType type) {
   // entire data was sent
   if(ret > 0 && ret == offset_) {
     if(eInitialSend == type) {
-      --requests_to_send_;
+      requests_to_send_ = 0;
     } else if(eFollowUpSend == type) {
       --followups_to_send_;
     }
