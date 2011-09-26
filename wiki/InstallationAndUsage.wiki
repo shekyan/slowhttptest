@@ -3,9 +3,9 @@
 
 The tool is distributed as portable package, so just download the latest tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads] section, extract, configure, compile, and install:
 {{{
-$ tar -xzvf slowhttptest-1.2.tar.gz
+$ tar -xzvf slowhttptest-x.x.tar.gz
 
-$ cd slowhttptest-1.2
+$ cd slowhttptest-x.x
 
 $ ./configure –prefix=PREFIX
 
@@ -26,13 +26,14 @@ $ PREFIX/bin/slowhttptest
 and test begins with the following default parameters:
 
 
-||slow section:||headers||
+||slow section||headers||
 ||number of connections||50||
 ||URL||http://localhost/||
 ||verb||GET||
 ||interval between follow up data||10 seconds||
 ||connections per second||50||
 ||test duration||240 seconds||
+||probe connection timeout||5 seconds||
 ||max length of followup data field||32 bytes||
 
 Every connection would generate an initial request containing:
@@ -61,6 +62,7 @@ X-iFrjuN: PdR7Jcj27P
  
 
 Repeated until server closes the connection or test hits time limit, 240 seconds in this case.
+Probe socket connects every second and takes a probe of web server availability by sending complete GET request. If server responds within probe connection timeout interval (specified by -p argument), server is considered available, otherwise it's considered DoSed. Default value of 5 seconds might be not enough for slow servers, or if SSL connection is being used, so appropriate value should be around average response time of the server. 
 
 Full list of configurable options is the following:          
 
@@ -72,6 +74,7 @@ Full list of configurable options is the following:
 ||-i seconds||interval between follow up data in seconds, per connection||
 ||-l seconds||test duration in seconds||
 ||-o file||custom output file path and/or name, effective if -g is specified||
+||-p seconds||timeout to wait for HTTP response on probe connection, after which server is considered inaccessible||
 ||-r connections per second||connection rate||
 ||-s bytes||value of Content-Length header, if -B specified||
 ||-t verb||custom verb to use||
@@ -81,7 +84,7 @@ Full list of configurable options is the following:
 
 Actual example of usage:
 {{{
-./slowhttptest -c 1000 -B -g -o my_server_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u https://myseceureserver/resources/index.html -x 10
+./slowhttptest -c 1000 -B -g -o my_server_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u https://myseceureserver/resources/index.html -x 10 -p 3
 }}}
 
 ==Output==
