@@ -466,6 +466,7 @@ bool SlowHTTPTest::run_test() {
     if(!probe_socket_ && probe_taken != seconds_passed_) {
       probe_socket_ = new SlowSocket();
       if(probe_socket_->init(addr_, &base_uri_, maxfd, 0)) {
+        probe_socket_->set_state(eConnecting);
         probe_taken = seconds_passed_;
       slowlog(LOG_DEBUG, "%s: created probe socket %d\n",
           __FUNCTION__, probe_socket_->get_sockfd());
