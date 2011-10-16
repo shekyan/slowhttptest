@@ -1,15 +1,16 @@
 #labels Featured,Usage
-In version 1.1 we added test for Apache range header handling vulnerability. 
+В версии 1.1 добавлена поддержка тестирования на уязвимость к обработе заголовка Range, описанная [http://httpd.apache.org/security/CVE-2011-3192.txt здесь]
 
--R would start the test with default values, and generate a HEAD request with header Range: 0-, x-1, x-2, x-3 ... x-y
+-R начинает тест с параметрами по умолчанию, и генерирует HEAD запросы с заголовком формата: 0-, x-1, x-2, x-3 ... x-y
 
-where x is set by -a argument, and y is set by -b argument and increments in step of 1 byte.
+, где х устанавливается ключом -a, а y устанавливается ключом -b, и возрастает с шагом 1. 
 
-Don't run the scan from same machine where server under test is, because entire system might become unstable. 
+Не советуется запускать скан на ток же машине, где запущен тестируемый сервер, так как система может выйти из под контроля. 
 
-Example:
+Пример использования:
 {{{
 slowhttptest -R -u http://127.0.1.1/ -t GET -c 1000 -a 10 -b 3000 -r 500
 }}}
 
-Test can be performed with various connection rate and number, over SSL, etc. Basically all options that make sense to use with range test are supported in -R mode and are described [InstallationAndUsage here] .
+Тестировать можно с разными количеством и скоростью соединений, SSL, и так далее. Большинство опций, доступных для других режимов тестирования, сработают и для этого теста, если они имеют смысл для режима -R. Список опций доступен [InstallationAndUsage здесь].
+
