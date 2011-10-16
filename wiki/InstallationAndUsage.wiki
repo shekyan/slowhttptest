@@ -62,7 +62,7 @@ X-iFrjuN: PdR7Jcj27P
  
 
 Repeated until server closes the connection or test hits time limit, 240 seconds in this case.
-Probe socket connects every second and takes a probe of web server availability by sending complete GET request. If server responds within probe connection timeout interval (specified by -p argument), server is considered available, otherwise it's considered DoSed. Default value of 5 seconds might be not enough for slow servers, or if SSL connection is being used, so appropriate value should be around average response time of the server. 
+There is a Probe socket, which connects every second and takes a probe of web server availability by sending complete GET request. If server responds within probe connection timeout interval (specified by -p argument), server is considered available, otherwise it's considered DoSed. Default value of 5 seconds might be not enough for slow servers, or if SSL connection is being used, so appropriate value should be around average response time of the server. 
 
 Full list of configurable options is the following:          
 
