@@ -1,5 +1,5 @@
 #labels Featured,Phase-Deploy
-==Installation==
+==Установка==
 
 The tool is distributed as portable package, so just download the latest tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads] section, extract, configure, compile, and install:
 {{{
