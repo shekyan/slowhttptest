@@ -98,6 +98,6 @@ Here is a sample screenshot of generated HTML page
 [https://lh5.googleusercontent.com/-vU4CrGXWOKQ/ToEhHQXKP0I/AAAAAAAAA6g/7GV2rnidAVI/s800/nginx_new.png]
 
 
-where connections states are graphically represented, and give the picture on how particular server behaves under specific load within given timeframe.
+that contains graphically represented connections states and server availability intervals, and gives the picture on how particular server behaves under specific load within given time frame.
 
 CSV file can be used as data source for your favorite chart building tool, like MS Excel, iWork Numbers, or Google Docs.
