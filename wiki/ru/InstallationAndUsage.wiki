@@ -1,0 +1,103 @@
+#labels Featured,Phase-Deploy
+==Installation==
+
+The tool is distributed as portable package, so just download the latest tarball from [http://code.google.com/p/slowhttptest/downloads/list Downloads] section, extract, configure, compile, and install:
+{{{
+$ tar -xzvf slowhttptest-x.x.tar.gz
+
+$ cd slowhttptest-x.x
+
+$ ./configure –prefix=PREFIX
+
+$ make
+
+$ sudo make install
+}}}
+You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
+
+Where PREFIX must be replaced with the absolute path where slowhttptest tool should be installed.
+
+==Usage==
+
+Tool works out-of-the-box with default parameters, which are harmless and most likely will not cause a Denial of Service. Type
+{{{
+$ PREFIX/bin/slowhttptest
+}}}
+and test begins with the following default parameters:
+
+
+||slow section||headers||
+||number of connections||50||
+||URL||http://localhost/||
+||verb||GET||
+||interval between follow up data||10 seconds||
+||connections per second||50||
+||test duration||240 seconds||
+||probe connection timeout||5 seconds||
+||max length of followup data field||32 bytes||
+
+Every connection would generate an initial request containing:
+{{{
+GET / HTTP/1.1
+Host: localhost:80
+User-Agent: Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)
+}}}
+ 
+Where user-agent is being randomly picked from hard-coded list of user-agent string, and remains the same for entire test.
+
+Then, every 10 seconds a follow up header with random name and value each not greater than 32 bytes is being sent:
+{{{
+X-HMzV2bwpzQw9jU9fGjIJyZRknd7Sa54J: u6RrIoLRrte4QV92yojeewiuDa9BL2N7
+.
+. 10 seconds
+.
+X-nq0HRGnv1W: T5dSL
+.
+. 10 seconds
+.
+X-iFrjuN: PdR7Jcj27P
+.
+.
+}}}
+ 
+
+Repeated until server closes the connection or test hits time limit, 240 seconds in this case.
+Probe socket connects every second and takes a probe of web server availability by sending complete GET request. If server responds within probe connection timeout interval (specified by -p argument), server is considered available, otherwise it's considered DoSed. Default value of 5 seconds might be not enough for slow servers, or if SSL connection is being used, so appropriate value should be around average response time of the server. 
+
+Full list of configurable options is the following:          
+
+||-a start||start value of ranges-specifier for range header test||
+||-b bytes||limit of range-specifier for range header test||
+||-c number of connections||limited to 1024||
+||-H, B, or R||specify to slow down in headers section or in message body. -R enables range test||
+||-g||generate statistics in CSV and HTML formats, pattern is slow_xxx.csv/html, where xxx is the time and date||
+||-i seconds||interval between follow up data in seconds, per connection||
+||-l seconds||test duration in seconds||
+||-o file||custom output file path and/or name, effective if -g is specified||
+||-p seconds||timeout to wait for HTTP response on probe connection, after which server is considered inaccessible||
+||-r connections per second||connection rate||
+||-s bytes||value of Content-Length header, if -B specified||
+||-t verb||custom verb to use||
+||-u URL||target URL, the same format you type in browser, e.g http[s]://host[:port]/||
+||-v level||verbosity level of log 0-4||
+||-x bytes||max length of follow up data||
+
+Actual example of usage:
+{{{
+./slowhttptest -c 1000 -B -g -o my_server_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u https://myseceureserver/resources/index.html -x 10 -p 3
+}}}
+
+==Output==
+
+Depends on verbosity level, output can be either as simple as heartbeat message generated every 5 seconds showing status of connections with verbosity level 1, or full traffic dump with verbosity level 4.
+
+-g option would generate both CSV file and interactive HTML based on Google Chart Tools.
+
+Here is a sample screenshot of generated HTML page
+
+[https://lh5.googleusercontent.com/-vU4CrGXWOKQ/ToEhHQXKP0I/AAAAAAAAA6g/7GV2rnidAVI/s800/nginx_new.png]
+
+
+where connections states are graphically represented, and give the picture on how particular server behaves under specific load within given timeframe.
+
+CSV file can be used as data source for your favorite chart building tool, like MS Excel, iWork Numbers, or Google Docs.
