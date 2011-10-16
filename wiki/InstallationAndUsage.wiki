@@ -13,9 +13,9 @@ $ make
 
 $ sudo make install
 }}}
-You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
-
 Where PREFIX must be replaced with the absolute path where slowhttptest tool should be installed.
+
+You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
 
 ==Usage==
 
@@ -43,7 +43,7 @@ Host: localhost:80
 User-Agent: Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)
 }}}
  
-Where user-agent is being randomly picked from hard-coded list of user-agent string, and remains the same for entire test.
+Where user-agent is being randomly picked from hard-coded list of user-agent strings, and remains the same for entire test.
 
 Then, every 10 seconds a follow up header with random name and value each not greater than 32 bytes is being sent:
 {{{
