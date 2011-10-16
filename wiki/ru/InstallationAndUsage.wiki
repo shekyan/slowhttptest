@@ -1,7 +1,7 @@
 #labels Featured,Phase-Deploy
 ==Установка==
 
-Утилита распространяется как portable package, так что просто скачайте последний архив из [http://code.google.com/p/slowhttptest/downloads/list Downloads] секции, разархивируйте, сконфигурируйте, скомпилируйте, и  установите:
+Утилита распространяется как portable package, так что просто скачайте последнюю версию архива из [http://code.google.com/p/slowhttptest/downloads/list Downloads] секции, разархивируйте, сконфигурируйте, скомпилируйте, и  установите:
 {{{
 $ tar -xzvf slowhttptest-x.x.tar.gz
 
@@ -27,15 +27,15 @@ $ PREFIX/bin/slowhttptest
 и тест запустится со следующими параметрами по умолчанию:
 
 
-||slow section||headers||
-||number of connections||50||
+||замедляемая секция||заголовки||
+||количество соединений||50||
 ||URL||http://localhost/||
-||verb||GET||
-||interval between follow up data||10 seconds||
-||connections per second||50||
-||test duration||240 seconds||
-||probe connection timeout||5 seconds||
-||max length of followup data field||32 bytes||
+||метод||GET||
+||интервал между дополнительными посылаемыми данными||10 секунд||
+||соединений в секунду||50||
+||длительность теста||240 секунд||
+||Таймаут соединения для проб||5 секунд||
+||максимальная длина имени или значения допольнителных данных||32 байта||
 
 Для каждого соединения сгенерируется запрос, содержащий:
 {{{
@@ -83,7 +83,7 @@ X-iFrjuN: PdR7Jcj27P
 ||-v level||verbosity level of log 0-4||
 ||-x bytes||max length of follow up data||
 
-Пример использвания:
+Пример использования:
 {{{
 ./slowhttptest -c 1000 -B -g -o my_server_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u https://myseceureserver/resources/index.html -x 10 -p 3
 }}}
