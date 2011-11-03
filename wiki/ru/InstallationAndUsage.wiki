@@ -1,7 +1,7 @@
 #labels Featured,Phase-Deploy
 ==Установка==
 
-Утилита распространяется как portable package, так что просто скачайте последнюю версию архива из секции [http://code.google.com/p/slowhttptest/downloads/list Downloads], разархивируйте, сконфигурируйте, скомпилируйте, и  установите:
+Утилита распространяется как portable package, так что просто скачайте последнюю версию архива из секции [http://code.google.com/p/slowhttptest/downloads/list Downloads], распакуйте, сконфигурируйте, скомпилируйте, и  установите:
 {{{
 $ tar -xzvf slowhttptest-x.x.tar.gz
 
