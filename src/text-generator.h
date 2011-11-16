@@ -38,8 +38,8 @@ class TextGenerator {
   TextGenerator() {};
   virtual ~TextGenerator() {}
 
-  virtual std::string GetText(int len) = 0;
-  virtual void get_text(int len, std::string* where) = 0;
+  virtual std::string GetText(size_t len) = 0;
+  virtual void get_text(size_t len, std::string* where) = 0;
 };
 
 
@@ -47,8 +47,8 @@ class RandomTextGenerator {
  public:
   RandomTextGenerator() { ::srand(time(NULL)); }
   virtual ~RandomTextGenerator() {}
-  virtual void get_text(int len, std::string* where);
-  virtual std::string get_text(int len);
+  virtual void get_text(size_t len, std::string* where);
+  virtual std::string get_text(size_t len);
 };
 
 }  // namespace slowhttptest

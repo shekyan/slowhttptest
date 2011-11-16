@@ -39,7 +39,8 @@ namespace slowhttptest {
 enum SlowTestType {
   eHeader = 0,
   ePost,
-  eRange
+  eRange,
+  eSlowRead
 };
 
 enum ExitStatusType {
@@ -59,7 +60,8 @@ class SlowHTTPTest {
   SlowHTTPTest(int delay, int duration, int interval,
    int con_cnt, int max_random_data_len, int content_length,
    SlowTestType type, bool need_stats, int probe_interval,
-   int range_start, int range_limit);
+   int range_start, int range_limit, int read_interval,
+   int window_size_limit);
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb, const char* path);
@@ -108,6 +110,8 @@ class SlowHTTPTest {
   int errored_; 
   int closed_;
   int extra_data_max_len_total_;
+  int read_interval_;
+  int window_size_limit_;
   bool is_dosed_;
 };
 

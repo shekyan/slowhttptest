@@ -58,7 +58,7 @@ class SlowSocket {
   void close();
 
   bool init(addrinfo* addr, const Url* url, int& maxfd,
-      int followups_to_send);
+      int followups_to_send, int read_interval = 0, int wnd_size = -1);
   int recv_slow(void* buf, size_t len);
   int send_slow(const void* msg, size_t len, const SendType type =
       eInitialSend);
@@ -99,7 +99,11 @@ class SlowSocket {
     return state_;
   }
 
+  const bool is_ready_read(const timeval* t) const;
+  void set_last_read(const timeval* t);
+
  private:
+  bool set_window_size(int wnd_size);
 
   static long timeval_to_milliseconds(const timeval* t) {
     return (t->tv_sec * 1000) + (t->tv_usec / 1000);
@@ -132,6 +136,9 @@ class SlowSocket {
   long connected_in_millisecs_;
   long stop_in_millisecs_;
   SocketState state_;
+  long last_read_in_msec_;
+  int window_size_;
+  long read_interval_;
 };
 
 }  // namespace slowhttptest
