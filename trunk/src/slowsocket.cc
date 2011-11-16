@@ -53,11 +53,18 @@ SlowSocket::SlowSocket()
       start_in_millisecs_(0),
       connected_in_millisecs_(0),
       stop_in_millisecs_(0),
-      state_(eInit) {
+      state_(eInit),
+      last_read_in_msec_(0),
+      read_interval_(0),
+      window_size_(-1) {
 }
 
 SlowSocket::~SlowSocket() {
   close();
+}
+
+bool SlowSocket::set_window_size(int wnd_size) {
+	return setsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &wnd_size, sizeof(wnd_size));
 }
 
 int SlowSocket::set_nonblocking() {
@@ -70,8 +77,10 @@ int SlowSocket::set_nonblocking() {
 }
 
 bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
-                      int followups_to_send) {
-  addrinfo* res;
+                      int followups_to_send, int read_interval, int wnd_size) {
+ 	read_interval_ = read_interval * 1000;
+	window_size_ = wnd_size; 
+	addrinfo* res;
   bool connect_initiated_ = false;
   for (res = addr; !connect_initiated_ && res; res = res->ai_next) {
     sockfd_ = socket(res->ai_family, res->ai_socktype,
@@ -85,8 +94,15 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
       slowlog(LOG_ERROR, "failed to set socket %d to non-blocking \n", sockfd_);
       return false;
     }
-
-    slowlog(LOG_DEBUG, "non-blocking socket %d created\n", sockfd_);
+    if(read_interval_) {
+      if(set_window_size(window_size_)) {
+        slowlog(LOG_ERROR, "Error setting receive buffer size %d on socket %d: %s",
+            window_size_, sockfd_, strerror(errno));
+        return false;
+      }
+    }
+    slowlog(LOG_DEBUG, "non-blocking socket %d created \n", sockfd_);
+    slowlog(LOG_DEBUG, "receive buffer set to %d\n", window_size_);
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
@@ -261,6 +277,26 @@ void SlowSocket::set_state(SocketState state) {
       break;
   } 
   state_ = state;
+}
+
+void SlowSocket::set_last_read(const timeval* t) {
+  if(read_interval_) {
+    last_read_in_msec_ = timeval_to_milliseconds(t);
+  }
+}
+
+const bool SlowSocket::is_ready_read(const timeval* t) const {
+  if(!read_interval_) //don't bother doing anything
+    return true;
+  long now = timeval_to_milliseconds(t);
+  if(last_read_in_msec_ == 0) {
+    now = read_interval_ + 1;
+  }
+  if(now - last_read_in_msec_ > read_interval_) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 

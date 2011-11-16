@@ -63,7 +63,8 @@ static const char* exit_status_msg[] = {
 static const char* test_type_name[] = {
     "HEADERS",
     "BODY",
-    "RANGE"
+    "RANGE",
+    "RESPONSE"
 };
 static const char* user_agents[] = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
@@ -104,7 +105,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
                            int interval, int con_cnt, int max_random_data_len,
                            int content_length, SlowTestType type,
                            bool need_stats, int probe_interval,
-                           int range_start, int range_limit)
+                           int range_start, int range_limit,
+                           int read_interval, int window_size_limit)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
@@ -121,6 +123,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       range_limit_(range_limit),
       exit_status_(eCancelledByUser),
       extra_data_max_len_total_(0),
+      read_interval_(read_interval),
+      window_size_limit_(window_size_limit),
       is_dosed_(false) {
 }
 
@@ -228,14 +232,16 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     } else {
       verb_.append("POST");
     }
-  } else if(eRange == test_type_){
+  } else if(eRange == test_type_) {
     if(strlen(verb)) {
       verb_.append(verb);
     } else {
       verb_.append("HEAD");
     }
+  } else if(eSlowRead == test_type_) {
+    verb_.append("GET");
   }
-  // srtat building request
+  // start building request
   request_.clear();
   request_.append(verb_);
   request_.append(" ");
@@ -269,6 +275,10 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     request_.append(post_request);
   } else if(eRange == test_type_) {
     GenerateRangeHeader(range_start_, 1, range_limit_, &request_);
+  }
+
+  if(eSlowRead == test_type_) {
+    request_.append("\r\n");
   }
   // init statistics
   if(need_stats_) {
@@ -494,7 +504,9 @@ bool SlowHTTPTest::run_test() {
       sock_[num_connected] = new SlowSocket();
       sock_[num_connected]->set_state(eInit);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
-          eRange == test_type_ ? 0 : followup_cnt_)) {
+          (eRange == test_type_ || eSlowRead == test_type_) ? 0 : followup_cnt_,
+          eSlowRead == test_type_ ? read_interval_ : 0,
+          (window_size_limit_ <= 1 ? window_size_limit_ : rand() % window_size_limit_))) {
         sock_[num_connected]->set_state(eError);
         slowlog(LOG_ERROR, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);
@@ -506,7 +518,9 @@ bool SlowHTTPTest::run_test() {
     }
     for(int i = 0; i < num_connected; ++i) {
       if(sock_[i] && sock_[i]->get_sockfd() > 0) {
-        FD_SET(sock_[i]->get_sockfd(), &readfds);
+        if(sock_[i]->is_ready_read(&progress_timer)) {
+          FD_SET(sock_[i]->get_sockfd(), &readfds);
+        }
         ++active_sock_num;
         if(sock_[i]->get_requests_to_send() > 0) {
           ++wr;
@@ -567,7 +581,7 @@ bool SlowHTTPTest::run_test() {
     ::gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
-      //slowlog(LOG_FATAL, "%s: select < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
+     // slowlog(LOG_FATAL, "%s: select < num_connections_error: %s\n", __FUNCTION__, strerror(errno));
       break;
     } else if(result == 0) {
       // nothing to monitor
@@ -644,6 +658,7 @@ bool SlowHTTPTest::run_test() {
                 buf[ret] = '\0';
                 slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
                     sock_[i]->get_sockfd(), buf);
+                sock_[i]->set_last_read(&progress_timer);
               } else {
                 // still in connect phase
                 //slowlog(LOG_DEBUG, "socket %d rd status:%s\n",

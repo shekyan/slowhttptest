@@ -42,21 +42,21 @@ static void usage() {
       "DoS vulnerabilities.\n"
       "Usage:\n"
       "slowtest [-a <range start>] [-b <range limit>]\n"
-      "[-c <number of connections>] [-<H|B|R>]\n"
+      "[-c <number of connections>] [-<H|B|R|X>]\n"
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
       "[-o <output file path and/or name>]\n"
       "[-p <timeout for probe connection>]\n"
       "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
-      "[-u <URL>]\n"
-      "[-v <verbosity level>] [-x <max length of follow up data>]\n"
+      "[-u <URL>] [-v <verbosity level>] \n"
+      "[-w <recv buffer limit>] [-x <max length of follow up data>]\n"
       "Options:\n\t"
       "-a start,        left boundary of range in range header, default: 5\n\t"
       "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
       "-h               display this help and exit\n\t"
-      "-H, -B, or -R    specify test mode (slow headers,body or range),\n\t"
+      "-H, -B, -R or X  specify test mode (slow headers,body, range or read),\n\t"
       "                 default: headers\n\t"
       "-g,              generate statistics with socket state changes,\n\t"
       "                 default: off\n\t"
@@ -71,9 +71,12 @@ static void usage() {
       "-s bytes,        value of Content-Length header if needed, default: 4096\n\t"
       "-t verb          verb to use in request,\n\t"
       "                 defalut to GET for slow headers and POST for slow body)\n\t"
-      "-u URL,          absolute URL to target, default: http://localhost/\n\t"
+      "-u URL,          absolute URL of target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "                 default: 1 - Info\n\t"
+      "-w size,         upper limit of socket receive buffer to use\n\t"
+      "                 with slow read (-X) test. Test uses random value for every connection\n\t"
+      "                 picked between 2 and the limit, min: 1, default: 2\n\t"
       "-x bytes,        max length of each randomized name/value pair of\n\t"
       "                 followup data per tick, e.g. -x 2 generates\n\t"
       "                 X-xx: xx for header or &xx=xx for body, where x\n\t"
@@ -114,12 +117,14 @@ int main(int argc, char **argv) {
   int range_start         = 5;
   int range_limit         = 2000;
   int rate                = 50;
+  int read_interval       = 5;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
+  int window_size_limit    = 2;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRga:b:c:i:l:o:p:r:s:t:u:v:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXga:b:c:i:l:o:p:r:s:t:u:v:w:x:")) != -1) {
     switch (o) {
       case 'a':
         tmp = strtol(optarg, 0, 10);
@@ -160,6 +165,9 @@ int main(int argc, char **argv) {
         break;
       case 'R':
         type = slowhttptest::eRange;
+        break;
+      case 'X':
+        type = slowhttptest::eSlowRead;
         break;
       case 'g':
         need_stats = true;
@@ -226,6 +234,15 @@ int main(int argc, char **argv) {
           debug_level = LOG_FATAL;
         }
         break;
+      case 'w':
+        tmp = strtol(optarg, 0, 10);
+        if(1 <= tmp && tmp <= INT_MAX) {
+          window_size_limit = tmp;
+        } else {
+          usage();
+          return -1;
+        }
+        break;
       case 'x':
         tmp = strtol(optarg, 0, 10);
         if(tmp && tmp <= INT_MAX) {
@@ -256,7 +273,8 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
-     probe_interval, range_start, range_limit));
+      probe_interval, range_start, range_limit,
+      read_interval, window_size_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;

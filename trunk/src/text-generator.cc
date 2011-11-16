@@ -43,15 +43,14 @@ namespace {
 
 
 namespace slowhttptest {
-string RandomTextGenerator::get_text(int len) {
-  // Dummy.
-  int rand_len = (rand() % len);
+string RandomTextGenerator::get_text(size_t len) {
+  int rand_len = (rand() % (len ? len : 1));
   string out(rand_len ? rand_len : 1, 'a');
   generate(out.begin(), out.end(), &gen_from_alphabet);
   return out;
 }
 
-void RandomTextGenerator::get_text(int len, string* where) {
+void RandomTextGenerator::get_text(size_t len, string* where) {
   CHECK_NOTNULL(where)->resize(len);
   generate(where->begin(), where->end(), &gen_from_alphabet);
 }
