@@ -102,11 +102,13 @@ static const char symbols[] =
 
 namespace slowhttptest {
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
-                           int interval, int con_cnt, int max_random_data_len,
+                           int interval, int con_cnt,
+                           int max_random_data_len,
                            int content_length, SlowTestType type,
                            bool need_stats, int probe_interval,
                            int range_start, int range_limit,
-                           int read_interval, int window_size_limit)
+                           int read_interval, int read_len,
+                           int window_size_limit)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
@@ -124,6 +126,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       exit_status_(eCancelledByUser),
       extra_data_max_len_total_(0),
       read_interval_(read_interval),
+      read_len_(read_len),
       window_size_limit_(window_size_limit),
       is_dosed_(false) {
 }
@@ -505,8 +508,7 @@ bool SlowHTTPTest::run_test() {
       sock_[num_connected]->set_state(eInit);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           (eRange == test_type_ || eSlowRead == test_type_) ? 0 : followup_cnt_,
-          eSlowRead == test_type_ ? read_interval_ : 0,
-          (window_size_limit_ <= 1 ? window_size_limit_ : rand() % window_size_limit_))) {
+          eSlowRead == test_type_ ? read_interval_ : 0, window_size_limit_)) {
         sock_[num_connected]->set_state(eError);
         slowlog(LOG_ERROR, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);
@@ -602,7 +604,7 @@ bool SlowHTTPTest::run_test() {
           } else {
             if(ret > 0) {
               slowlog(LOG_DEBUG, "%s:probe socket %d replied %s\n", __FUNCTION__,
-                  probe_socket_->get_sockfd(), buf);
+                  probe_socket_->get_sockfd(),buf);
                   is_dosed_ = false;
                   delete probe_socket_;
                   probe_socket_ = NULL;
@@ -645,7 +647,7 @@ bool SlowHTTPTest::run_test() {
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
-            ret = sock_[i]->recv_slow(buf, kBufSize);
+            ret = sock_[i]->recv_slow(buf, (eSlowRead == test_type_ ? read_len_ : kBufSize));
             if(ret <= 0 && errno != EAGAIN) {
               sock_[i]->set_state(eClosed);
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
@@ -656,7 +658,7 @@ bool SlowHTTPTest::run_test() {
             } else {
               if(ret > 0) {// actual data recieved
                 buf[ret] = '\0';
-                slowlog(LOG_DEBUG, "%s: sock %d replied %s\n", __FUNCTION__,
+                slowlog(LOG_DEBUG, "%s: socket %d replied:\n%s\n", __FUNCTION__,
                     sock_[i]->get_sockfd(), buf);
                 sock_[i]->set_last_read(&progress_timer);
               } else {

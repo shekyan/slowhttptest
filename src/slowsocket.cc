@@ -64,7 +64,16 @@ SlowSocket::~SlowSocket() {
 }
 
 bool SlowSocket::set_window_size(int wnd_size) {
-	return setsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &wnd_size, sizeof(wnd_size));
+  int actual_wnd_size = 0;
+  socklen_t actual_wnd_size_len = sizeof(actual_wnd_size);
+	bool ret = setsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &wnd_size, sizeof(wnd_size));
+  if(ret) {
+    slowlog(LOG_ERROR, "error setting socket send buffer size to %d: %s\n", wnd_size, strerror(errno));
+  } else {
+    getsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &actual_wnd_size, &actual_wnd_size_len);
+    slowlog(LOG_DEBUG, "set socket %d send buffer size to %d bytes(requested %d)\n", sockfd_, actual_wnd_size, wnd_size);
+  }
+  return ret; 
 }
 
 int SlowSocket::set_nonblocking() {
@@ -77,9 +86,11 @@ int SlowSocket::set_nonblocking() {
 }
 
 bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
-                      int followups_to_send, int read_interval, int wnd_size) {
+                      int followups_to_send, int read_interval, int wnd_size_max) {
  	read_interval_ = read_interval * 1000;
-	window_size_ = wnd_size; 
+  if(read_interval_) { // slow read test
+    window_size_ = wnd_size_max ? (rand() % wnd_size_max) : 1; 
+  }
 	addrinfo* res;
   bool connect_initiated_ = false;
   for (res = addr; !connect_initiated_ && res; res = res->ai_next) {
@@ -95,14 +106,9 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
       return false;
     }
     if(read_interval_) {
-      if(set_window_size(window_size_)) {
-        slowlog(LOG_ERROR, "Error setting receive buffer size %d on socket %d: %s",
-            window_size_, sockfd_, strerror(errno));
-        return false;
-      }
+      set_window_size(window_size_);
     }
     slowlog(LOG_DEBUG, "non-blocking socket %d created \n", sockfd_);
-    slowlog(LOG_DEBUG, "receive buffer set to %d\n", window_size_);
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
