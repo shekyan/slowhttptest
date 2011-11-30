@@ -45,12 +45,13 @@ static void usage() {
       "[-c <number of connections>] [-<H|B|R|X>]\n"
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
-      "[-o <output file path and/or name>]\n"
+      "[-n <slow read interval in seconds>] [-o <output file path and/or name>]\n"
       "[-p <timeout for probe connection>]\n"
       "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
       "[-u <URL>] [-v <verbosity level>] \n"
       "[-w <recv buffer limit>] [-x <max length of follow up data>]\n"
+      "[-z <slow read from recieve buffer in bytes>]\n"
       "Options:\n\t"
       "-a start,        left boundary of range in range header, default: 5\n\t"
       "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
@@ -62,6 +63,7 @@ static void usage() {
       "                 default: off\n\t"
       "-i seconds,      interval between followup data in seconds, default: 10\n\t"
       "-l seconds,      target test length in seconds, default: 240\n\t"
+      "-n seconds,      interval between read operation from recv buffer in seconds, default: 5\n\t"
       "-o file,         save statistics output in file.html and file.csv,\n\t"
       "                 -g must be specified to use this option\n\t"
       "-p seconds,      timeout to wait for HTTP response on probe connection,\n\t"
@@ -80,10 +82,23 @@ static void usage() {
       "-x bytes,        max length of each randomized name/value pair of\n\t"
       "                 followup data per tick, e.g. -x 2 generates\n\t"
       "                 X-xx: xx for header or &xx=xx for body, where x\n\t"
-      "                 is random character, default: 32\n"
+      "                 is random character, default: 32\n\t"
+      "-z bytes         bytes to slow read from receive buffer, default: 5\n"
       , PACKAGE
       , VERSION
       );
+}
+
+
+static bool parse_int(int &val) {
+  long tmp = strtol(optarg, 0, 10);
+  if(tmp && tmp <= INT_MAX) {
+    val = static_cast<int>(tmp);
+    return true;
+  } else {
+    usage();
+    return false;
+  }
 }
 
 // global flag to indicite if we need to run
@@ -118,13 +133,14 @@ int main(int argc, char **argv) {
   int range_limit         = 2000;
   int rate                = 50;
   int read_interval       = 5;
+  int read_len            = 5;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
   int window_size_limit    = 2;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRXga:b:c:i:l:o:p:r:s:t:u:v:w:x:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXga:b:c:i:l:n:o:p:r:s:t:u:v:w:x:z:")) != -1) {
     switch (o) {
       case 'a':
         tmp = strtol(optarg, 0, 10);
@@ -173,52 +189,31 @@ int main(int argc, char **argv) {
         need_stats = true;
         break;
       case 'i':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          interval = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(interval))
           return -1;
-        }
         break;
       case 'l':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          duration = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(interval))
           return -1;
-        }
+        break;
+      case 'n':
+        if(!parse_int(read_interval))
+          return -1;
         break;
       case 'o':
         strncpy(path, optarg, 1023);
         break;
       case 'p':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          probe_interval = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(probe_interval))
           return -1;
-        }
         break;
       case 'r':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          rate = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(rate))
           return -1;
-        }
         break;
       case 's':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          content_length = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(content_length))
           return -1;
-        }
         break;
       case 't':
         strncpy(verb, optarg, 15);
@@ -235,13 +230,8 @@ int main(int argc, char **argv) {
         }
         break;
       case 'w':
-        tmp = strtol(optarg, 0, 10);
-        if(1 <= tmp && tmp <= INT_MAX) {
-          window_size_limit = tmp;
-        } else {
-          usage();
+        if(!parse_int(window_size_limit))
           return -1;
-        }
         break;
       case 'x':
         tmp = strtol(optarg, 0, 10);
@@ -252,6 +242,10 @@ int main(int argc, char **argv) {
           usage();
           return -1;
         }
+        break;
+      case 'z':
+        if(!parse_int(read_len))
+          return -1;
         break;
       case '?':
         printf("Illegal option -%c\n", optopt);
@@ -274,7 +268,7 @@ int main(int argc, char **argv) {
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
       probe_interval, range_start, range_limit,
-      read_interval, window_size_limit));
+      read_interval, read_len, window_size_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;

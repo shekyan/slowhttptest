@@ -61,7 +61,7 @@ class SlowHTTPTest {
    int con_cnt, int max_random_data_len, int content_length,
    SlowTestType type, bool need_stats, int probe_interval,
    int range_start, int range_limit, int read_interval,
-   int window_size_limit);
+   int read_len, int window_size_limit);
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb, const char* path);
@@ -111,6 +111,7 @@ class SlowHTTPTest {
   int closed_;
   int extra_data_max_len_total_;
   int read_interval_;
+  int read_len_;
   int window_size_limit_;
   bool is_dosed_;
 };
