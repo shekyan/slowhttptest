@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(slowhttptest, 1.2, shekyan@gmail.com)
-AM_INIT_AUTOMAKE([slowhttptest], [1.2])
+AC_INIT(slowhttptest, 1.3, shekyan@gmail.com)
+AM_INIT_AUTOMAKE([slowhttptest], [1.3])
 AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 
@@ -13,7 +13,7 @@ AC_PROG_CC
 
 # Checks for libraries.
 # FIXME: Replace `main' with a function in `-lssl':
-AC_CHECK_LIB([ssl], [SSL_library_init], [], [AC_MSG_ERROR([OpenSSL is missing])])
+AC_CHECK_LIB([ssl], [SSL_library_init], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
 
 # Checks for header files.
 AC_HEADER_STDC
