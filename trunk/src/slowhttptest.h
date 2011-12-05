@@ -59,8 +59,9 @@ class SlowHTTPTest {
  public:
   SlowHTTPTest(int delay, int duration, int interval,
    int con_cnt, int max_random_data_len, int content_length,
-   SlowTestType type, bool need_stats, int probe_interval,
-   int range_start, int range_limit, int read_interval,
+   SlowTestType type, bool need_stats,int pipeline_factor,
+   int probe_interval, int range_start,
+   int range_limit, int read_interval,
    int read_len, int window_size_limit);
   ~SlowHTTPTest();
 
@@ -94,6 +95,7 @@ class SlowHTTPTest {
   int followup_timing_;
   int followup_cnt_;
   int num_connections_;
+  int pipeline_factor_;
   int probe_timeout_;
   int extra_data_max_len_;
   int seconds_passed_;
