@@ -105,7 +105,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
                            int interval, int con_cnt,
                            int max_random_data_len,
                            int content_length, SlowTestType type,
-                           bool need_stats, int probe_interval,
+                           bool need_stats, int pipeline_factor, 
+                           int probe_interval,
                            int range_start, int range_limit,
                            int read_interval, int read_len,
                            int window_size_limit)
@@ -115,6 +116,7 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       followup_timing_(interval),
       followup_cnt_(duration_ / followup_timing_),
       num_connections_(con_cnt),
+      pipeline_factor_(pipeline_factor),
       probe_timeout_(probe_interval),
       extra_data_max_len_(max_random_data_len),
       seconds_passed_(0),
@@ -281,7 +283,11 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   }
 
   if(eSlowRead == test_type_) {
+    request_.append("Connection: Keep-Alive\r\n");
     request_.append("\r\n");
+    for(int i = 0; i < pipeline_factor_; ++i){
+      request_.append(request_);
+    }
   }
   // init statistics
   if(need_stats_) {
@@ -603,8 +609,8 @@ bool SlowHTTPTest::run_test() {
 
           } else {
             if(ret > 0) {
-              slowlog(LOG_DEBUG, "%s:probe socket %d replied %s\n", __FUNCTION__,
-                  probe_socket_->get_sockfd(),buf);
+              slowlog(LOG_DEBUG, "%s:probe socket %d replied %d bytes:\n %s\n", __FUNCTION__,
+                  probe_socket_->get_sockfd(), ret, buf);
                   is_dosed_ = false;
                   delete probe_socket_;
                   probe_socket_ = NULL;
@@ -658,8 +664,8 @@ bool SlowHTTPTest::run_test() {
             } else {
               if(ret > 0) {// actual data recieved
                 buf[ret] = '\0';
-                slowlog(LOG_DEBUG, "%s: socket %d replied:\n%s\n", __FUNCTION__,
-                    sock_[i]->get_sockfd(), buf);
+                slowlog(LOG_DEBUG, "%s: socket %d replied %d bytes:\n%s\n", __FUNCTION__,
+                    sock_[i]->get_sockfd(),ret, buf);
                 sock_[i]->set_last_read(&progress_timer);
               } else {
                 // still in connect phase
@@ -671,6 +677,8 @@ bool SlowHTTPTest::run_test() {
           }
           if(FD_ISSET(sock_[i]->get_sockfd(), &writefds)) { // write
             if(sock_[i]->get_requests_to_send() > 0) {
+              ret = sock_[i]->send_slow(request_.c_str(),
+                  request_.size());
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());
               if(ret <= 0 && errno != EAGAIN) {

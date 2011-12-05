@@ -44,7 +44,8 @@ static void usage() {
       "slowtest [-a <range start>] [-b <range limit>]\n"
       "[-c <number of connections>] [-<H|B|R|X>]\n"
       "[-g <generate statistics>]\n"
-      "[-i <interval in seconds>] [-l <test duration in seconds>]\n"
+      "[-i <interval in seconds>] [-k <request multiply factor>]\n"
+      "[-l <test duration in seconds>]\n"
       "[-n <slow read interval in seconds>] [-o <output file path and/or name>]\n"
       "[-p <timeout for probe connection>]\n"
       "[-r <connections per second>]\n"
@@ -62,8 +63,11 @@ static void usage() {
       "-g,              generate statistics with socket state changes,\n\t"
       "                 default: off\n\t"
       "-i seconds,      interval between followup data in seconds, default: 10\n\t"
+      "-k num,          number of times to repeat same request in the connection\n\t"
+      "                 Use to multiply response size if server supports persistent connections,\n\t"
+      "                 effective in slow read (-X) mode only. default: 1\n\t"
       "-l seconds,      target test length in seconds, default: 240\n\t"
-      "-n seconds,      interval between read operation from recv buffer in seconds, default: 5\n\t"
+      "-n seconds,      interval between read operations from recv buffer in seconds, default: 5\n\t"
       "-o file,         save statistics output in file.html and file.csv,\n\t"
       "                 -g must be specified to use this option\n\t"
       "-p seconds,      timeout to wait for HTTP response on probe connection,\n\t"
@@ -72,7 +76,7 @@ static void usage() {
       "-r num,          connection rate (connections per seconds), default: 50\n\t"
       "-s bytes,        value of Content-Length header if needed, default: 4096\n\t"
       "-t verb          verb to use in request,\n\t"
-      "                 defalut to GET for slow headers and POST for slow body)\n\t"
+      "                 defalut to GET for slow headers and response and to POST for slow body\n\t"
       "-u URL,          absolute URL of target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "                 default: 1 - Info\n\t"
@@ -90,7 +94,7 @@ static void usage() {
 }
 
 
-static bool parse_int(int &val) {
+static bool parse_int(int &val, long max = INT_MAX) {
   long tmp = strtol(optarg, 0, 10);
   if(tmp && tmp <= INT_MAX) {
     val = static_cast<int>(tmp);
@@ -134,6 +138,7 @@ int main(int argc, char **argv) {
   int rate                = 50;
   int read_interval       = 5;
   int read_len            = 5;
+  int pipeline_factor     = 1;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
   int window_size_limit    = 2;
@@ -143,31 +148,16 @@ int main(int argc, char **argv) {
   while((o = getopt(argc, argv, ":HBRXga:b:c:i:l:n:o:p:r:s:t:u:v:w:x:z:")) != -1) {
     switch (o) {
       case 'a':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= 65539) {
-          range_start = tmp;
-        } else {
-          usage();
+        if(!parse_int(range_start, 65539))
           return -1;
-        }
         break;
       case 'b':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= 524288) {
-          range_limit = tmp;
-        } else {
-          usage();
+        if(!parse_int(range_limit, 524288))
           return -1;
-        }
         break;
       case 'c':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= 1024) {
-          conn_cnt = static_cast<int>(tmp);
-        } else {
-          usage();
+        if(!parse_int(conn_cnt, 1024))
           return -1;
-        }
         break;
       case 'h':
         usage();
@@ -190,6 +180,10 @@ int main(int argc, char **argv) {
         break;
       case 'i':
         if(!parse_int(interval))
+          return -1;
+        break;
+      case 'k':
+        if(!parse_int(pipeline_factor, 10))
           return -1;
         break;
       case 'l':
@@ -267,7 +261,7 @@ int main(int argc, char **argv) {
   std::auto_ptr<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
-      probe_interval, range_start, range_limit,
+      pipeline_factor, probe_interval, range_start, range_limit,
       read_interval, read_len, window_size_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
