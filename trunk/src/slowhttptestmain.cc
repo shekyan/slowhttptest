@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRXga:b:c:i:l:n:o:p:r:s:t:u:v:w:x:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXga:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'l':
-        if(!parse_int(interval))
+        if(!parse_int(duration))
           return -1;
         break;
       case 'n':
