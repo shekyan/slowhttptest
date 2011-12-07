@@ -255,7 +255,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   request_.append("Host: ");
   request_.append(base_uri_.getHost());
 
-  if(base_uri_.getPort() != 80 || base_uri_.getPort() != 443) {
+  if(base_uri_.getPort() != 80 && base_uri_.getPort() != 443) {
     request_.append(":");
     std::stringstream ss;
     ss << base_uri_.getPort();
@@ -283,7 +283,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   }
 
   if(eSlowRead == test_type_) {
-    request_.append("Connection: Keep-Alive\r\n");
+    if(pipeline_factor_ > 1)
+      request_.append("Connection: Keep-Alive\r\n");
     request_.append("\r\n");
     for(int i = 0; i < pipeline_factor_; ++i){
       request_.append(request_);
