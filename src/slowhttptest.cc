@@ -283,11 +283,14 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   }
 
   if(eSlowRead == test_type_) {
-    if(pipeline_factor_ > 1)
+    if(pipeline_factor_ > 1) {
       request_.append("Connection: Keep-Alive\r\n");
+      request_.reserve(request_.length() * pipeline_factor_);
+    }
     request_.append("\r\n");
-    for(int i = 0; i < pipeline_factor_; ++i){
-      request_.append(request_);
+    size_t len = request_.length();
+    for(int i = 1; i < pipeline_factor_; ++i){
+      request_.append(request_.c_str(), len);
     }
   }
   // init statistics
