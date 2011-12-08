@@ -89,7 +89,9 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
                       int followups_to_send, int read_interval, int wnd_size_max) {
  	read_interval_ = read_interval * 1000;
   if(read_interval_) { // slow read test
-    window_size_ = wnd_size_max ? (rand() % wnd_size_max) : 1; 
+    window_size_ = rand() % wnd_size_max;
+    if(!window_size_) // null is not a good choice
+      window_size_ = 1; 
   }
 	addrinfo* res;
   bool connect_initiated_ = false;
