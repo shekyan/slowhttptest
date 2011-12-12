@@ -683,8 +683,6 @@ bool SlowHTTPTest::run_test() {
             if(sock_[i]->get_requests_to_send() > 0) {
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());
-              ret = sock_[i]->send_slow(request_.c_str(),
-                  request_.size());
               if(ret <= 0 && errno != EAGAIN) {
                 sock_[i]->set_state(eClosed);
                 slowlog(LOG_DEBUG,
