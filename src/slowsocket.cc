@@ -71,7 +71,7 @@ bool SlowSocket::set_window_size(int wnd_size) {
     slowlog(LOG_ERROR, "error setting socket send buffer size to %d: %s\n", wnd_size, strerror(errno));
   } else {
     getsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &actual_wnd_size, &actual_wnd_size_len);
-    slowlog(LOG_DEBUG, "set socket %d send buffer size to %d bytes(requested %d)\n", sockfd_, actual_wnd_size, wnd_size);
+    slowlog(LOG_DEBUG, "set socket %d receive buffer size to %d bytes(requested %d)\n", sockfd_, actual_wnd_size, wnd_size);
   }
   return ret; 
 }
@@ -110,7 +110,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
     if(read_interval_) {
       set_window_size(window_size_);
     }
-    slowlog(LOG_DEBUG, "non-blocking socket %d created \n", sockfd_);
+    slowlog(LOG_DEBUG, "socket %d created \n", sockfd_);
     if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
