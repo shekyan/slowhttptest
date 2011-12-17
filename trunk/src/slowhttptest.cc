@@ -61,10 +61,10 @@ static const char* exit_status_msg[] = {
 };
 
 static const char* test_type_name[] = {
-    "HEADERS",
-    "BODY",
+    "SLOW HEADER",
+    "SLOW BODY",
     "RANGE",
-    "RESPONSE"
+    "SLOW READ"
 };
 static const char* user_agents[] = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
@@ -309,28 +309,52 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
     }
     char test_info[1024];
-    sprintf(test_info,"<table border='0'>"
-        "<tr><th>Test parameters</th></tr>"
-        "<tr><td><b>Slow section</b></td><td>%s</td></tr>"
-        "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
-        "<tr><td><b>Verb</b></td><td>%s</td></tr>"
-        "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
-        "<tr><td><b>Extra data max length</b></td><td>%d</td></tr>"
-        "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
-        "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
-        "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
-        "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
-        "</table>",
-        test_type_name[test_type_],
-        num_connections_,
-        verb_.c_str(),
-        content_length_,
-        extra_data_max_len_total_,
-        followup_timing_,
-        delay_,
-        probe_timeout_,
-        duration_
-        );
+    if(eSlowRead != test_type_) { 
+      sprintf(test_info,"<table border='0'>"
+          "<tr><th>Test parameters</th></tr>"
+          "<tr><td><b>Test type</b></td><td>%s</td></tr>"
+          "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
+          "<tr><td><b>Verb</b></td><td>%s</td></tr>"
+          "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
+          "<tr><td><b>Extra data max length</b></td><td>%d</td></tr>"
+          "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
+          "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
+          "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
+          "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
+          "</table>",
+          test_type_name[test_type_],
+          num_connections_,
+          verb_.c_str(),
+          content_length_,
+          extra_data_max_len_total_,
+          followup_timing_,
+          delay_,
+          probe_timeout_,
+          duration_
+          );
+    } else {
+      sprintf(test_info,"<table border='0'>"
+          "<tr><th>Test parameters</th></tr>"
+          "<tr><td><b>Test type</b></td><td>%s</td></tr>"
+          "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
+          "<tr><td><b>Receive window range</b></td><td>1 - %d</td></tr>"
+          "<tr><td><b>Pipeline factor</b></td><td>%d</td></tr>"
+          "<tr><td><b>Read rate from receive buffer</b></td><td>%d bytes / %d sec</td></tr>"
+          "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
+          "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
+          "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
+          "</table>",
+          test_type_name[test_type_],
+          num_connections_,
+          window_size_limit_,
+          pipeline_factor_,
+          read_len_,
+          read_interval_,
+          delay_,
+          probe_timeout_,
+          duration_
+          );
+    }
 
     dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
         test_info));
@@ -367,7 +391,7 @@ void SlowHTTPTest::report_final() {
 void SlowHTTPTest::report_parameters() {
 
   slowlog(LOG_INFO, "\nUsing:\n"
-    "slow section:                     %s\n"
+    "test type:                        %s\n"
     "number of connections:            %d\n"
     "URL:                              %s\n"
     "verb:                             %s\n"
@@ -696,7 +720,7 @@ bool SlowHTTPTest::run_test() {
                   sock_[i]->set_state(eConnected);
                   is_any_ever_connected = true;
                   slowlog(LOG_DEBUG,
-                      "%s:initial %d of %d bytes sent on socket %d:\n%s\n",
+                      "%s:initial %d of %d bytes sent on socket %d:\n%s",
                       __FUNCTION__, ret,
                       (int) request_.size(),
                       (int) sock_[i]->get_sockfd(),
