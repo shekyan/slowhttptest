@@ -61,7 +61,7 @@ static const char* exit_status_msg[] = {
 };
 
 static const char* test_type_name[] = {
-    "SLOW HEADER",
+    "SLOW HEADERS",
     "SLOW BODY",
     "RANGE",
     "SLOW READ"
