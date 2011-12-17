@@ -67,7 +67,7 @@ static void usage() {
       "                 Use to multiply response size if server supports persistent connections,\n\t"
       "                 effective in slow read (-X) mode only. default: 1\n\t"
       "-l seconds,      target test length in seconds, default: 240\n\t"
-      "-n seconds,      interval between read operations from recv buffer in seconds, default: 5\n\t"
+      "-n seconds,      interval between read operations from recv buffer in seconds, default: 1\n\t"
       "-o file,         save statistics output in file.html and file.csv,\n\t"
       "                 -g must be specified to use this option\n\t"
       "-p seconds,      timeout to wait for HTTP response on probe connection,\n\t"
@@ -80,14 +80,14 @@ static void usage() {
       "-u URL,          absolute URL of target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "                 default: 1 - Info\n\t"
-      "-w size,         upper limit of socket receive buffer to use\n\t"
+      "-w bytes,        upper limit of socket receive buffer to use\n\t"
       "                 with slow read (-X) test. Test uses random value for every connection\n\t"
-      "                 picked between 2 and the limit, min: 1, default: 2\n\t"
+      "                 picked between 1 and the limit, min: 1, default: 512\n\t"
       "-x bytes,        max length of each randomized name/value pair of\n\t"
       "                 followup data per tick, e.g. -x 2 generates\n\t"
       "                 X-xx: xx for header or &xx=xx for body, where x\n\t"
       "                 is random character, default: 32\n\t"
-      "-z bytes         bytes to slow read from receive buffer, default: 5\n"
+      "-z bytes         bytes to slow read from receive buffer with single read() call, default: 5\n"
       , PACKAGE
       , VERSION
       );
@@ -136,12 +136,12 @@ int main(int argc, char **argv) {
   int range_start         = 5;
   int range_limit         = 2000;
   int rate                = 50;
-  int read_interval       = 5;
+  int read_interval       = 1;
   int read_len            = 5;
   int pipeline_factor     = 1;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
-  int window_size_limit    = 2;
+  int window_size_limit    = 512;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
