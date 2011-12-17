@@ -36,7 +36,7 @@ and test begins with the following default parameters:
 ||probe connection timeout||5 seconds||
 ||max length of followup data field||32 bytes||
 
-Every connection would generate an initial request containing:
+Every connection generates an initial request containing:
 {{{
 GET / HTTP/1.1
 Host: localhost:80
@@ -69,10 +69,12 @@ Full list of configurable options is the following:
 ||-a start||start value of ranges-specifier for range header test||
 ||-b bytes||limit of range-specifier for range header test||
 ||-c number of connections||limited to 1024||
-||-H, B, or R||specify to slow down in headers section or in message body. -R enables range test||
+||-H, B, R or X||specify to slow down in headers section or in message body, -R enables range test, -X enables slow read test||
 ||-g||generate statistics in CSV and HTML formats, pattern is slow_xxx.csv/html, where xxx is the time and date||
 ||-i seconds||interval between follow up data in seconds, per connection||
+||-k pipeline factor||number of times to repeat the request in the same connection for slow read test if server supports HTTP pipe-lining.||
 ||-l seconds||test duration in seconds||
+||-n seconds||interval between read operations from receive buffer||
 ||-o file||custom output file path and/or name, effective if -g is specified||
 ||-p seconds||timeout to wait for HTTP response on probe connection, after which server is considered inaccessible||
 ||-r connections per second||connection rate||
@@ -80,7 +82,9 @@ Full list of configurable options is the following:
 ||-t verb||custom verb to use||
 ||-u URL||target URL, the same format you type in browser, e.g http[s]://host[:port]/||
 ||-v level||verbosity level of log 0-4||
+||-w bytes||upper limit of socket receive buffer to use with slow read test. Connection uses a value picked from the range of 1 to the limit.||
 ||-x bytes||max length of follow up data||
+||-z bytes||bytes to read from receive buffer with single read() operation||
 
 Actual example of usage:
 {{{
