@@ -26,7 +26,7 @@ $ PREFIX/bin/slowhttptest
 and test begins with the following default parameters:
 
 
-||test type||headers||
+||test type||SLOW HEADERS||
 ||number of connections||50||
 ||URL||http://localhost/||
 ||verb||GET||
