@@ -58,7 +58,8 @@ class SlowSocket {
   void close();
 
   bool init(addrinfo* addr, const Url* url, int& maxfd,
-      int followups_to_send, int read_interval = 0, int wnd_size = -1);
+      int followups_to_send, int read_interval = 0,
+      int wnd_lower_limit = -1, int wnd_upper_limit = -1);
   int recv_slow(void* buf, size_t len);
   int send_slow(const void* msg, size_t len, const SendType type =
       eInitialSend);

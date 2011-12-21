@@ -109,7 +109,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
                            int probe_interval,
                            int range_start, int range_limit,
                            int read_interval, int read_len,
-                           int window_size_limit)
+                           int window_lower_limit,
+                           int window_upper_limit)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
@@ -129,7 +130,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       extra_data_max_len_total_(0),
       read_interval_(read_interval),
       read_len_(read_len),
-      window_size_limit_(window_size_limit),
+      window_lower_limit_(window_lower_limit),
+      window_upper_limit_(window_upper_limit),
       is_dosed_(false) {
 }
 
@@ -337,7 +339,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
-          "<tr><td><b>Receive window range</b></td><td>1 - %d</td></tr>"
+          "<tr><td><b>Receive window range</b></td><td>%d - %d</td></tr>"
           "<tr><td><b>Pipeline factor</b></td><td>%d</td></tr>"
           "<tr><td><b>Read rate from receive buffer</b></td><td>%d bytes / %d sec</td></tr>"
           "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
@@ -346,7 +348,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "</table>",
           test_type_name[test_type_],
           num_connections_,
-          window_size_limit_,
+          window_lower_limit_,
+          window_upper_limit_,
           pipeline_factor_,
           read_len_,
           read_interval_,
@@ -542,7 +545,8 @@ bool SlowHTTPTest::run_test() {
       sock_[num_connected]->set_state(eInit);
       if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
           (eRange == test_type_ || eSlowRead == test_type_) ? 0 : followup_cnt_,
-          eSlowRead == test_type_ ? read_interval_ : 0, window_size_limit_)) {
+          eSlowRead == test_type_ ? read_interval_ : 0,
+          window_lower_limit_, window_upper_limit_)) {
         sock_[num_connected]->set_state(eError);
         slowlog(LOG_ERROR, "%s: Unable to initialize %dth slow  socket.\n", __FUNCTION__,
             (int) num_connected);
