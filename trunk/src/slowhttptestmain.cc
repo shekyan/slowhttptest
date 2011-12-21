@@ -51,8 +51,8 @@ static void usage() {
       "[-r <connections per second>]\n"
       "[-s <value of Content-Length header>] [-t <verb>]\n"
       "[-u <URL>] [-v <verbosity level>] \n"
-      "[-w <recv buffer limit>] [-x <max length of follow up data>]\n"
-      "[-z <slow read from recieve buffer in bytes>]\n"
+      "[-w <advertised window size range start>] [-x <max length of follow up data>]\n"
+      "[-y <advertised window size range end>] [-z <slow read from recieve buffer in bytes>]\n"
       "Options:\n\t"
       "-a start,        left boundary of range in range header, default: 5\n\t"
       "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
@@ -80,19 +80,28 @@ static void usage() {
       "-u URL,          absolute URL of target, default: http://localhost/\n\t"
       "-v level,        verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n\t"
       "                 default: 1 - Info\n\t"
-      "-w bytes,        upper limit of socket receive buffer to use\n\t"
-      "                 with slow read (-X) test. Test uses random value for every connection\n\t"
-      "                 picked between 1 and the limit, min: 1, default: 512\n\t"
+      "-w bytes,        start of range the advertised  window size would be picked from.\n\t"
+      "                 Effective in slow read (-X) test, min: 1, default: 1\n\t"
       "-x bytes,        max length of each randomized name/value pair of\n\t"
       "                 followup data per tick, e.g. -x 2 generates\n\t"
       "                 X-xx: xx for header or &xx=xx for body, where x\n\t"
       "                 is random character, default: 32\n\t"
+      "-y bytes,        end of range the advertised  window size would be picked from.\n\t"
+      "                 Effective in slow read (-X) test, min: 1, default: 512\n\t"
       "-z bytes         bytes to slow read from receive buffer with single read() call, default: 5\n"
       , PACKAGE
       , VERSION
       );
 }
 
+static bool check_window_range(int a,int b) {
+  if(a > b) {
+    printf("Error: start value of the advertised window range is higher than end value\r\n");
+    usage();
+    return  false;
+  }
+  return true;
+}
 
 static bool parse_int(int &val, long max = INT_MAX) {
   long tmp = strtol(optarg, 0, 10);
@@ -141,11 +150,12 @@ int main(int argc, char **argv) {
   int pipeline_factor     = 1;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
-  int window_size_limit    = 512;
+  int window_upper_limit    = 512;
+  int window_lower_limit    = 1;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRXga:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXga:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
@@ -224,8 +234,10 @@ int main(int argc, char **argv) {
         }
         break;
       case 'w':
-        if(!parse_int(window_size_limit))
+        if(!parse_int(window_lower_limit))
           return -1;
+        if(!check_window_range(window_lower_limit, window_upper_limit))
+          return -1; 
         break;
       case 'x':
         tmp = strtol(optarg, 0, 10);
@@ -236,6 +248,12 @@ int main(int argc, char **argv) {
           usage();
           return -1;
         }
+        break;
+      case 'y':
+        if(!parse_int(window_upper_limit))
+          return -1;
+        if(!check_window_range(window_lower_limit, window_upper_limit))
+          return -1;
         break;
       case 'z':
         if(!parse_int(read_len))
@@ -262,7 +280,7 @@ int main(int argc, char **argv) {
       new SlowHTTPTest(rate, duration, interval, conn_cnt, 
       max_random_data_len, content_length, type, need_stats,
       pipeline_factor, probe_interval, range_start, range_limit,
-      read_interval, read_len, window_size_limit));
+      read_interval, read_len, window_lower_limit, window_upper_limit));
   if(!slow_test->init(url, verb, path)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
