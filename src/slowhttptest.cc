@@ -392,29 +392,56 @@ void SlowHTTPTest::report_final() {
 }
 
 void SlowHTTPTest::report_parameters() {
+  if(eSlowRead != test_type_) {
+    slowlog(LOG_INFO, "\nUsing:\n"
+      "test type:                        %s\n"
+      "number of connections:            %d\n"
+      "URL:                              %s\n"
+      "verb:                             %s\n"
+      "Content-Length header value:      %d\n"
+      "follow up data max size:          %d\n"
+      "interval between follow up data:  %d seconds\n"
+      "connections per seconds:          %d\n"
+      "probe connection timeout:         %d seconds\n"
+      "test duration:                    %d seconds\n",
+      test_type_name[test_type_],
+      num_connections_,
+      base_uri_.getData(),
+      verb_.c_str(),
+      content_length_,
+      extra_data_max_len_total_,
+      followup_timing_,
+      delay_,
+      probe_timeout_,
+      duration_
+      );
+  } else { // slow read
+    slowlog(LOG_INFO, "\nUsing:\n"
+      "test type:                        %s\n"
+      "number of connections:            %d\n"
+      "URL:                              %s\n"
+      "verb:                             %s\n"
+      "receive window range:             %d - %d\n"
+      "pipeline factor:                  %d\n"
+      "read rate from receive buffer:    %d bytes / %d sec\n"
+      "connections per seconds:          %d\n"
+      "probe connection timeout:         %d seconds\n"
+      "test duration:                    %d seconds\n",
+      test_type_name[test_type_],
+      num_connections_,
+      base_uri_.getData(),
+      verb_.c_str(),
+      window_lower_limit_,
+      window_upper_limit_,
+      pipeline_factor_,
+      read_len_,
+      read_interval_,
+      delay_,
+      probe_timeout_,
+      duration_
+      );
 
-  slowlog(LOG_INFO, "\nUsing:\n"
-    "test type:                        %s\n"
-    "number of connections:            %d\n"
-    "URL:                              %s\n"
-    "verb:                             %s\n"
-    "Content-Length header value:      %d\n"
-    "follow up data max size:          %d\n"
-    "interval between follow up data:  %d seconds\n"
-    "connections per seconds:          %d\n"
-    "probe connection timeout:         %d seconds\n"
-    "test duration:                    %d seconds\n",
-    test_type_name[test_type_],
-    num_connections_,
-    base_uri_.getData(),
-    verb_.c_str(),
-    content_length_,
-    extra_data_max_len_total_,
-    followup_timing_,
-    delay_,
-    probe_timeout_,
-    duration_
-  );
+  }
 }
 
 void SlowHTTPTest::report_status(bool to_stats) {
