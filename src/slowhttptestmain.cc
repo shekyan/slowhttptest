@@ -105,7 +105,7 @@ static bool check_window_range(int a,int b) {
 
 static bool parse_int(int &val, long max = INT_MAX) {
   long tmp = strtol(optarg, 0, 10);
-  if(tmp && tmp <= INT_MAX) {
+  if(tmp && tmp <= max) {
     val = static_cast<int>(tmp);
     return true;
   } else {
