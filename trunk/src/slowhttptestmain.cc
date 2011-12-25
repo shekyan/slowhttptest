@@ -109,6 +109,7 @@ static bool parse_int(int &val, long max = INT_MAX) {
     val = static_cast<int>(tmp);
     return true;
   } else {
+    printf("Error: argument value %ld is higher than allowed maximum: %ld\r\n", tmp, max);
     usage();
     return false;
   }
