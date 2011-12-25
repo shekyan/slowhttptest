@@ -490,7 +490,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
     }
   } else {
     slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-        "inititalizing:       %d\n"
+        "initializing:        %d\n"
         "pending:             %d\n"
         "connected:           %d\n"
         "error:               %d\n"
