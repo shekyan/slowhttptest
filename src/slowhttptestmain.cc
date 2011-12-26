@@ -36,6 +36,9 @@
 
 #define DEFAULT_URL "http://localhost/"
 
+static void info() {
+  printf("Try \'%s -h\' for more information\n", PACKAGE);
+}
 static void usage() {
   printf(
       "\n%s %s, a tool to test for slow HTTP "
@@ -97,7 +100,7 @@ static void usage() {
 static bool check_window_range(int a,int b) {
   if(a > b) {
     printf("Error: start value of the advertised window range is higher than end value\r\n");
-    usage();
+    info();
     return  false;
   }
   return true;
@@ -110,7 +113,7 @@ static bool parse_int(int &val, long max = INT_MAX) {
     return true;
   } else {
     printf("Error: argument value %ld is higher than allowed maximum: %ld\r\n", tmp, max);
-    usage();
+    info();
     return false;
   }
 }
@@ -130,7 +133,7 @@ using slowhttptest::SlowTestType;
 int main(int argc, char **argv) {
 
   if (argc < 1) {
-    usage();
+    info();
     return -1;
   }
   char url[1024] = { 0 };
@@ -241,14 +244,10 @@ int main(int argc, char **argv) {
           return -1; 
         break;
       case 'x':
-        tmp = strtol(optarg, 0, 10);
-        if(tmp && tmp <= INT_MAX) {
-          max_random_data_len = static_cast<int>(tmp);
-          if(max_random_data_len < 2) max_random_data_len = 2;
-        } else {
-          usage();
+        if(!parse_int(max_random_data_len))
           return -1;
-        }
+        else
+          if(max_random_data_len < 2) max_random_data_len = 2;
         break;
       case 'y':
         if(!parse_int(window_upper_limit))
@@ -262,12 +261,12 @@ int main(int argc, char **argv) {
         break;
       case '?':
         printf("Illegal option -%c\n", optopt);
-        usage();
+        info();
         return -1;
         break;
       default:
         printf("Option -%c requires an argument.\n", optopt);
-        usage();
+        info();
         return -1;
     }
   }
