@@ -154,12 +154,12 @@ int main(int argc, char **argv) {
   int pipeline_factor     = 1;
   int debug_level         = LOG_INFO;
   bool  need_stats        = false;
-  int window_upper_limit    = 512;
-  int window_lower_limit    = 1;
+  int window_upper_limit  = 512;
+  int window_lower_limit  = 1;
   SlowTestType type = slowhttptest::eHeader;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRXga:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
