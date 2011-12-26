@@ -14,4 +14,16 @@ Possibility to prolong TCP connection is described in several vulnerability repo
 slowhttptest controls the incoming data rate by manipulating receive buffer size through SO_RCVBUF socket option _and_ by varying reading rate from it by application.
 Note, that different operating systems might have different behavior. For example, OSX uses the value we set SO_RCVBUF to in initial SYN packet, while Linux systems double this value (to allow space for bookkeeping overhead) when it is set using setsockopt. Minimum doubled value for Linux systems is 256 or the first value of /proc/sys/net/ipv4/tcp_rmem, whichever is larger.
 
+For SSL connections, slow reading from receive buffer engages after SSL handshake is finished. However, as initial window size is smaller than usual, handshake might require more TCP packets and last longer than usual.
 
+= Example =
+
+Actual example of usage:
+{{{
+./slowhttptest -c 1000 -X -g -o slow_read_stats -r 200 -w 512 -y 1024 -n 5 -z 32 -k 3 -u https://myseceureserver/resources/index.html -p 3 
+}}}
+
+-X starts Slow Read test with 1000 connections, creating 200 connections per second. 
+Initial SYN packet for every connection would have random advertised window size value between 512 and 1024, and application would read 32 bytes every 5 seconds from each socket's receive buffer. 
+To multiply overall response size, we use pipeline factor 3 to request the same resource 3 times per socket.
+Probe connection would consider server DoSed, if no response was received after 3 seconds.
