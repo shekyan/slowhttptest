@@ -82,8 +82,9 @@ Full list of configurable options is the following:
 ||-t verb||custom verb to use||
 ||-u URL||target URL, the same format you type in browser, e.g http[s]://host[:port]/||
 ||-v level||verbosity level of log 0-4||
-||-w bytes||upper limit of socket receive buffer for slow read test. Connection uses a value picked from the range of 1 to the limit.||
+||-w bytes||start of range the advertised  window size would be picked from||
 ||-x bytes||max length of follow up data||
+||-y bytes||end of range the advertised  window size would be picked from||
 ||-z bytes||bytes to read from receive buffer with single read() operation||
 
 Actual example of usage:
