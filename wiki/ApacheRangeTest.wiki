@@ -1,5 +1,5 @@
 #labels Featured,Usage
-In version 1.1 we added test for Apache range header handling vulnerability, described [http://httpd.apache.org/security/CVE-2011-3192.txt here].
+In version 1.1 we added test for Apache range header handling vulnerability, described in [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2011-3192 CVE-2011-3192].
 
 -R would start the test with default values, and generate a HEAD request with header Range: 0-, x-1, x-2, x-3 ... x-y
 
