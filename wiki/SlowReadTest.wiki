@@ -3,14 +3,15 @@
 
 = Slow Read Denial of Service attack=
 
-Idea is to send legitimate HTTP requests, and read responses slowly aiming to keep as many as possible connections in active state. 
+Idea is to send legitimate HTTP requests, and read responses slowly aiming to keep as many connections as possible in active state.
 
-Attack exploits the fact that most of modern web servers are not limiting the connection duration if there is a data flow going on, and it's possible to prolong TCP connection virtually forever with zero or minimal data flow by manipulating TCP receive window size value, reported by client to the server.
-Such behavior of TCP/IP stack is described in several vulnerability reports [http://www.microsoft.com/technet/security/Bulletin/MS09-048.mspx MS09-048], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2008-4609 CVE-2008-4609], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1925 CVE-2009-1925], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1926 CVE-2009-1926] .
 
 = Details =
 
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+Attack exploits the fact that most of modern web servers are not limiting the connection duration if there is a data flow going on, and with possiblity to prolong TCP connection virtually forever with zero or minimal data flow by manipulating TCP receive window size value, it is possible to acquire concurent connections pool of the application. 
+Possibility to prolong TCP connection is described in several vulnerability reports: [http://www.microsoft.com/technet/security/Bulletin/MS09-048.mspx MS09-048], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2008-4609 CVE-2008-4609], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1925 CVE-2009-1925], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1926 CVE-2009-1926] .
+
+slowhttptest controls the incoming data rate by manipulating receive buffer size through SO_RCVBUF socket option _and_ by varying reading rate from it by application.
+Note, that different operating systems might have different behavior. For example, OSX uses the value we set SO_RCVBUF to in initial SYN packet, while Linux systems double this value (to allow space for bookkeeping overhead) when it is set using setsockopt. Minimum doubled value for Linux systems is 256 or the first value of /proc/sys/net/ipv4/tcp_rmem, whichever is larger.
+
+
