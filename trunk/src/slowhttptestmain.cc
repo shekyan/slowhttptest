@@ -108,13 +108,17 @@ static bool check_window_range(int a,int b) {
 
 static bool parse_int(int &val, long max = INT_MAX) {
   long tmp = strtol(optarg, 0, 10);
-  if(tmp && tmp <= max) {
-    val = static_cast<int>(tmp);
-    return true;
-  } else {
-    printf("Error: argument value %ld is higher than allowed maximum: %ld\r\n", tmp, max);
+  if(tmp == 0) { //not last empty argument
+    printf("Option -%c requires an argument.\n", optopt);
     info();
     return false;
+  } else if(tmp < 0 || tmp >= max) {
+    printf("Error: invalid -%c value %ld, max: %ld\r\n",optopt, tmp, max);
+    info();
+    return false;
+  } else {
+    val = static_cast<int>(tmp);
+    return true;
   }
 }
 
