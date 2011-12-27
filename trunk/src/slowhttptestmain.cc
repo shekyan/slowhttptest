@@ -112,7 +112,7 @@ static bool parse_int(int &val, long max = INT_MAX) {
     printf("Option -%c requires an argument.\n", optopt);
     info();
     return false;
-  } else if(tmp < 0 || tmp >= max) {
+  } else if(tmp < 0 || tmp > max) {
     printf("Error: invalid -%c value %ld, max: %ld\r\n",optopt, tmp, max);
     info();
     return false;
