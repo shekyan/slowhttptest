@@ -12,7 +12,7 @@ Attack exploits the fact that most of modern web servers are not limiting the co
 Possibility to prolong TCP connection is described in several vulnerability reports: [http://www.microsoft.com/technet/security/Bulletin/MS09-048.mspx MS09-048], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2008-4609 CVE-2008-4609], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1925 CVE-2009-1925], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1926 CVE-2009-1926] .
 
 Prerequisites for the successful attack are:
-- victim server should accept connections with relatively small advertised window
+- victim server should accept connections with advertised window smaller than server socket send buffer, the smaller the better
 – attacker needs to request a resource that doesn't fit into server's socket send buffer, which is usually between 64K and 128K. To fill up server socket's send buffer for sure, consider using HTTP pipelining (-k argument of slowhttptest)
 
 slowhttptest controls the incoming data rate by manipulating receive buffer size through SO_RCVBUF socket option _and_ by varying reading rate from it by application.
