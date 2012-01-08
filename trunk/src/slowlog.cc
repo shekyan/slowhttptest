@@ -25,7 +25,9 @@
 
 #include <ctime>
 #include <errno.h>
+#ifdef __linux
 #include <execinfo.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
