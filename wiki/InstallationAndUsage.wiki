@@ -17,7 +17,7 @@ Where PREFIX must be replaced with the absolute path where slowhttptest tool sho
 
 You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
 
-Update:
+*Update:*
 Apologies for FreeBSD users for failed build. Fix checked into svn. Use
 {{{
 svn checkout http://slowhttptest.googlecode.com/svn/trunk/ slowhttptest-read-only
