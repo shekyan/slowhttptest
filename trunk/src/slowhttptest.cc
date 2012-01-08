@@ -37,6 +37,7 @@
 #include <netinet/in.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
 
 #include "range-generator.h"
 #include "slowlog.h"
@@ -50,7 +51,7 @@ extern int g_running;
 
 namespace {
 static const int kBufSize = 65537;
-// update ExitStatusTupe too
+// update ExitStatusType too
 static const char* exit_status_msg[] = {
     "Hit test time limit",
     "No open connections left",
