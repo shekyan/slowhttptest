@@ -39,12 +39,16 @@ static FILE* log_file = NULL;
 int current_log_level;
 
 void print_call_stack() {
+#ifdef __linux__
   static void* buf[64];
   const int depth = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
   backtrace_symbols_fd(buf, depth, fileno(stdout));
   if (stdout != log_file) {
     backtrace_symbols_fd(buf, depth, fileno(log_file));
   }
+#else
+  return;
+#endif
 }
 }
 
