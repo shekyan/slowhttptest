@@ -7,7 +7,7 @@ $ tar -xzvf slowhttptest-x.x.tar.gz
 
 $ cd slowhttptest-x.x
 
-$ ./configure –prefix=PREFIX
+$ ./configure --prefix=PREFIX
 
 $ make
 
