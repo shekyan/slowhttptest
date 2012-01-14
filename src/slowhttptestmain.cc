@@ -246,8 +246,6 @@ int main(int argc, char **argv) {
       case 'w':
         if(!parse_int(window_lower_limit))
           return -1;
-        if(!check_window_range(window_lower_limit, window_upper_limit))
-          return -1; 
         break;
       case 'x':
         if(!parse_int(max_random_data_len))
@@ -257,8 +255,6 @@ int main(int argc, char **argv) {
         break;
       case 'y':
         if(!parse_int(window_upper_limit))
-          return -1;
-        if(!check_window_range(window_lower_limit, window_upper_limit))
           return -1;
         break;
       case 'z':
@@ -276,6 +272,8 @@ int main(int argc, char **argv) {
         return -1;
     }
   }
+  if(!check_window_range(window_lower_limit, window_upper_limit))
+    return -1;
   if(!strlen(url)) {
     strncpy(url, DEFAULT_URL, sizeof(DEFAULT_URL));
   }
