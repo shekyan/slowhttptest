@@ -25,9 +25,6 @@
 
 #include <ctime>
 #include <errno.h>
-#ifdef __linux
-#include <execinfo.h>
-#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,18 +37,6 @@ namespace {
 static FILE* log_file = NULL;
 int current_log_level;
 
-void print_call_stack() {
-#ifdef __linux__
-  static void* buf[64];
-  const int depth = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
-  backtrace_symbols_fd(buf, depth, fileno(stdout));
-  if (stdout != log_file) {
-    backtrace_symbols_fd(buf, depth, fileno(log_file));
-  }
-#else
-  return;
-#endif
-}
 }
 
 namespace slowhttptest {
@@ -68,7 +53,6 @@ void check(bool f, const char* message) {
   if (!f) {
     fprintf(log_file, "%s\n", message);
     fflush(log_file);
-    print_call_stack();
     exit(1);
   }   
 }
@@ -85,7 +69,6 @@ void log_fatal(const char* format, ...) {
   vfprintf(log_file, format, va);
   va_end(va);
   fflush(log_file);
-  print_call_stack();
   exit(1);
 }
 
