@@ -101,7 +101,8 @@ static void usage() {
 
 static bool check_window_range(int a,int b) {
   if(a > b) {
-    printf("Error: start value of the advertised window range is higher than end value\r\n");
+    printf("Error: start value of the advertised window range "
+       "is higher (%d) than the end value (%d)\r\n", a, b);
     info();
     return  false;
   }
@@ -272,7 +273,8 @@ int main(int argc, char **argv) {
         return -1;
     }
   }
-  if(!check_window_range(window_lower_limit, window_upper_limit))
+  if(slowhttptest::eSlowRead == type 
+      && !check_window_range(window_lower_limit, window_upper_limit))
     return -1;
   if(!strlen(url)) {
     strncpy(url, DEFAULT_URL, sizeof(DEFAULT_URL));
