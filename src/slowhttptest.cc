@@ -20,7 +20,6 @@
  * Slow HTTP attack vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *****/
-
 #include "config.h"
 #include "slowhttptest.h"
 
@@ -35,6 +34,9 @@
 
 #include <netdb.h>
 #include <netinet/in.h>
+#ifdef USE_POLL
+#include <sys/poll.h>
+#endif
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
@@ -509,7 +511,11 @@ void SlowHTTPTest::report_status(bool to_stats) {
 
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
+#ifdef USE_POLL  
+  pollfd fds[num_connections_ + 1]; // +1 for probe socket 
+#else
   fd_set readfds, writefds;
+#endif
   int maxfd = 0;
   int result = 0;
   int ret = 0;
@@ -538,8 +544,11 @@ bool SlowHTTPTest::run_test() {
     int wr = 0;
 
     seconds_passed_ = progress_timer.tv_sec;
-    FD_ZERO(&readfds);
-    FD_ZERO(&writefds);
+
+#ifndef USE_POLL  
+    //FD_ZERO(&readfds);
+    //FD_ZERO(&writefds);
+#endif
     // init and connect probe socket
     if(!probe_socket_ && probe_taken != seconds_passed_) {
       probe_socket_ = new SlowSocket();
@@ -560,11 +569,23 @@ bool SlowHTTPTest::run_test() {
       }
     }
     if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
+#ifdef USE_POLL
+      fds[0].fd = probe_socket_->get_sockfd();
+      fds[0].events = 0;
+#endif
       if(probe_socket_->get_requests_to_send()) {
+#ifdef USE_POLL
+        fds[0].events |= POLLOUT;
+#else
         FD_SET(probe_socket_->get_sockfd(), &writefds);
+#endif
         ++wr;
       }
+#ifdef USE_POLL
+      fds[0].events |= POLLIN;
+#else
       FD_SET(probe_socket_->get_sockfd(), &readfds);
+#endif
     }
 
     active_sock_num = 0;
@@ -586,19 +607,35 @@ bool SlowHTTPTest::run_test() {
     }
     for(int i = 0; i < num_connected; ++i) {
       if(sock_[i] && sock_[i]->get_sockfd() > 0) {
+#ifdef USE_POLL
+        fds[i+1].fd = sock_[i]->get_sockfd();
+        fds[i+1].events = 0;
+#endif
         if(sock_[i]->is_ready_read(&progress_timer)) {
+#ifdef USE_POLL
+          fds[i+1].events |= POLLIN;
+#else
           FD_SET(sock_[i]->get_sockfd(), &readfds);
+#endif
         }
         ++active_sock_num;
         if(sock_[i]->get_requests_to_send() > 0) {
           ++wr;
+#ifdef USE_POLL
+          fds[i+1].events |= POLLOUT;
+#else
           FD_SET(sock_[i]->get_sockfd(), &writefds);
+#endif
         } else if(sock_[i]->get_followups_to_send() > 0
             && (seconds_passed_ > 0 && seconds_passed_ % followup_timing_ == 0)) {
           if(sock_[i]->get_last_followup_timing() != seconds_passed_) {
             sock_[i]->set_last_followup_timing(seconds_passed_);
             ++wr;
+#ifdef USE_POLL
+            fds[i+1].events |= POLLOUT;
+#else
             FD_SET(sock_[i]->get_sockfd(), &writefds);
+#endif
           }
         }
       }
@@ -644,8 +681,12 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
 
+#ifdef USE_POLL    
+    result = poll(fds, num_connections_ + 1, 1000);
+#else
     result = ::select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
      &timeout);
+#endif
     ::gettimeofday(&now, 0);
     timersub(&now, &start, &progress_timer);
     if(result < 0) {
@@ -656,7 +697,11 @@ bool SlowHTTPTest::run_test() {
       //continue;
     } else {
       if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
+#ifdef USE_POLL
+        if(fds[0].revents & POLLIN) {
+#else
         if(FD_ISSET(probe_socket_->get_sockfd(), &readfds)) {
+#endif
           ret = probe_socket_->recv_slow(buf, kBufSize);
           buf[ret] = '\0';
           if(ret < 0 && errno != EAGAIN) {
@@ -683,7 +728,11 @@ bool SlowHTTPTest::run_test() {
         }
       }
       if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
+#ifdef USE_POLL
+        if(fds[0].revents & POLLOUT) {
+#else
         if(FD_ISSET(probe_socket_->get_sockfd(), &writefds)) {
+#endif
           ret = probe_socket_->send_slow(probe_request_.c_str(),
            probe_request_.size());
           if(ret <= 0 && errno != EAGAIN) {
@@ -712,7 +761,11 @@ bool SlowHTTPTest::run_test() {
 
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
+#ifdef USE_POLL
+          if(fds[i+1].revents & POLLIN) {
+#else
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
+#endif
             ret = sock_[i]->recv_slow(buf, (eSlowRead == test_type_ ? read_len_ : kBufSize));
             if(ret <= 0 && errno != EAGAIN) {
               sock_[i]->set_state(eClosed);
@@ -735,7 +788,11 @@ bool SlowHTTPTest::run_test() {
               }
             }
           }
+#ifdef USE_POLL
+          if(fds[i+1].revents & POLLOUT) {
+#else
           if(FD_ISSET(sock_[i]->get_sockfd(), &writefds)) { // write
+#endif
             if(sock_[i]->get_requests_to_send() > 0) {
               ret = sock_[i]->send_slow(request_.c_str(),
                   request_.size());

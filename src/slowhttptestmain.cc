@@ -21,6 +21,8 @@
  * Slow HTTP attack vulnerability test tool
  *  http://code.google.com/p/slowhttptest/
  *****/
+
+#undef USE_POLL
 #include "config.h"
 #include <limits.h>
 #include <signal.h>
@@ -177,7 +179,11 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'c':
+#ifdef USE_POLL
+        if(!parse_int(conn_cnt, 65539))
+#else
         if(!parse_int(conn_cnt, 1024))
+#endif
           return -1;
         break;
       case 'h':
