@@ -546,8 +546,8 @@ bool SlowHTTPTest::run_test() {
     seconds_passed_ = progress_timer.tv_sec;
 
 #ifndef USE_POLL  
-    //FD_ZERO(&readfds);
-    //FD_ZERO(&writefds);
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
 #endif
     // init and connect probe socket
     if(!probe_socket_ && probe_taken != seconds_passed_) {
