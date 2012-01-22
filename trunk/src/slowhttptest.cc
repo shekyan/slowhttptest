@@ -171,7 +171,7 @@ bool SlowHTTPTest::change_fd_limits() {
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
       num_connections_ = fd_limit.rlim_max - 6;
-      slowlog(LOG_WARN, "hit system limit. Decreasing target connection number to %d\n",
+      slowlog(LOG_INFO, "hit system limit for open fds. Decreasing target connection number to %d\n",
         num_connections_);
     }
     if(setrlimit(RLIMIT_NOFILE, &fd_limit)) {
