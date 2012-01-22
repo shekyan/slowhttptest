@@ -34,7 +34,7 @@
 
 #include <netdb.h>
 #include <netinet/in.h>
-#ifdef USE_POLL
+#ifdef HAVE_POLL
 #include <sys/poll.h>
 #endif
 #include <sys/time.h>
@@ -511,7 +511,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
 
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
-#ifdef USE_POLL  
+#ifdef HAVE_POLL  
   pollfd fds[num_connections_ + 1]; // +1 for probe socket 
 #else
   fd_set readfds, writefds;
@@ -545,7 +545,7 @@ bool SlowHTTPTest::run_test() {
 
     seconds_passed_ = progress_timer.tv_sec;
 
-#ifndef USE_POLL  
+#ifndef HAVE_POLL  
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
 #endif
@@ -569,19 +569,19 @@ bool SlowHTTPTest::run_test() {
       }
     }
     if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
       fds[0].fd = probe_socket_->get_sockfd();
       fds[0].events = 0;
 #endif
       if(probe_socket_->get_requests_to_send()) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
         fds[0].events |= POLLOUT;
 #else
         FD_SET(probe_socket_->get_sockfd(), &writefds);
 #endif
         ++wr;
       }
-#ifdef USE_POLL
+#ifdef HAVE_POLL
       fds[0].events |= POLLIN;
 #else
       FD_SET(probe_socket_->get_sockfd(), &readfds);
@@ -607,12 +607,12 @@ bool SlowHTTPTest::run_test() {
     }
     for(int i = 0; i < num_connected; ++i) {
       if(sock_[i] && sock_[i]->get_sockfd() > 0) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
         fds[i+1].fd = sock_[i]->get_sockfd();
         fds[i+1].events = 0;
 #endif
         if(sock_[i]->is_ready_read(&progress_timer)) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
           fds[i+1].events |= POLLIN;
 #else
           FD_SET(sock_[i]->get_sockfd(), &readfds);
@@ -621,7 +621,7 @@ bool SlowHTTPTest::run_test() {
         ++active_sock_num;
         if(sock_[i]->get_requests_to_send() > 0) {
           ++wr;
-#ifdef USE_POLL
+#ifdef HAVE_POLL
           fds[i+1].events |= POLLOUT;
 #else
           FD_SET(sock_[i]->get_sockfd(), &writefds);
@@ -631,7 +631,7 @@ bool SlowHTTPTest::run_test() {
           if(sock_[i]->get_last_followup_timing() != seconds_passed_) {
             sock_[i]->set_last_followup_timing(seconds_passed_);
             ++wr;
-#ifdef USE_POLL
+#ifdef HAVE_POLL
             fds[i+1].events |= POLLOUT;
 #else
             FD_SET(sock_[i]->get_sockfd(), &writefds);
@@ -681,7 +681,7 @@ bool SlowHTTPTest::run_test() {
     timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
 
-#ifdef USE_POLL    
+#ifdef HAVE_POLL    
     result = poll(fds, num_connections_ + 1, 1000);
 #else
     result = ::select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
@@ -697,7 +697,7 @@ bool SlowHTTPTest::run_test() {
       //continue;
     } else {
       if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
         if(fds[0].revents & POLLIN) {
 #else
         if(FD_ISSET(probe_socket_->get_sockfd(), &readfds)) {
@@ -728,7 +728,7 @@ bool SlowHTTPTest::run_test() {
         }
       }
       if(probe_socket_ && probe_socket_->get_sockfd() > 0) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
         if(fds[0].revents & POLLOUT) {
 #else
         if(FD_ISSET(probe_socket_->get_sockfd(), &writefds)) {
@@ -761,7 +761,7 @@ bool SlowHTTPTest::run_test() {
 
       for(int i = 0; i < num_connected; i++) {
         if(sock_[i] && sock_[i]->get_sockfd() > 0) {
-#ifdef USE_POLL
+#ifdef HAVE_POLL
           if(fds[i+1].revents & POLLIN) {
 #else
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
@@ -788,7 +788,7 @@ bool SlowHTTPTest::run_test() {
               }
             }
           }
-#ifdef USE_POLL
+#ifdef HAVE_POLL
           if(fds[i+1].revents & POLLOUT) {
 #else
           if(FD_ISSET(sock_[i]->get_sockfd(), &writefds)) { // write
