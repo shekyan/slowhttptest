@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(slowhttptest, 1.3, shekyan@gmail.com)
-AM_INIT_AUTOMAKE([slowhttptest], [1.3])
+AC_INIT(slowhttptest, 1.4, shekyan@gmail.com)
+AM_INIT_AUTOMAKE([slowhttptest], [1.4])
 AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 
@@ -28,7 +28,7 @@ AC_HEADER_TIME
 # Checks for library functions.
 AC_FUNC_SELECT_ARGTYPES
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([atexit gettimeofday select socket strerror strstr strtol])
+AC_CHECK_FUNCS([atexit gettimeofday poll select socket strerror strstr strtol])
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 AC_OUTPUT
