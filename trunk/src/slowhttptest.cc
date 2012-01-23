@@ -161,7 +161,7 @@ SlowHTTPTest::~SlowHTTPTest() {
 bool SlowHTTPTest::change_fd_limits() {
   rlimit fd_limit = {0, 0};
   if(getrlimit(RLIMIT_NOFILE, &fd_limit)) {
-    slowlog(LOG_ERROR, "error getting limits for open files: %s\n", strerror(errno));
+    slowlog(LOG_ERROR, " error getting limits for open files: %s\n", strerror(errno));
     return false;
   }
   // +3 is stdin, stdout, stderr + 2 for stat fds + 4 spare
@@ -171,14 +171,16 @@ bool SlowHTTPTest::change_fd_limits() {
     } else { // max limit is lower than requested
       fd_limit.rlim_cur = fd_limit.rlim_max;
       num_connections_ = fd_limit.rlim_max - 6;
-      slowlog(LOG_INFO, "hit system limit for open fds. Decreasing target connection number to %d\n",
+      slowlog(LOG_INFO, " hit system limit for open fds: %d. \n"
+	"Decreasing target connection number to %d\n",
+	fd_limit.rlim_max,
         num_connections_);
     }
     if(setrlimit(RLIMIT_NOFILE, &fd_limit)) {
-      slowlog(LOG_ERROR, "error setting limits for open files: %s\n", strerror(errno));
+      slowlog(LOG_ERROR, " error setting limits for open files: %s\n", strerror(errno));
       return false;
     } else {
-      slowlog(LOG_INFO, "set open files limit to %d\n", fd_limit.rlim_cur);
+      slowlog(LOG_INFO, " set open files limit to %d\n", fd_limit.rlim_cur);
     }
   }
   return true;
