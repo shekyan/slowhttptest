@@ -515,13 +515,16 @@ bool SlowHTTPTest::run_test() {
   int num_connected = 0;
 #ifdef HAVE_POLL  
   pollfd fds[num_connections_ + 1]; // +1 for probe socket 
+  const int timeout = 1000; // constant 1 second timeout for poll 
 #else
   fd_set readfds, writefds;
+  timeval timeout;
+  timerclear(&timeout);
 #endif
   int maxfd = 0;
   int result = 0;
   int ret = 0;
-  timeval now, timeout, start, progress_timer, 
+  timeval now, start, progress_timer, 
           tv_delay;
 
   // connection rate per second
@@ -536,12 +539,11 @@ bool SlowHTTPTest::run_test() {
   int probe_taken = -1; // connect probe every second 
   int connection_timeout = followup_timing_;
   timerclear(&now);
-  timerclear(&timeout);
   timerclear(&progress_timer);
   gettimeofday(&start, 0);
   sock_.resize(num_connections_);
 
-  // select loop
+  // select/poll loop
   while(true) {
     int wr = 0;
 
@@ -679,13 +681,14 @@ bool SlowHTTPTest::run_test() {
       break;
     }
 
+#ifdef HAVE_POLL
+    // do not block if have new connections to establish
+    result = poll(fds, num_connections_ + 1,
+     (num_connected < num_connections_)? 0 : timeout);
+#else
     // do not block if have new connections to establish
     timeout.tv_sec = (num_connected < num_connections_)? 0 : 1;
     timeout.tv_usec = 0; //microseconds
-
-#ifdef HAVE_POLL    
-    result = poll(fds, num_connections_ + 1, 1000);
-#else
     result = ::select(maxfd + 1, &readfds, wr ? &writefds : NULL, NULL,
      &timeout);
 #endif
