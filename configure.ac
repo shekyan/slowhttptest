@@ -30,5 +30,5 @@ AC_FUNC_SELECT_ARGTYPES
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([atexit gettimeofday poll select socket strerror strstr strtol])
 
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile man/Makefile])
 AC_OUTPUT
