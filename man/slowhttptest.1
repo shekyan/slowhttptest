@@ -1,0 +1,153 @@
+.\"
+.\"  Copyright 2012 Sergey Shekyan
+.\"
+.\"  Licensed under the Apache License, Version 2.0 (the "License");
+.\"  you may not use this file except in compliance with the License.
+.\"  You may obtain a copy of the License at
+.\" 
+.\"  http://www.apache.org/licenses/LICENSE-2.0
+.\" 
+.\"  Unless required by applicable law or agreed to in writing, software
+.\"  distributed under the License is distributed on an "AS IS" BASIS,
+.\"  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+.\"  See the License for the specific language governing permissions and
+.\"  limitations under the License.
+.\"
+.Dd January 28, 2012
+.Dt SLOWHTTPTEST 1
+.Os
+.Sh NAME
+.Nm slowhttptest
+.Nd Denial Of Service attacks simulator
+.Sh SYNOPSIS
+.Nm slowhttptest
+.Bk -words
+.Op Fl H|B|R|X
+.Op Fl g
+.Op Fl a Ar range start
+.Op Fl b Ar range limit
+.Op Fl c Ar number of connections
+.Op Fl i Ar interval in seconds
+.Op Fl k Ar request multiply factor
+.Op Fl l Ar test duration in seconds
+.Op Fl n Ar slow read interval in seconds
+.Op Fl o Ar output file path and/or name
+.Op Fl p Ar timeout for probe connection in seconds
+.Op Fl r Ar connection per second
+.Op Fl s Ar value of Content-Length header
+.Op Fl t Ar HTTP verb
+.Op Fl u Ar absolute URL
+.Op Fl v Ar output verbosity level
+.Op Fl w Ar advertised window size range start 
+.Op Fl x Ar max length of follow up data
+.Op Fl y Ar advertised window size range end
+.Op Fl z Ar slow read from recieve buffer in bytes
+.Ek
+.Sh DESCRIPTION
+The
+.Nm
+implements most common low-bandwidth Application Layer DoS attacks
+and produces CSV and HTML files with test statistics.
+.Pp
+Currently supported attacks are:
+.Pp
+.Bl -bullet -offset indent -compact
+.It
+Slowloris
+.It
+Slow HTTP POST
+.It
+Apache Range Header
+.It
+Slow Read
+.El
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl g
+Forces
+.Nm
+to generate CSV and HTML files when test finishes with timestamp in filename.
+.It Fl H
+Starts
+.Nm
+in SlowLoris mode, sending unfinished HTTP requests.
+.It Fl B
+Starts
+.Nm
+in Slow POST mode, sending unfinished HTTP message bodies.
+.It Fl R
+Starts
+.Nm
+in Range Header mode, sending malicious Range Request header data.
+.It Fl X
+Starts
+.Nm
+in Slow Read mode, reading HTTP responses slowly.
+.It Fl a Ar start
+Sets the start value of range-specifier for Range Header attack.
+.It Fl b Ar bytes
+Sets the limit value of range-specifier for Range Header attack.
+.It Fl c Ar number of connections
+Specifies the target number of connections to establish during the test.
+.It Fl i Ar seconds
+Specifies the interval between follow up data for slowrois and Slow POST tests.
+.It Fl k Ar pipeline factor
+Specifies number of times the resource would be requested per socket in Slow Read test.
+.It Fl l Ar seconds
+Specifies test duration in seconds.
+.It Fl n Ar seconds
+Specifies the interval between read operations for Slow Read test.
+.It Fl o Ar file name
+Specifies custom file name, effective with -g.
+.It Fl p Ar seconds
+Specifies the interval to wait for HTTP response onprobe connection, before marking the server as DoSed.
+.It Fl r Ar connections per second
+Specifies the connection rate.
+.It Fl s Ar bytes
+Specifies the value of Content-Length header for Slow POST test.
+.It Fl t Ar HTTP verb
+Specifies the verb to use in HTTP request.
+.It Fl u Ar URL
+Specifies the URL.
+.It Fl v Ar level
+Specifies the verbosity level of logging.
+.It Fl w Ar bytes
+Specifies the start of the range the TCP advertised window size would be picked from in Slow Read test.
+.It Fl x Ar bytes
+Specifies the maximum length of follow up data for slowloris and Slow POST tests.
+.It Fl y Ar bytes
+Specifies the end of the range the TCP advertised window size would be picked from in Slow Read test.
+.It Fl z Ar bytes
+Specifies the number of bytes to read from receive buffer with each read() operation.
+.Sh EXAMPLES
+Start a slowloris test of host.example.com with 1000 connections, statistics goes into my_header_stats,
+interval between follow up headers is 10 seconds and connection rate is 200 connections per second:
+.Pp
+.Dl $ slowhttptest -c 1000 -H -g -o my_header_stats -i 10 -r 200 -t GET -u https://host.example.com/index.html -x 24 -p 3
+.Pp
+Start slow POST test of host.example.com with 3000 connections, statistics goes into my_body_stats,
+interval between follow up headers is 110 seconds, connection rate is 200 connections per second,
+Content-Length header value is 8192, maximum length of follow up data is random value limited by 10 bytes and probe connections waits 3 seconds for HTTP response before marking server as DoSed:
+.Pp
+.Dl $ slowhttptest -c 3000 -B -g -o my_body_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u http://host.example.com/loginform.html -x 10 -p 3
+.Pp
+Start Range Header test of host.example.com with 1000 connections, use HEAD verb,
+and generate HTTP header Range:0-, x-1, x-2, x-3, ... x-y, where x is 10 and y is 3000,
+connection rate is 500:
+interval between follow up headers is 10 seconds and connection rate is 200 connections per second:
+.Pp
+.Dl $ slowhttptest -R -u http://host.example.com/ -t HEAD -c 1000 -a 10 -b 3000 -r 500
+.Pp
+Start Slow Read test of host.example.com with 8000 connections, no statistics is generated,
+connection rate is 200 connections per second, TCP advertised window size is a random value
+between 512 and 1024,
+.Nm
+reads 32 bytes from each connections every 5 seconds, 3 requests are pipelined per each connections,
+probe connection waits 3 seconds for HTTP response before marking server as DoSed:
+.Pp
+.Dl $ slowhttptest -c 8000 -X -r 200 -w 512 -y 1024 -n 5 -z 32 -k 3 -u https://host.example.com/resources/index.html -p 3
+.Pp
+.Sh AUTHORS
+Sergey Shekyan
+.Aq shekyan@gmail.com .
