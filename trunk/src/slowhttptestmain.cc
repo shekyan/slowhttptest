@@ -1,5 +1,5 @@
 /*****************************************************************************
-*  Copyright 2011 Sergey Shekya,n Victor Agababov
+*  Copyright 2011 Sergey Shekyan, Victor Agababov
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ static void usage() {
       "\n%s %s, a tool to test for slow HTTP "
       "DoS vulnerabilities.\n"
       "Usage:\n"
-      "slowtest [-a <range start>] [-b <range limit>]\n"
+      "slowhttptest [-a <range start>] [-b <range limit>]\n"
       "[-c <number of connections>] [-<H|B|R|X>]\n"
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-k <request multiply factor>]\n"
