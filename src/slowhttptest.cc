@@ -516,6 +516,7 @@ bool SlowHTTPTest::run_test() {
 #ifdef HAVE_POLL  
   pollfd *fds;
   fds = new pollfd[num_connections_ + 1]; // +1 for probe socket 
+  memset(fds, 0, sizeof(pollfd) * num_connections_ + 1);
   const int timeout = 1000; // constant 1 second timeout for poll 
 #else
   fd_set readfds, writefds;
@@ -684,7 +685,7 @@ bool SlowHTTPTest::run_test() {
 
 #ifdef HAVE_POLL
     // do not block if have new connections to establish
-    result = poll(fds, num_connections_ + 1,
+    result = poll(fds, (nfds_t)num_connections_ + 1,
      (num_connected < num_connections_)? 0 : timeout);
 #else
     // do not block if have new connections to establish
@@ -873,7 +874,9 @@ bool SlowHTTPTest::run_test() {
       usleep(tv_delay.tv_usec);
     }
   }
+#ifdef HAVE_POLL
   delete [] fds;
+#endif
   return true;
 }
 }  // namespace slowhttptest
