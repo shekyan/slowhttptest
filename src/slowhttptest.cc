@@ -516,7 +516,7 @@ bool SlowHTTPTest::run_test() {
 #ifdef HAVE_POLL  
   pollfd *fds;
   fds = new pollfd[num_connections_ + 1]; // +1 for probe socket 
-  memset(fds, 0, sizeof(pollfd) * num_connections_ + 1);
+  memset(fds, 0, sizeof(pollfd) * (num_connections_ + 1));
   const int timeout = 1000; // constant 1 second timeout for poll 
 #else
   fd_set readfds, writefds;
