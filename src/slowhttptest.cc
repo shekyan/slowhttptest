@@ -514,7 +514,8 @@ void SlowHTTPTest::report_status(bool to_stats) {
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
 #ifdef HAVE_POLL  
-  pollfd fds[num_connections_ + 1]; // +1 for probe socket 
+  pollfd *fds;
+  fds = new pollfd[num_connections_ + 1]; // +1 for probe socket 
   const int timeout = 1000; // constant 1 second timeout for poll 
 #else
   fd_set readfds, writefds;
@@ -872,6 +873,7 @@ bool SlowHTTPTest::run_test() {
       usleep(tv_delay.tv_usec);
     }
   }
+  delete [] fds;
   return true;
 }
 }  // namespace slowhttptest
