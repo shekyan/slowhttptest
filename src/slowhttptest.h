@@ -52,6 +52,14 @@ enum ExitStatusType {
   eUnexpectedError
 };
 
+enum ProxyType {
+  eHTTPProxy,
+  eTunnelProxy,
+  eSocks4Proxy,
+  eSocks5Proxy,
+  eNoProxy
+};
+
 class StatsDumper;
 class RandomTextGenerator;
 class SlowSocket;
@@ -62,10 +70,12 @@ class SlowHTTPTest {
    SlowTestType type, bool need_stats,int pipeline_factor,
    int probe_interval, int range_start,
    int range_limit, int read_interval,
-   int read_len, int window_lower_limit, int window_upper_limit);
+   int read_len, int window_lower_limit,
+   int window_upper_limit, ProxyType proxy_type);
   ~SlowHTTPTest();
 
-  bool init(const char* url, const char* verb, const char* path);
+  bool init(const char* url, const char* verb,
+    const char* path, const char* proxy);
   void report_parameters();
   void report_status(bool to_csv);
   void report_csv();
@@ -76,7 +86,10 @@ class SlowHTTPTest {
   void close_sock(int id);
   bool change_fd_limits();
   const char* get_random_extra();
-  
+ 
+  static bool resolve_addr(const char* host, 
+    const char* port, addrinfo **addr);
+   
   RandomTextGenerator textgen_;
   addrinfo* addr_;
   std::string request_;
@@ -85,6 +98,7 @@ class SlowHTTPTest {
   std::string verb_;
   std::string user_agent_;
   Url base_uri_;
+  Proxy proxy_;
   const char* separator_;
   const char* prefix_;
   const char* postfix_;
@@ -117,6 +131,7 @@ class SlowHTTPTest {
   int window_lower_limit_;
   int window_upper_limit_;
   bool is_dosed_;
+  ProxyType proxy_type_;
 };
 
 }  // namespace slowhttptest

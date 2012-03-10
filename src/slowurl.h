@@ -29,6 +29,7 @@
 #include <string>
 
 namespace slowhttptest {
+
 class Url {
  public:
   Url();
@@ -60,6 +61,31 @@ class Url {
   std::string port_str_;
   int port_;
   bool is_ssl_;
+};
+
+class Proxy {
+ public:
+  Proxy();
+  bool prepare(const char* proxy);
+  const std::string& getHost() const {
+    return host_;
+  }
+  const int getPort() const {
+    return port_;
+  }
+  const char* getPortStr() const {
+    return port_str_.c_str();
+  }
+  const char* getData() const {
+    return data_.c_str();
+  }
+ 
+ private:
+  std::string data_;
+  std::string host_;
+  std::string port_str_;
+  int port_;
+ 
 };
 
 } // namespace slowhttptest

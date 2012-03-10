@@ -62,7 +62,14 @@ static const char* exit_status_msg[] = {
     "Cancelled by user",
     "Unexpected error"
 };
-
+// update ProxyType too 
+static const char* proxy_type_name[] = {
+    "HTTP proxy at ",
+    "HTTP tunnel at ",
+    "SOCKS 4 at ",
+    "SOCKS 5 at ",
+    "no proxy"
+};
 static const char* test_type_name[] = {
     "SLOW HEADERS",
     "SLOW BODY",
@@ -113,7 +120,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
                            int range_start, int range_limit,
                            int read_interval, int read_len,
                            int window_lower_limit,
-                           int window_upper_limit)
+                           int window_upper_limit,
+                           ProxyType proxy_type)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
@@ -135,7 +143,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       read_len_(read_len),
       window_lower_limit_(window_lower_limit),
       window_upper_limit_(window_upper_limit),
-      is_dosed_(false) {
+      is_dosed_(false),
+      proxy_type_(proxy_type) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
@@ -199,7 +208,7 @@ const char* SlowHTTPTest::get_random_extra() {
 }
 
 bool SlowHTTPTest::init(const char* url, const char* verb,
-    const char* path) {
+    const char* path, const char* proxy) {
   if(!change_fd_limits()) {
     slowlog(LOG_ERROR, "error setting open file limits\n");
   }
@@ -207,18 +216,26 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     slowlog(LOG_FATAL, "Error parsing URL\n");
     return false;
   }
-  
-  int error;
-  addrinfo hints;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = PF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  /* resolve the domain name into a list of addresses */
-  error = getaddrinfo(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &hints, &addr_);
-  if(error != 0) {
-    slowlog(LOG_FATAL, "Error in getaddrinfo: %s\n", gai_strerror(error));
-    return false;
+  if(eNoProxy == proxy_type_) {
+    if(!resolve_addr(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &addr_)) {
+      return false;
+    } 
+  } else {
+    if(proxy != 0 && strlen(proxy)) {
+      if(!proxy_.prepare(proxy)) {
+        slowlog(LOG_FATAL, "Error parsing proxy information\n");
+        return false;
+      } else {
+        if(!resolve_addr(proxy_.getHost().c_str(), proxy_.getPortStr(), &addr_)) {
+          return false;
+        }
+      }
+    } else {
+      slowlog(LOG_FATAL, "No proxy specified\n");
+      return false;
+    }
   }
+
   extra_data_max_len_total_ = extra_data_max_len_ * 2 + (eHeader == test_type_ ? 4 : 2);
   random_extra_.resize(extra_data_max_len_total_); // including separators
   user_agent_.append(user_agents[rand() % sizeof(user_agents)/sizeof(*user_agents)]);
@@ -257,7 +274,10 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   request_.clear();
   request_.append(verb_);
   request_.append(" ");
-  request_.append(base_uri_.getPath());
+  if(eHTTPProxy == proxy_type_)
+    request_.append(base_uri_.getData());
+  else
+    request_.append(base_uri_.getPath());
   request_.append(" HTTP/1.1\r\n");
   request_.append("Host: ");
   request_.append(base_uri_.getHost());
@@ -328,6 +348,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
           "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
           "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
+          "<tr><td><b>Using proxy</b></td><td>%s %s</td></tr>"
           "</table>",
           test_type_name[test_type_],
           num_connections_,
@@ -337,7 +358,9 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           followup_timing_,
           delay_,
           probe_timeout_,
-          duration_
+          duration_,
+          proxy_type_name[proxy_type_],
+          proxy_type_ == eNoProxy ? NULL : proxy_.getData()
           );
     } else {
       sprintf(test_info,"<table border='0'>"
@@ -350,6 +373,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
           "<tr><td><b>Timeout for probe connection</b></td><td>%d</td></tr>"
           "<tr><td><b>Target test duration</b></td><td>%d seconds</td></tr>"
+          "<tr><td><b>Using proxy</b></td><td>%s %s</td></tr>"
           "</table>",
           test_type_name[test_type_],
           num_connections_,
@@ -360,7 +384,9 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           read_interval_,
           delay_,
           probe_timeout_,
-          duration_
+          duration_,
+          proxy_type_name[proxy_type_],
+          proxy_type_ == eNoProxy ? NULL : proxy_.getData()
           );
     }
 
@@ -408,7 +434,8 @@ void SlowHTTPTest::report_parameters() {
       "interval between follow up data:  %d seconds\n"
       "connections per seconds:          %d\n"
       "probe connection timeout:         %d seconds\n"
-      "test duration:                    %d seconds\n",
+      "test duration:                    %d seconds\n"
+      "using proxy:                      %s%s\n",
       test_type_name[test_type_],
       num_connections_,
       base_uri_.getData(),
@@ -418,7 +445,9 @@ void SlowHTTPTest::report_parameters() {
       followup_timing_,
       delay_,
       probe_timeout_,
-      duration_
+      duration_,
+      proxy_type_name[proxy_type_],
+      proxy_type_ == eNoProxy ? NULL : proxy_.getData()
       );
   } else { // slow read
     slowlog(LOG_INFO, "\nUsing:\n"
@@ -431,7 +460,8 @@ void SlowHTTPTest::report_parameters() {
       "read rate from receive buffer:    %d bytes / %d sec\n"
       "connections per seconds:          %d\n"
       "probe connection timeout:         %d seconds\n"
-      "test duration:                    %d seconds\n",
+      "test duration:                    %d seconds\n"
+      "using proxy:                      %s%s\n",
       test_type_name[test_type_],
       num_connections_,
       base_uri_.getData(),
@@ -443,7 +473,9 @@ void SlowHTTPTest::report_parameters() {
       read_interval_,
       delay_,
       probe_timeout_,
-      duration_
+      duration_,
+      proxy_type_name[proxy_type_],
+      proxy_type_ == eNoProxy ? NULL : proxy_.getData()
       );
 
   }
@@ -511,6 +543,21 @@ void SlowHTTPTest::report_status(bool to_stats) {
   }
 }
 
+bool SlowHTTPTest::resolve_addr(const char* host, const char* port, addrinfo  **addr) {
+  int error;
+  addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = PF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  // resolve the domain name into a list of addresses
+  error = getaddrinfo(host, port, &hints, addr);
+  if(error != 0) {
+    slowlog(LOG_FATAL, "Error in getaddrinfo: %s\n", gai_strerror(error));
+    return false;
+  }
+  return true;
+}
+
 bool SlowHTTPTest::run_test() {
   int num_connected = 0;
 #ifdef HAVE_POLL  
@@ -557,7 +604,7 @@ bool SlowHTTPTest::run_test() {
     // init and connect probe socket
     if(!probe_socket_ && probe_taken != seconds_passed_) {
       probe_socket_ = new SlowSocket();
-      if(probe_socket_->init(addr_, &base_uri_, maxfd, 0)) {
+      if(probe_socket_->init(addr_, proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
         probe_socket_->set_state(eConnecting);
         probe_taken = seconds_passed_;
       slowlog(LOG_DEBUG, "%s: created probe socket %d\n",
@@ -597,7 +644,7 @@ bool SlowHTTPTest::run_test() {
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
       sock_[num_connected]->set_state(eInit);
-      if(!sock_[num_connected]->init(addr_, &base_uri_, maxfd,
+      if(!sock_[num_connected]->init(addr_, proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd,
           (eRange == test_type_ || eSlowRead == test_type_) ? 0 : followup_cnt_,
           eSlowRead == test_type_ ? read_interval_ : 0,
           window_lower_limit_, window_upper_limit_)) {
