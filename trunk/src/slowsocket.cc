@@ -85,7 +85,7 @@ int SlowSocket::set_nonblocking() {
   return fcntl(sockfd_, F_SETFL, flags | O_NONBLOCK);
 }
 
-bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
+bool SlowSocket::init(addrinfo* addr, const bool isSSL, int& maxfd,
                       int followups_to_send, int read_interval,
                       int wnd_lower_limit, int wnd_upper_limit) {
  	read_interval_ = read_interval * 1000;
@@ -116,7 +116,7 @@ bool SlowSocket::init(addrinfo* addr, const Url* url, int& maxfd,
       set_window_size(window_size_);
     }
     slowlog(LOG_DEBUG, "socket %d created \n", sockfd_);
-    if(connect_initiated_ = url->isSSL() ? connect_ssl(addr) : connect_plain(addr)) {
+    if(connect_initiated_ = isSSL ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
   }

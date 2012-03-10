@@ -111,5 +111,29 @@ bool Url::prepare(const char* url) {
   return true;
 }
 
+Proxy::Proxy()
+    : port_(0) {
+}
+
+bool Proxy::prepare(const char* proxy) {
+  if(!proxy)
+    return false;
+  data_.append(proxy);
+  size_t delim = data_.find_first_of(':');
+  if(delim == std::string::npos)
+    return false;
+  host_.append(data_, 0, delim);
+  port_str_.append(data_, delim + 1, data_.size());
+  long tmp = strtol(port_str_.c_str(), 0, 10);
+  if(tmp && tmp <= USHRT_MAX) {
+    port_ = static_cast<int>(tmp);
+  } else {
+    return false;
+  }
+  return true;
+}
+
+
+
 
 }  // namespace slowhttptest

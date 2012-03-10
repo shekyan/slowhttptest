@@ -47,6 +47,7 @@ static void usage() {
       "Usage:\n"
       "slowhttptest [-a <range start>] [-b <range limit>]\n"
       "[-c <number of connections>] [-<H|B|R|X>]\n"
+      "[-d <host:port>] HTTP proxy on given host:port\n"
       "[-g <generate statistics>]\n"
       "[-i <interval in seconds>] [-k <request multiply factor>]\n"
       "[-l <test duration in seconds>]\n"
@@ -61,6 +62,7 @@ static void usage() {
       "-a start,        left boundary of range in range header, default: 5\n\t"
       "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
+      "-d host:port,    HTTP proxy host:ports, default: off\n\t"
       "-h               display this help and exit\n\t"
       "-H, -B, -R or X  specify test mode (slow headers,body, range or read),\n\t"
       "                 default: headers\n\t"
@@ -137,6 +139,7 @@ using slowhttptest::slowlog_init;
 using slowhttptest::slowlog;
 using slowhttptest::SlowHTTPTest;
 using slowhttptest::SlowTestType;
+using slowhttptest::ProxyType;
 
 int main(int argc, char **argv) {
 
@@ -146,6 +149,7 @@ int main(int argc, char **argv) {
   }
   char url[1024] = { 0 };
   char path[1024] = { 0 };
+  char proxy[1024] = { 0 };
   char verb[16] = { 0 };
   // default vaules
   int conn_cnt            = 50;
@@ -165,9 +169,10 @@ int main(int argc, char **argv) {
   int window_upper_limit  = 512;
   int window_lower_limit  = 1;
   SlowTestType type = slowhttptest::eHeader;
+  ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   char o;
-  while((o = getopt(argc, argv, ":HBRXgha:b:c:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
@@ -184,6 +189,10 @@ int main(int argc, char **argv) {
         if(!parse_int(conn_cnt, 1024))
 #endif
           return -1;
+        break;
+      case 'd':
+        strncpy(proxy, optarg, 1023);
+        proxy_type = slowhttptest::eHTTPProxy;
         break;
       case 'h':
         usage();
@@ -288,11 +297,12 @@ int main(int argc, char **argv) {
   signal(SIGINT, &int_handler);
   slowlog_init(debug_level, NULL);
   std::auto_ptr<SlowHTTPTest> slow_test(
-      new SlowHTTPTest(rate, duration, interval, conn_cnt, 
-      max_random_data_len, content_length, type, need_stats,
-      pipeline_factor, probe_interval, range_start, range_limit,
-      read_interval, read_len, window_lower_limit, window_upper_limit));
-  if(!slow_test->init(url, verb, path)) {
+      new SlowHTTPTest(rate, duration, interval,
+      conn_cnt, max_random_data_len, content_length,
+      type, need_stats, pipeline_factor, probe_interval,
+      range_start, range_limit, read_interval, read_len,
+      window_lower_limit, window_upper_limit, proxy_type));
+  if(!slow_test->init(url, verb, path, proxy)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
