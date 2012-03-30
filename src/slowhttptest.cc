@@ -360,7 +360,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           probe_timeout_,
           duration_,
           proxy_type_name[proxy_type_],
-          proxy_type_ == eNoProxy ? NULL : proxy_.getData()
+          proxy_type_ == eNoProxy ? " " : proxy_.getData()
           );
     } else {
       sprintf(test_info,"<table border='0'>"
@@ -386,7 +386,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           probe_timeout_,
           duration_,
           proxy_type_name[proxy_type_],
-          proxy_type_ == eNoProxy ? NULL : proxy_.getData()
+          proxy_type_ == eNoProxy ? " " : proxy_.getData()
           );
     }
 
@@ -447,7 +447,7 @@ void SlowHTTPTest::report_parameters() {
       probe_timeout_,
       duration_,
       proxy_type_name[proxy_type_],
-      proxy_type_ == eNoProxy ? NULL : proxy_.getData()
+      proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
   } else { // slow read
     slowlog(LOG_INFO, "\nUsing:\n"
@@ -475,7 +475,7 @@ void SlowHTTPTest::report_parameters() {
       probe_timeout_,
       duration_,
       proxy_type_name[proxy_type_],
-      proxy_type_ == eNoProxy ? NULL : proxy_.getData()
+      proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
 
   }
