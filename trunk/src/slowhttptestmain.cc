@@ -62,7 +62,7 @@ static void usage() {
       "-a start,        left boundary of range in range header, default: 5\n\t"
       "-b bytes,        limit for range header right boundary values, default: 2000\n\t"
       "-c connections,  target number of connections, default: 50\n\t"
-      "-d host:port,    HTTP proxy host:ports, default: off\n\t"
+      "-d host:port,    HTTP proxy host:port, default: off\n\t"
       "-h               display this help and exit\n\t"
       "-H, -B, -R or X  specify test mode (slow headers,body, range or read),\n\t"
       "                 default: headers\n\t"
