@@ -23,10 +23,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
+#include <unistd.h>"
 
 #include <algorithm>
 #include <string>
