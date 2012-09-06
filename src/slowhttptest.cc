@@ -594,15 +594,13 @@ bool SlowHTTPTest::run_test() {
   // select/poll loop
   while(true) {
     int wr = 0;
-
     seconds_passed_ = progress_timer.tv_sec;
-
 #ifndef HAVE_POLL  
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
 #endif
     // init and connect probe socket
-    if(!probe_socket_ && probe_taken != seconds_passed_) {
+    if(!probe_socket_ && probe_taken != seconds_passed_ && seconds_passed_ % probe_timeout_ == 0) {
       probe_socket_ = new SlowSocket();
       if(probe_socket_->init(addr_, proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
         probe_socket_->set_state(eConnecting);
@@ -764,7 +762,9 @@ bool SlowHTTPTest::run_test() {
                 strerror(errno));
             delete probe_socket_;
             probe_socket_ = NULL;
-
+#ifdef HAVE_POLL
+            fds[0].events = 0;
+#endif
           } else {
             if(ret > 0) {
               slowlog(LOG_DEBUG, "%s:probe socket %d replied %d bytes:\n %s\n", __FUNCTION__,
@@ -772,6 +772,9 @@ bool SlowHTTPTest::run_test() {
                   is_dosed_ = false;
                   delete probe_socket_;
                   probe_socket_ = NULL;
+#ifdef HAVE_POLL
+                  fds[0].events = 0;
+#endif
             } else {
               slowlog(LOG_DEBUG, "%s: pending probe socket %d\n", __FUNCTION__,
                    probe_socket_->get_sockfd());
@@ -826,6 +829,9 @@ bool SlowHTTPTest::run_test() {
                   sock_[i]->get_sockfd(),
                   ret?strerror(errno):peer_closed);
               close_sock(i);
+#ifdef HAVE_POLL
+              fds[i+1].events = 0;
+#endif
               continue;
             } else {
               if(ret > 0) {// actual data recieved
@@ -856,6 +862,9 @@ bool SlowHTTPTest::run_test() {
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 close_sock(i);
+#ifdef HAVE_POLL
+                fds[i+1].events = 0;
+#endif
                 continue;
               } else {
                 if(ret > 0) { //actual data was sent
@@ -887,6 +896,9 @@ bool SlowHTTPTest::run_test() {
                     __FUNCTION__, sock_[i]->get_sockfd(),
                     strerror(errno));
                 close_sock(i);
+#ifdef HAVE_POLL
+                fds[i+1].events = 0;
+#endif
                 continue;
               } else {
                 if(ret > 0) { //actual data was sent
