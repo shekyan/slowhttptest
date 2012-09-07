@@ -68,6 +68,7 @@ static const char* proxy_type_name[] = {
     "HTTP tunnel at ",
     "SOCKS 4 at ",
     "SOCKS 5 at ",
+    "probe proxy at ",
     "no proxy"
 };
 static const char* test_type_name[] = {
@@ -221,13 +222,27 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       return false;
     } 
   } else {
+    if(base_uri_.isSSL()) {
+      slowlog(LOG_FATAL, "TLS/SSL connections through proxy are not supported yet.\n");
+      return false;
+    }
     if(proxy != 0 && strlen(proxy)) {
       if(!proxy_.prepare(proxy)) {
         slowlog(LOG_FATAL, "Error parsing proxy information\n");
         return false;
       } else {
-        if(!resolve_addr(proxy_.getHost().c_str(), proxy_.getPortStr(), &addr_)) {
-          return false;
+        if(eHTTPProxy == proxy_type_) {
+          if(!resolve_addr(proxy_.getHost().c_str(), proxy_.getPortStr(), &addr_)) {
+            return false;
+          }
+        }
+        if(eProbeProxy == proxy_type_) {
+          if(!resolve_addr(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &addr_)) {
+            return false;
+          }
+          if(!resolve_addr(base_uri_.getHost().c_str(), proxy_.getPortStr(), &probe_proxy_addr_)) {
+            return false;
+          } 
         }
       }
     } else {
@@ -296,7 +311,13 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   request_.append(referer);
   // method for probe is always GET
   probe_request_.append("GET");
-  probe_request_.append(request_.begin() + verb_.size(), request_.end());
+  if(eProbeProxy == proxy_type_) {
+    probe_request_.append(" ");
+    probe_request_.append(base_uri_.getData());
+    probe_request_.append(request_.begin() + verb_.size() + 1 + base_uri_.getPathLen(), request_.end());
+  } else {
+    probe_request_.append(request_.begin() + verb_.size(), request_.end());
+  }
   probe_request_.append("\r\n");
   if(ePost == test_type_) {
     request_.append("Content-Length: ");

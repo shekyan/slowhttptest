@@ -54,6 +54,10 @@ class Url {
     return data_.c_str();
   }
 
+  const size_t getPathLen() const {
+    return path_.size();
+  }
+
  private:
   std::string data_;
   std::string host_;
@@ -79,8 +83,8 @@ class Proxy {
   const char* getData() const {
     return data_.c_str();
   }
- 
- private:
+
+private:
   std::string data_;
   std::string host_;
   std::string port_str_;
