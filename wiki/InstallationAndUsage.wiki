@@ -76,8 +76,8 @@ Full list of configurable options is the following:
 ||-a start||start value of ranges-specifier for range header test||
 ||-b bytes||limit of range-specifier for range header test||
 ||-c number of connections||limited to 65539||
-||-d proxy host:port for directing all traffic through web proxy||
-||-e proxy host:port for directing only probe traffic through web proxy||
+||-d proxy host:port||for directing all traffic through web proxy||
+||-e proxy host:port||for directing only probe traffic through web proxy||
 ||-H, B, R or X||specify to slow down in headers section or in message body, -R enables range test, -X enables slow read test||
 ||-g||generate statistics in CSV and HTML formats, pattern is slow_xxx.csv/html, where xxx is the time and date||
 ||-i seconds||interval between follow up data in seconds, per connection||
