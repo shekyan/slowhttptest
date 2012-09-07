@@ -57,6 +57,7 @@ enum ProxyType {
   eTunnelProxy,
   eSocks4Proxy,
   eSocks5Proxy,
+  eProbeProxy,
   eNoProxy
 };
 
@@ -92,6 +93,7 @@ class SlowHTTPTest {
    
   RandomTextGenerator textgen_;
   addrinfo* addr_;
+  addrinfo* probe_proxy_addr_;
   std::string request_;
   std::string probe_request_;
   std::string random_extra_;

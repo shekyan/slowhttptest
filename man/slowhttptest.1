@@ -13,7 +13,7 @@
 .\"  See the License for the specific language governing permissions and
 .\"  limitations under the License.
 .\"
-.Dd January 28, 2012
+.Dd September 6, 2012
 .Dt SLOWHTTPTEST 1
 .Os
 .Sh NAME
@@ -27,7 +27,8 @@
 .Op Fl a Ar range start
 .Op Fl b Ar range limit
 .Op Fl c Ar number of connections
-.Op Fl d Ar HTTP proxy host:port
+.Op Fl d Ar all traffic directed through HTTP proxy at host:port
+.Op Fl e Ar probe traffic directed through HTTP proxy at host:port
 .Op Fl i Ar interval in seconds
 .Op Fl k Ar request multiply factor
 .Op Fl l Ar test duration in seconds
@@ -93,6 +94,8 @@ Sets the limit value of range-specifier for Range Header attack.
 Specifies the target number of connections to establish during the test.
 .It Fl d Ar HTTP proxy host:port
 Specifies HTTP proxy server to connect to for all connections.
+.It Fl e Ar HTTP proxy host:port
+Specifies HTTP proxy server to connect to for probe connections.
 .It Fl i Ar seconds
 Specifies the interval between follow up data for slowrois and Slow POST tests.
 .It Fl k Ar pipeline factor
@@ -151,11 +154,18 @@ probe connection waits 3 seconds for HTTP response before marking server as DoSe
 .Pp
 .Dl $ slowhttptest -c 8000 -X -r 200 -w 512 -y 1024 -n 5 -z 32 -k 3 -u https://host.example.com/resources/index.html -p 3
 .Pp
-Start Slow Read test of host.example.com through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test vaules are default. Using
+Start Slow Read test of host.example.com through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test vaules are default.
 .Nm
 most likely would test HTTP proxy server itself, rather than target server, but it all depends on the HTTP proxy server implementation:
 .Pp
 .Dl $ slowhttptest -d 10.10.0.1:8080 -c 8000 -X -u https://host.example.com/resources/index.html
+.Pp
+Start Slow Read test of host.example.com and direct probe traffic through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test vaules are default.
+Specifying another connection channel for probe connections helps to make sure that
+.Nm
+shows valid statistics for availability of server under test:
+.Pp
+.Dl $ slowhttptest -e 10.10.0.1:8080 -c 8000 -X -u https://host.example.com/resources/index.html
 .Pp
 
 .Sh AUTHOR
