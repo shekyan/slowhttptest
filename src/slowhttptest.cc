@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <numeric>
 #include <sstream>
