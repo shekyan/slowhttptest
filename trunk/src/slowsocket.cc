@@ -100,8 +100,10 @@ bool SlowSocket::init(addrinfo* addr, const bool isSSL, int& maxfd,
     }
   }
 	addrinfo* res;
-  bool connect_initiated_ = false;
-  for (res = addr; !connect_initiated_ && res; res = res->ai_next) {
+  bool connect_initiated = false;
+  bool addr_found = false;
+  for (res = addr; !connect_initiated && res; res = res->ai_next) {
+    addr_found = true;
     sockfd_ = socket(res->ai_family, res->ai_socktype,
                      res->ai_protocol);
     if(-1 == sockfd_) {
@@ -117,11 +119,14 @@ bool SlowSocket::init(addrinfo* addr, const bool isSSL, int& maxfd,
       set_window_size(window_size_);
     }
     slowlog(LOG_DEBUG, "socket %d created \n", sockfd_);
-    if(connect_initiated_ = isSSL ? connect_ssl(addr) : connect_plain(addr)) {
+    if(connect_initiated = isSSL ? connect_ssl(addr) : connect_plain(addr)) {
       break; //found right addrinfo
     }
   }
-
+  if(!addr_found) {
+    slowlog(LOG_FATAL, "addrinfo corrupted/null\n");
+    return false;
+  }
   followups_to_send_ = followups_to_send;
   requests_to_send_ = 1;
 
