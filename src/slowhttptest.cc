@@ -633,7 +633,7 @@ bool SlowHTTPTest::run_test() {
         slowlog(LOG_ERROR, "%s: Unable to initialize probe socket.\n", __FUNCTION__);
       }
     } else {
-      if(probe_socket_ && probe_socket_->get_sockfd() &&
+      if(probe_socket_ && probe_socket_->get_sockfd() > 0 &&
           (seconds_passed_ - probe_taken >= probe_timeout_)) {
         delete probe_socket_;
         probe_socket_ = NULL;
