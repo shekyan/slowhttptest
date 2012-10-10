@@ -58,7 +58,7 @@ static const int kBufSize = 65537;
 static const char* exit_status_msg[] = {
     "Hit test time limit",
     "No open connections left",
-    "Cannot esatblish connection",
+    "Cannot establish connection",
     "Connection refused",
     "Cancelled by user",
     "Unexpected error"
