@@ -17,12 +17,12 @@ Where PREFIX must be replaced with the absolute path where slowhttptest tool sho
 
 You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
 
-*Update:*
-Apologies for FreeBSD users for failed build. Fix checked into svn. Use
+*10.10.2012 Update:*
+High CPU utilization could be annoying on some platforms, if you try to open more than 3K connections. Fix is in trunk, so checkout the source at
 {{{
 svn checkout http://slowhttptest.googlecode.com/svn/trunk/ slowhttptest-read-only
 }}}
-to build on FreeBSD, until we release new version.
+
 
 ==Usage==
 
@@ -125,3 +125,11 @@ Here is a sample screenshot of generated HTML page
 that contains graphically represented connections states and server availability intervals, and gives the picture on how particular server behaves under specific load within given time frame.
 
 CSV file can be used as data source for your favorite chart building tool, like MS Excel, iWork Numbers, or Google Docs.
+
+Last message you'll see is the exit status that hints for possible possible program termination reasons:
+"Hit test time limit",
+"No open connections left",
+"Cannot esatblish connection",
+ 62     "Connection refused",
+ 63     "Cancelled by user",
+ 64     "Unexpected error"
