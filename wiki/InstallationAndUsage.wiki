@@ -127,9 +127,9 @@ that contains graphically represented connections states and server availability
 CSV file can be used as data source for your favorite chart building tool, like MS Excel, iWork Numbers, or Google Docs.
 
 Last message you'll see is the exit status that hints for possible possible program termination reasons:
-"Hit test time limit",
-"No open connections left",
-"Cannot esatblish connection",
- 62     "Connection refused",
- 63     "Cancelled by user",
- 64     "Unexpected error"
+||"Hit test time limit"||program reached the time limit specified with -l argument||
+||"No open connections left"||peer closed all connections||
+||"Cannot establish connection"||no connections were established during first N seconds of the test, where N is either value of -i argument, or 10, if not specified. This would happen if there is no route to host or remote peer is down||
+||"Connection refused"||remote peer doesn't accept connections (from you only? Use proxy to probe) on specified port||
+||"Cancelled by user"||you pressed Ctrl-C or sent SIGINT in some other way||
+||"Unexpected error"||should never happen||
