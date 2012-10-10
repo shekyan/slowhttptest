@@ -637,6 +637,9 @@ bool SlowHTTPTest::run_test() {
           (seconds_passed_ - probe_taken >= probe_timeout_)) {
         delete probe_socket_;
         probe_socket_ = NULL;
+        fds[0].fd = -1;
+        fds[0].events = 0;
+        fds[0].revents = 0;
         is_dosed_ = true;
       }
     }
