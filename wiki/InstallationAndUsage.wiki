@@ -17,12 +17,6 @@ Where PREFIX must be replaced with the absolute path where slowhttptest tool sho
 
 You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
 
-*10.10.2012 Update:*
-High CPU utilization could be annoying on some platforms, if you try to open more than 3K connections. Fix is in trunk, so checkout the source at
-{{{
-svn checkout http://slowhttptest.googlecode.com/svn/trunk/ slowhttptest-read-only
-}}}
-
 
 ==Usage==
 
