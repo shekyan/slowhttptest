@@ -294,6 +294,12 @@ int main(int argc, char **argv) {
         return -1;
     }
   }
+  int index;
+  for (index = optind; index < argc; index++) {
+    printf ("Non-option argument %s\n", argv[index]);
+    info();
+    return -1;
+  }
   if(slowhttptest::eSlowRead == type 
       && !check_window_range(window_lower_limit, window_upper_limit))
     return -1;
