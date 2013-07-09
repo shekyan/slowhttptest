@@ -34,7 +34,7 @@
 
 #include <string>
 #include <openssl/ssl.h>
-
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 struct addrinfo;
 
 namespace slowhttptest {
