@@ -119,8 +119,8 @@ bool SlowSocket::init(addrinfo* addr, const bool isSSL, int& maxfd,
       set_window_size(window_size_);
     }
     slowlog(LOG_DEBUG, "socket %d created \n", sockfd_);
-    if(connect_initiated = isSSL ? connect_ssl(addr) : connect_plain(addr)) {
-      break; //found right addrinfo
+    if((connect_initiated = isSSL ? connect_ssl(addr) : connect_plain(addr))) {
+      break; // found right addrinfo
     }
   }
   if(!addr_found) {
