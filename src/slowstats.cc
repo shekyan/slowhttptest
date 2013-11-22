@@ -40,6 +40,10 @@ const char* HTML_HEADER =
 "<!-- SlowHTTPTest Analysis chart (c) Sergey Shekyan, Victor Agababov 2011  -->\n \
 <html>\n \
   <head>\n \
+  <style>\n \
+    body { font: 12px/18px \"Lucida Grande\", \"Lucida Sans Unicode\", Helvetica, Arial, Verdana, sans-serif; background-color: transparent; color: #333; -webkit-font-smoothing: antialiased; } \n \
+    .sht_results {font-size: 12px; } \n \
+    </style>\n \
     <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\n \
     <script type=\"text/javascript\">\n \
       google.load(\"visualization\", \"1\", {packages:[\"corechart\"]});\n \
