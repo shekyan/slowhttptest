@@ -359,7 +359,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     }
     char test_info[1024];
     if(eSlowRead != test_type_) { 
-      sprintf(test_info,"<table border='0'>"
+      sprintf(test_info,"<table class='sht_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
@@ -434,11 +434,8 @@ void SlowHTTPTest::close_sock(int id) {
 }
 
 void SlowHTTPTest::report_final() {
-
-  // report parameters once more
-  report_parameters();
-  slowlog(LOG_INFO, "Test ended on %dth second\n"
-      "status:                           %s\n",
+  slowlog(LOG_INFO, cBLU "\nTest ended on %dth second\n"
+      "Exit status:" cLBL"                     %s\n" cRST,
       seconds_passed_,
       exit_status_msg[exit_status_]
       );
@@ -446,58 +443,62 @@ void SlowHTTPTest::report_final() {
 
 void SlowHTTPTest::report_parameters() {
   if(eSlowRead != test_type_) {
-    slowlog(LOG_INFO, "\nUsing:\n"
-      "test type:                        %s\n"
-      "number of connections:            %d\n"
-      "URL:                              %s\n"
-      "verb:                             %s\n"
-      "Content-Length header value:      %d\n"
-      "follow up data max size:          %d\n"
-      "interval between follow up data:  %d seconds\n"
-      "connections per seconds:          %d\n"
-      "probe connection timeout:         %d seconds\n"
-      "test duration:                    %d seconds\n"
-      "using proxy:                      %s%s\n",
-      test_type_name[test_type_],
-      num_connections_,
-      base_uri_.getData(),
-      verb_.c_str(),
-      content_length_,
-      extra_data_max_len_total_,
-      followup_timing_,
-      delay_,
-      probe_timeout_,
-      duration_,
-      proxy_type_name[proxy_type_],
-      proxy_type_ == eNoProxy ? " " : proxy_.getData()
+    slowlog(LOG_INFO, "\x1b[H\x1b[J");
+    slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
+      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      cGRN "test type:" cLGN "                        %s\n"
+      cGRN "number of connections:" cLGN "            %d\n"
+      cGRN "URL:" cLGN "                              %s\n"
+      cGRN "verb:" cLGN "                             %s\n"
+      cGRN "Content-Length header value:" cLGN "      %d\n"
+      cGRN "follow up data max size:" cLGN "          %d\n"
+      cGRN "interval between follow up data:" cLGN "  %d seconds\n"
+      cGRN "connections per seconds:" cLGN "          %d\n"
+      cGRN "probe connection timeout:" cLGN "         %d seconds\n"
+      cGRN "test duration:" cLGN "                    %d seconds\n"
+      cGRN "using proxy:" cLGN "                      %s%s\n" cRST,
+        test_type_name[test_type_],
+        num_connections_,
+        base_uri_.getData(),
+        verb_.c_str(),
+        content_length_,
+        extra_data_max_len_total_,
+        followup_timing_,
+        delay_,
+        probe_timeout_,
+        duration_,
+        proxy_type_name[proxy_type_],
+        proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
   } else { // slow read
-    slowlog(LOG_INFO, "\nUsing:\n"
-      "test type:                        %s\n"
-      "number of connections:            %d\n"
-      "URL:                              %s\n"
-      "verb:                             %s\n"
-      "receive window range:             %d - %d\n"
-      "pipeline factor:                  %d\n"
-      "read rate from receive buffer:    %d bytes / %d sec\n"
-      "connections per seconds:          %d\n"
-      "probe connection timeout:         %d seconds\n"
-      "test duration:                    %d seconds\n"
-      "using proxy:                      %s%s\n",
-      test_type_name[test_type_],
-      num_connections_,
-      base_uri_.getData(),
-      verb_.c_str(),
-      window_lower_limit_,
-      window_upper_limit_,
-      pipeline_factor_,
-      read_len_,
-      read_interval_,
-      delay_,
-      probe_timeout_,
-      duration_,
-      proxy_type_name[proxy_type_],
-      proxy_type_ == eNoProxy ? " " : proxy_.getData()
+    slowlog(LOG_INFO, "\x1b[H\x1b[J");
+    slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
+      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      cGRN "test type:" cLGN "                       %s\n"
+      cGRN "number of connections:" cLGN "           %d\n"
+      cGRN "URL:" cLGN "                             %s\n"
+      cGRN "verb:" cLGN "                            %s\n"
+      cGRN "receive window range:" cLGN "            %d - %d\n"
+      cGRN "pipeline factor:" cLGN "                 %d\n"
+      cGRN "read rate from receive buffer:" cLGN "   %d bytes / %d sec\n"
+      cGRN "connections per seconds:" cLGN "         %d\n"
+      cGRN "probe connection timeout:" cLGN "        %d seconds\n"
+      cGRN "test duration:" cLGN "                   %d seconds\n"
+      cGRN "using proxy:" cLGN "                     %s%s\n",
+        test_type_name[test_type_],
+        num_connections_,
+        base_uri_.getData(),
+        verb_.c_str(),
+        window_lower_limit_,
+        window_upper_limit_,
+        pipeline_factor_,
+        read_len_,
+        read_interval_,
+        delay_,
+        probe_timeout_,
+        duration_,
+        proxy_type_name[proxy_type_],
+        proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
 
   }
@@ -548,13 +549,13 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
-    slowlog(LOG_INFO, "slow HTTP test status on %dth second:\n"
-        "initializing:        %d\n"
-        "pending:             %d\n"
-        "connected:           %d\n"
-        "error:               %d\n"
-        "closed:              %d\n"
-        "service available:   %s\n",
+    slowlog(LOG_INFO, cGRA"\n\nslow HTTP test status on %dth second:\n\n"
+      cGRA"initializing:" cNOR"        %d\n"
+      cGRA"pending:     " cNOR"        %d\n"
+      cGRA"connected:   " cNOR"        %d\n"
+      cGRA"error:       " cNOR"        %d\n"
+      cGRA"closed:      " cNOR"        %d\n"
+      cGRA"service available:"cNOR"   %s\n"cRST,
         seconds_passed_,
         initializing_,
         connecting_,
@@ -722,6 +723,7 @@ bool SlowHTTPTest::run_test() {
     }
     // Print every 5 seconds.
     if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
+      report_parameters();
       report_status(false /*print_stats*/);
       heartbeat_reported = seconds_passed_;
     }
