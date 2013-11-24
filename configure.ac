@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(slowhttptest, 1.5, shekyan@gmail.com)
-AM_INIT_AUTOMAKE([slowhttptest], [1.5])
+AC_INIT(slowhttptest, 1.6, shekyan@gmail.com)
 AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
+AM_INIT_AUTOMAKE
 
 # Checks for programs.
 AC_PROG_CXX
@@ -17,6 +17,7 @@ AC_CHECK_LIB([ssl], [SSL_library_init], [], [AC_MSG_ERROR([OpenSSL-devel is miss
 
 # Checks for header files.
 AC_HEADER_STDC
+AC_DEFINE(USE_COLOR, 1, Use terminal colors)
 AC_CHECK_HEADERS([fcntl.h limits.h netdb.h netinet/in.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
