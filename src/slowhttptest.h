@@ -72,7 +72,7 @@ class SlowHTTPTest {
    int probe_interval, int range_start,
    int range_limit, int read_interval,
    int read_len, int window_lower_limit,
-   int window_upper_limit, ProxyType proxy_type);
+   int window_upper_limit, ProxyType proxy_type, int debug_level);
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb,
@@ -134,6 +134,7 @@ class SlowHTTPTest {
   int window_upper_limit_;
   bool is_dosed_;
   ProxyType proxy_type_;
+  int debug_level_;
 };
 
 }  // namespace slowhttptest

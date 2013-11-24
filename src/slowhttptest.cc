@@ -123,7 +123,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
                            int read_interval, int read_len,
                            int window_lower_limit,
                            int window_upper_limit,
-                           ProxyType proxy_type)
+                           ProxyType proxy_type,
+                           int debug_level)
     : probe_socket_(0),
       delay_(delay),
       duration_(duration),
@@ -146,7 +147,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       window_lower_limit_(window_lower_limit),
       window_upper_limit_(window_upper_limit),
       is_dosed_(false),
-      proxy_type_(proxy_type) {
+      proxy_type_(proxy_type),
+      debug_level_(debug_level) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
@@ -443,7 +445,8 @@ void SlowHTTPTest::report_final() {
 
 void SlowHTTPTest::report_parameters() {
   if(eSlowRead != test_type_) {
-    slowlog(LOG_INFO, "\x1b[H\x1b[J");
+    if(LOG_INFO == debug_level_)
+      slowlog(LOG_INFO, "\x1b[H\x1b[J");
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
       cGRN "test type:" cLGN "                        %s\n"
@@ -549,13 +552,13 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
-    slowlog(LOG_INFO, cGRA"\n\nslow HTTP test status on %dth second:\n\n"
-      cGRA"initializing:" cNOR"        %d\n"
-      cGRA"pending:     " cNOR"        %d\n"
-      cGRA"connected:   " cNOR"        %d\n"
-      cGRA"error:       " cNOR"        %d\n"
-      cGRA"closed:      " cNOR"        %d\n"
-      cGRA"service available:"cNOR"   %s\n"cRST,
+    slowlog(LOG_INFO, cNOR"\n\nslow HTTP test status on %dth second:\n\n"
+      cNOR"initializing:" cBRI"        %d\n"
+      cNOR"pending:     " cBRI"        %d\n"
+      cNOR"connected:   " cBRI"        %d\n"
+      cNOR"error:       " cBRI"        %d\n"
+      cNOR"closed:      " cBRI"        %d\n"
+      cNOR"service available:"cBRI"   %s\n"cRST,
         seconds_passed_,
         initializing_,
         connecting_,
@@ -723,6 +726,7 @@ bool SlowHTTPTest::run_test() {
     }
     // Print every 5 seconds.
     if(seconds_passed_ % 5 == 0 && heartbeat_reported != seconds_passed_) {
+      if(LOG_INFO == debug_level_)
       report_parameters();
       report_status(false /*print_stats*/);
       heartbeat_reported = seconds_passed_;
