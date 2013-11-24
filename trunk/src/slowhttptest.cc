@@ -436,8 +436,8 @@ void SlowHTTPTest::close_sock(int id) {
 }
 
 void SlowHTTPTest::report_final() {
-  slowlog(LOG_INFO, cBLU "\nTest ended on %dth second\n"
-      "Exit status:" cLBL"                     %s\n" cRST,
+  slowlog(LOG_INFO, cCYA"\nTest ended on %dth second\n"
+      "Exit status:" cLCY"                     %s\n" cRST,
       seconds_passed_,
       exit_status_msg[exit_status_]
       );
@@ -449,17 +449,17 @@ void SlowHTTPTest::report_parameters() {
       slowlog(LOG_INFO, "\x1b[H\x1b[J");
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
-      cGRN "test type:" cLGN "                        %s\n"
-      cGRN "number of connections:" cLGN "            %d\n"
-      cGRN "URL:" cLGN "                              %s\n"
-      cGRN "verb:" cLGN "                             %s\n"
-      cGRN "Content-Length header value:" cLGN "      %d\n"
-      cGRN "follow up data max size:" cLGN "          %d\n"
-      cGRN "interval between follow up data:" cLGN "  %d seconds\n"
-      cGRN "connections per seconds:" cLGN "          %d\n"
-      cGRN "probe connection timeout:" cLGN "         %d seconds\n"
-      cGRN "test duration:" cLGN "                    %d seconds\n"
-      cGRN "using proxy:" cLGN "                      %s%s\n" cRST,
+      cBLU "test type:" cLBL "                        %s\n"
+      cBLU "number of connections:" cLBL "            %d\n"
+      cBLU "URL:" cLBL "                              %s\n"
+      cBLU "verb:" cLBL "                             %s\n"
+      cBLU "Content-Length header value:" cLBL "      %d\n"
+      cBLU "follow up data max size:" cLBL "          %d\n"
+      cBLU "interval between follow up data:" cLBL "  %d seconds\n"
+      cBLU "connections per seconds:" cLBL "          %d\n"
+      cBLU "probe connection timeout:" cLBL "         %d seconds\n"
+      cBLU "test duration:" cLBL "                    %d seconds\n"
+      cBLU "using proxy:" cLBL "                      %s%s\n" cRST,
         test_type_name[test_type_],
         num_connections_,
         base_uri_.getData(),
@@ -477,17 +477,17 @@ void SlowHTTPTest::report_parameters() {
     slowlog(LOG_INFO, "\x1b[H\x1b[J");
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
-      cGRN "test type:" cLGN "                       %s\n"
-      cGRN "number of connections:" cLGN "           %d\n"
-      cGRN "URL:" cLGN "                             %s\n"
-      cGRN "verb:" cLGN "                            %s\n"
-      cGRN "receive window range:" cLGN "            %d - %d\n"
-      cGRN "pipeline factor:" cLGN "                 %d\n"
-      cGRN "read rate from receive buffer:" cLGN "   %d bytes / %d sec\n"
-      cGRN "connections per seconds:" cLGN "         %d\n"
-      cGRN "probe connection timeout:" cLGN "        %d seconds\n"
-      cGRN "test duration:" cLGN "                   %d seconds\n"
-      cGRN "using proxy:" cLGN "                     %s%s\n",
+      cBLU "test type:" cLBL "                       %s\n"
+      cBLU "number of connections:" cLBL "           %d\n"
+      cBLU "URL:" cLBL "                             %s\n"
+      cBLU "verb:" cLBL "                            %s\n"
+      cBLU "receive window range:" cLBL "            %d - %d\n"
+      cBLU "pipeline factor:" cLBL "                 %d\n"
+      cBLU "read rate from receive buffer:" cLBL "   %d bytes / %d sec\n"
+      cBLU "connections per seconds:" cLBL "         %d\n"
+      cBLU "probe connection timeout:" cLBL "        %d seconds\n"
+      cBLU "test duration:" cLBL "                   %d seconds\n"
+      cBLU "using proxy:" cLBL "                     %s%s\n",
         test_type_name[test_type_],
         num_connections_,
         base_uri_.getData(),
@@ -552,13 +552,13 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
-    slowlog(LOG_INFO, cNOR"\n\nslow HTTP test status on %dth second:\n\n"
-      cNOR"initializing:" cBRI"        %d\n"
-      cNOR"pending:     " cBRI"        %d\n"
-      cNOR"connected:   " cBRI"        %d\n"
-      cNOR"error:       " cBRI"        %d\n"
-      cNOR"closed:      " cBRI"        %d\n"
-      cNOR"service available:"cBRI"   %s\n"cRST,
+    slowlog(LOG_INFO, cLGN"\n\nslow HTTP test status on %dth second:\n\n"
+      cLGN"initializing:" cLGN"        %d\n"
+      cLGN"pending:     " cLGN"        %d\n"
+      cLGN"connected:   " cLGN"        %d\n"
+      cLGN"error:       " cLGN"        %d\n"
+      cLGN"closed:      " cLGN"        %d\n"
+      cLGN"service available:"cLGN"   %s\n"cRST,
         seconds_passed_,
         initializing_,
         connecting_,
