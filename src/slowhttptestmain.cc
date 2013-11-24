@@ -44,21 +44,21 @@ static void info() {
 }
 static void usage() {
   printf(
-      "\n"PACKAGE" "VERSION", a tool to test for slow HTTP "
-      "DoS vulnerabilities.\n"
-      "Usage:\n"
-      "./"PACKAGE" [options ...]"
+      "\n"PACKAGE", a tool to test for slow HTTP "
+      "DoS vulnerabilities - version " VERSION "\n"
+      "Usage: "
+      PACKAGE" [options ...]"
       "\n"
       "Test modes:\n"
       "  -H               slow headers a.k.a. Slowloris (default)\n"
       "  -B               slow body a.k.a R-U-Dead-Yet\n"
       "  -R               range attack a.k.a Apache killer\n"
       "  -X               slow read a.k.a Slow Read\n"
-      "\nReporting options:\n"
+      "\nReporting options:\n\n"
       "  -g               generate statistics with socket state changes (off)\n"
       "  -o file_prefix   save statistics output in file.html and file.csv (-g required)\n"
       "  -v level         verbosity level 0-4: Fatal, Info, Error, Warning, Debug\n"
-      "\nGeneral options:\n"
+      "\nGeneral options:\n\n"
       "  -c connections   target number of connections (50)\n"
       "  -i seconds       interval between followup data in seconds (10)\n"
       "  -l seconds       target test length in seconds (240)\n"
@@ -71,24 +71,21 @@ static void usage() {
       "                   followup data per tick, e.g. -x 2 generates\n"
       "                   X-xx: xx for header or &xx=xx for body, where x\n"
       "                   is random character (32)\n"
-      "\nProbe/Proxy options:\n"
+      "\nProbe/Proxy options:\n\n"
       "  -d host:port     all traffic directed through HTTP proxy at host:port (off)\n"
       "  -e host:port     probe traffic directed through HTTP proxy at host:port (off)\n"
       "  -p seconds       timeout to wait for HTTP response on probe connection,\n"
       "                   after which server is considered inaccessible (5)\n"
-      "\nRange attack specific options:\n"
+      "\nRange attack specific options:\n\n"
       "  -a start        left boundary of range in range header (5)\n"
       "  -b bytes        limit for range header right boundary values (2000)\n"
-      "\nSlow read specific options:\n"
+      "\nSlow read specific options:\n\n"
       "  -k num          number of times to repeat same request in the connection. Use to\n"
       "                  multiply response size if server supports persistent connections (1)\n"
       "  -n seconds      interval between read operations from recv buffer in seconds (1)\n"
       "  -w bytes        start of the range advertised window size would be picked from (1)\n"
       "  -y bytes        end of the range advertised window size would be picked from (512)\n"
       "  -z bytes        bytes to slow read from receive buffer with single read() call (5)\n"
-
-
-
       );
 }
 
