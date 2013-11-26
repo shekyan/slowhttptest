@@ -214,7 +214,8 @@ const char* SlowHTTPTest::get_random_extra() {
 bool SlowHTTPTest::init(const char* url, const char* verb,
     const char* path, const char* proxy) {
   if(!change_fd_limits()) {
-    slowlog(LOG_ERROR, "error setting open file limits\n");
+    slowlog(LOG_INFO, "error setting open file limits\n");
+    
   }
   if(!base_uri_.prepare(url)) {
     slowlog(LOG_FATAL, "Error parsing URL\n");
@@ -429,7 +430,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       }
     }
   }
-  report_parameters();
+  //report_parameters();
   return true;
 }
 
@@ -439,7 +440,7 @@ void SlowHTTPTest::close_sock(int id) {
 
 void SlowHTTPTest::report_final() {
   slowlog(LOG_INFO, cCYA"\nTest ended on %dth second\n"
-      "Exit status:" cLCY"                     %s\n" cRST,
+      "Exit status:" cLCY" %s\n" cRST,
       seconds_passed_,
       exit_status_msg[exit_status_]
       );
@@ -452,8 +453,9 @@ void SlowHTTPTest::report_final() {
 }
 
 void SlowHTTPTest::report_parameters() {
-  if(LOG_INFO == debug_level_)
-      slowlog(LOG_INFO, "\x1b[H\x1b[J");
+  if(LOG_INFO == debug_level_) {
+      slowlog(LOG_INFO, "\x1b[H\x1b[2J");
+  }
   if(eSlowRead != test_type_) {
       slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
@@ -482,7 +484,6 @@ void SlowHTTPTest::report_parameters() {
         proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
   } else { // slow read
-    slowlog(LOG_INFO, "\x1b[H\x1b[J");
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
       cBLU "test type:" cLBL "                       %s\n"
