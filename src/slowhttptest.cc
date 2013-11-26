@@ -359,9 +359,11 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
       strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
     }
+    csv_report_.append(csv_file_name);
+    html_report_.append(html_file_name);
     char test_info[1024];
     if(eSlowRead != test_type_) { 
-      sprintf(test_info,"<table class='sht_results' border='0'>"
+      sprintf(test_info,"<table class='slow_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
@@ -387,7 +389,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           proxy_type_ == eNoProxy ? " " : proxy_.getData()
           );
     } else {
-      sprintf(test_info,"<table border='0'>"
+      sprintf(test_info,"<table class='slow_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
@@ -441,13 +443,19 @@ void SlowHTTPTest::report_final() {
       seconds_passed_,
       exit_status_msg[exit_status_]
       );
+  if(need_stats_) {
+    printf(cCYA"CSV report saved to " cLCY "%s\n" cRST,
+    csv_report_.c_str());
+    printf(cCYA"HTML report saved to " cLCY "%s\n" cRST,
+    html_report_.c_str());
+  }
 }
 
 void SlowHTTPTest::report_parameters() {
-  if(eSlowRead != test_type_) {
-    if(LOG_INFO == debug_level_)
+  if(LOG_INFO == debug_level_)
       slowlog(LOG_INFO, "\x1b[H\x1b[J");
-    slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
+  if(eSlowRead != test_type_) {
+      slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
       "\n - https://code.google.com/p/slowhttptest/ -\n"
       cBLU "test type:" cLBL "                        %s\n"
       cBLU "number of connections:" cLBL "            %d\n"
@@ -459,7 +467,7 @@ void SlowHTTPTest::report_parameters() {
       cBLU "connections per seconds:" cLBL "          %d\n"
       cBLU "probe connection timeout:" cLBL "         %d seconds\n"
       cBLU "test duration:" cLBL "                    %d seconds\n"
-      cBLU "using proxy:" cLBL "                      %s%s\n" cRST,
+      cBLU "using proxy:" cLBL "                      %s%s\n\n" cRST,
         test_type_name[test_type_],
         num_connections_,
         base_uri_.getData(),
@@ -487,7 +495,7 @@ void SlowHTTPTest::report_parameters() {
       cBLU "connections per seconds:" cLBL "         %d\n"
       cBLU "probe connection timeout:" cLBL "        %d seconds\n"
       cBLU "test duration:" cLBL "                   %d seconds\n"
-      cBLU "using proxy:" cLBL "                     %s%s\n",
+      cBLU "using proxy:" cLBL "                     %s%s\n\n" cRST,
         test_type_name[test_type_],
         num_connections_,
         base_uri_.getData(),
@@ -503,7 +511,6 @@ void SlowHTTPTest::report_parameters() {
         proxy_type_name[proxy_type_],
         proxy_type_ == eNoProxy ? " " : proxy_.getData()
       );
-
   }
 }
 
@@ -552,7 +559,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
-    slowlog(LOG_INFO, cLGN"\n\nslow HTTP test status on %dth second:\n\n"
+    slowlog(LOG_INFO, cLGN"\nslow HTTP test status on "cGRN"%d"cLGN"th second:\n\n"
       cLGN"initializing:" cLGN"        %d\n"
       cLGN"pending:     " cLGN"        %d\n"
       cLGN"connected:   " cLGN"        %d\n"
@@ -565,7 +572,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
         connected_,
         errored_,
         closed_,
-        is_dosed_ ? "NO" : "YES");
+        is_dosed_ ? cLRD"NO"cRST: cLGN"YES"cRST);
   }
 }
 
