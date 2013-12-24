@@ -43,7 +43,7 @@
 .Op Fl w Ar advertised window size range start 
 .Op Fl x Ar max length of follow up data
 .Op Fl y Ar advertised window size range end
-.Op Fl z Ar slow read from recieve buffer in bytes
+.Op Fl z Ar slow read from receive buffer in bytes
 .Ek
 .Sh DESCRIPTION
 The
@@ -105,9 +105,9 @@ Specifies test duration in seconds.
 .It Fl n Ar seconds
 Specifies the interval between read operations for Slow Read test.
 .It Fl o Ar file name
-Specifies custom file name, effective with -g.
+Specifies custom file name, effective with \-g.
 .It Fl p Ar seconds
-Specifies the interval to wait for HTTP response onprobe connection, before marking the server as DoSed.
+Specifies the interval to wait for HTTP response on probe connection, before marking the server as DoSed.
 .It Fl r Ar connections per second
 Specifies the connection rate.
 .It Fl s Ar bytes
@@ -126,6 +126,7 @@ Specifies the maximum length of follow up data for slowloris and Slow POST tests
 Specifies the end of the range the TCP advertised window size would be picked from in Slow Read test.
 .It Fl z Ar bytes
 Specifies the number of bytes to read from receive buffer with each read() operation.
+.El
 .Sh EXAMPLES
 Start a slowloris test of host.example.com with 1000 connections, statistics goes into my_header_stats,
 interval between follow up headers is 10 seconds and connection rate is 200 connections per second:
@@ -167,7 +168,6 @@ shows valid statistics for availability of server under test:
 .Pp
 .Dl $ slowhttptest -e 10.10.0.1:8080 -c 8000 -X -u https://host.example.com/resources/index.html
 .Pp
-
 .Sh AUTHOR
 Sergey Shekyan
 .Aq shekyan@gmail.com .
