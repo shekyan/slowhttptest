@@ -38,6 +38,9 @@ class Url {
   const int isSSL() const {
     return is_ssl_;
   }
+  const int isLiteralIPv6() const {
+    return is_literal_ipv6_;
+  }
   const std::string& getHost() const {
     return host_;
   }
@@ -65,6 +68,7 @@ class Url {
   std::string port_str_;
   int port_;
   bool is_ssl_;
+  bool is_literal_ipv6_;
 };
 
 class Proxy {

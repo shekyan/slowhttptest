@@ -107,8 +107,6 @@ static const char body_separator[] = "=";
 
 static const char crlf[] = "\r\n";
 static const char peer_closed[] = "Peer closed connection";
-static const char symbols[] =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 
 }  // namespace
 
@@ -222,7 +220,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     return false;
   }
   if(eNoProxy == proxy_type_) {
-    if(!resolve_addr(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &addr_)) {
+    if(!resolve_addr(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &addr_, base_uri_.isLiteralIPv6())) {
       return false;
     } 
   } else {
@@ -577,11 +575,16 @@ void SlowHTTPTest::report_status(bool to_stats) {
   }
 }
 
-bool SlowHTTPTest::resolve_addr(const char* host, const char* port, addrinfo  **addr) {
+bool SlowHTTPTest::resolve_addr(const char* host, const char* port, addrinfo  **addr, bool is_ipv6) {
   int error;
   addrinfo hints;
   memset(&hints, 0, sizeof(hints));
-  hints.ai_family = PF_UNSPEC;
+  if(is_ipv6) {
+    hints.ai_family = PF_INET6;
+    hints.ai_flags = AI_NUMERICHOST;
+  } else {
+    hints.ai_family = PF_UNSPEC;
+  }
   hints.ai_socktype = SOCK_STREAM;
   // resolve the domain name into a list of addresses
   error = getaddrinfo(host, port, &hints, addr);

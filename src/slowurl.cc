@@ -33,7 +33,8 @@
 namespace slowhttptest {
 Url::Url()
     : port_(0),
-      is_ssl_(false) {
+      is_ssl_(false),
+      is_literal_ipv6_(false) {
 }
 
 bool Url::prepare(const char* url) {
@@ -44,6 +45,7 @@ bool Url::prepare(const char* url) {
   size_t host_len = 0;
   size_t path_start = 0;
   size_t port_start = 0;
+  size_t tmp = 0;
 
   data_.append(url);
   const std::string scheme("https");
@@ -56,14 +58,28 @@ bool Url::prepare(const char* url) {
     is_ssl_ = data_[4] == 's';
     host_start = is_ssl_ ? 8 : 7;
   }
-
-  size_t tmp = data_.find_first_of(":", host_start);
-  if(tmp != std::string::npos) {
-    has_port = true;
-    port_start = tmp;
+  if('[' == data_[host_start]) {
+    size_t host_end = data_.find_first_of("]", host_start);
+    if(host_end != std::string::npos) {
+      host_len = host_end - host_start;
+      tmp = data_.find_first_of(":", host_end);
+      if(tmp != std::string::npos) {
+        has_port = true;
+        port_start = tmp;
+      }
+      tmp = host_start;
+      is_literal_ipv6_ = true;
+    } else {
+      return false;
+    }
+  } else {
+    tmp = data_.find_first_of(":", host_start);
+    if(tmp != std::string::npos) {
+      has_port = true;
+      port_start = tmp;
+    }
+    tmp = host_start;
   }
-  tmp = host_start;
-
   tmp = data_.find_first_of("/", tmp);
   if(tmp != std::string::npos) {
     has_path = true;
@@ -77,7 +93,10 @@ bool Url::prepare(const char* url) {
   else
     host_len = data_.size();
   // get host
-  host_.append(data_, host_start, host_len - host_start);
+  if(is_literal_ipv6_)
+    host_.append(data_, host_start + 1, host_len - host_start - 1);
+  else
+    host_.append(data_, host_start, host_len - host_start);
  if(host_.size() == 0)
    return false;
   // get port

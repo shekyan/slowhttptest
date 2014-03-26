@@ -89,7 +89,7 @@ class SlowHTTPTest {
   const char* get_random_extra();
  
   static bool resolve_addr(const char* host, 
-    const char* port, addrinfo **addr);
+    const char* port, addrinfo **addr, bool is_ipv6=false);
    
   RandomTextGenerator textgen_;
   addrinfo* addr_;
