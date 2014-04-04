@@ -79,20 +79,20 @@ static const char* test_type_name[] = {
     "SLOW READ"
 };
 static const char* user_agents[] = {
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7) "
-    "AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 Safari/534.48.3",
-    "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) "
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/537.75.14",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:27.0) Gecko/20100101 Firefox/27.0"
     "AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.7; rv:5.0.1) "
-    "Gecko/20100101 Firefox/5.0.1",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) "
+    "msnbot-131-253-46-102.search.msn.com",
+    "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko"
     "AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.122 Safari/534.30",
     "Opera/9.80 (Macintosh; Intel Mac OS X 10.7.0; U; Edition MacAppStore; en) "
-    "Presto/2.9.168 Version/11.50",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/534.34 (KHTML,like Gecko) PhantomJS/1.9.0 (development) Safari/534.34",
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
 };
 static const char referer[] = 
-    "Referer: http://code.google.com/p/slowhttptest/\r\n";
+    "Referer: http://www.nont.worry.u533.is.testing.com/\r\n";
 static const char post_request[] = "Connection: close\r\n"
     "Content-Type: application/x-www-form-urlencoded\r\n"
     "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
