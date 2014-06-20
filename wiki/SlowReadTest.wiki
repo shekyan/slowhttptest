@@ -9,7 +9,7 @@ Idea is to send legitimate HTTP requests, and read responses slowly aiming to ke
 = Details =
 
 Attack exploits the fact that most of modern web servers are not limiting the connection duration if there is a data flow going on, and with possiblity to prolong TCP connection virtually forever with zero or minimal data flow by manipulating TCP receive window size value, it is possible to acquire concurent connections pool of the application. 
-Possibility to prolong TCP connection is described in several vulnerability reports: [http://www.microsoft.com/technet/security/Bulletin/MS09-048.mspx MS09-048], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2008-4609 CVE-2008-4609], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1925 CVE-2009-1925], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1926 CVE-2009-1926] .
+Possibility to prolong TCP connection is described in several vulnerability reports: [http://www.microsoft.com/technet/security/Bulletin/MS09-048.mspx MS09-048], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2008-4609 CVE-2008-4609], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1925 CVE-2009-1925], [http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2009-1926 CVE-2009-1926] . [http://blog.shekyan.com/2012/01/are-you-ready-for-slow-reading.html My write up] on the topic can reveal some more details.
 
 Prerequisites for the successful attack are:
 - victim server should accept connections with advertised window smaller than server socket send buffer, the smaller the better
