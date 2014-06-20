@@ -21,7 +21,7 @@ Alternatively
 ===Mac OS X===
 Using Homebrew: {{{brew update && brew install slowhttptest}}}
 ===Linux===
-try your favorite package manager. 
+Try your favorite package manager, some of them are aware of slowhttptest.
 
 ==Usage==
 
