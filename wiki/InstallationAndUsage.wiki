@@ -17,6 +17,9 @@ Where PREFIX must be replaced with the absolute path where slowhttptest tool sho
 
 You need libssl-dev to be installed to successfully compile the tool. Most systems would have it. 
 
+Alternatively, you can try your favorite package manager.
+===Mac OS X===
+Using Homebrew: {{{brew update && brew install slowhttptest}}}
 
 ==Usage==
 
