@@ -1,6 +1,8 @@
 # slowhttptest #
 
-Moved from **[Google Code](https://code.google.com/p/slowhttptest/)**
+Moved here from **[Google Code](https://code.google.com/p/slowhttptest/)**
+
+
 SlowHTTPTest is a highly configurable tool that simulates some Application Layer Denial of Service attacks. It works on majority of Linux platforms, OSX and Cygwin - a Unix-like environment and command-line interface for Microsoft Windows.
 
 It implements most common low-bandwidth Application Layer DoS attacks, such as **[slowloris](http://ha.ckers.org/slowloris/)**, **[Slow HTTP POST](http://www.darkreading.com/vulnerability-management/167901026/security/attacks-breaches/228000532/index.html)**, **[Slow Read attack](https://community.qualys.com/blogs/securitylabs/2012/01/05/slow-read)** (based on TCP persist timer exploit) by draining concurrent connections pool, as well as **[Apache Range Header attack](ApacheRangeTest.md)** by causing very significant memory and CPU usage on the server.
