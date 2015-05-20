@@ -26,7 +26,7 @@ Slowloris and Slow HTTP POST DoS attacks rely on the fact that the HTTP protocol
 
 
 
-Many thanks to [Tigran Gevorgyan](http://code.google.com/u/tigran_gevorgyan@hotmail.com)  and [Victor Agababov](http://code.google.com/u/107950426759701528367/) for tons of help and support.
+Many thanks to [Tigran Gevorgyan](http://code.google.com/u/tigran_gevorgyan@hotmail.com)  and [Victor Agababov](https://github.com/vagababov) for tons of help and support.
 The logo is from http://openclipart.org/detail/168031/.
 
 Some links to the media coverage, for historical purposes:
