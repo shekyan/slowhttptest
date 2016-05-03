@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
   SlowTestType type = slowhttptest::eHeader;
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
-  char o;
+  int o;
   while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
