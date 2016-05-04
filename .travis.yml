@@ -4,7 +4,7 @@ branches:
   only:
    - master
 
-before_script: configure
+before_script: ./configure
 
 script:
   - make
