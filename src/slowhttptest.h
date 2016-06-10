@@ -76,7 +76,8 @@ class SlowHTTPTest {
   ~SlowHTTPTest();
 
   bool init(const char* url, const char* verb,
-    const char* path, const char* proxy);
+    const char* path, const char* proxy,
+    const char* content_type, const char* accept);
   void report_parameters();
   void report_status(bool to_csv);
   void report_csv();
