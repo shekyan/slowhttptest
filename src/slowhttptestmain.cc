@@ -138,7 +138,9 @@ int main(int argc, char **argv) {
   char path[1024] = { 0 };
   char proxy[1024] = { 0 };
   char verb[16] = { 0 };
-  // default vaules
+  char content_type[1024] = { 0 };
+  char accept[1024] = { 0 };
+  // default values
   int conn_cnt            = 50;
   int content_length      = 4096;
   int duration            = 240;
@@ -159,11 +161,14 @@ int main(int argc, char **argv) {
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   int o;
-  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXghA:C:a:b:c:d:e:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
           return -1;
+        break;
+      case 'A':
+        strncpy(accept, optarg, 1023);
         break;
       case 'b':
         if(!parse_int(range_limit, 524288))
@@ -176,6 +181,9 @@ int main(int argc, char **argv) {
         if(!parse_int(conn_cnt, 1024))
 #endif
           return -1;
+        break;
+      case 'C':
+        strncpy(content_type, optarg, 1023);
         break;
       case 'd':
         strncpy(proxy, optarg, 1023);
@@ -299,7 +307,7 @@ int main(int argc, char **argv) {
       type, need_stats, pipeline_factor, probe_interval,
       range_start, range_limit, read_interval, read_len,
       window_lower_limit, window_upper_limit, proxy_type, debug_level));
-  if(!slow_test->init(url, verb, path, proxy)) {
+  if(!slow_test->init(url, verb, path, proxy, content_type, accept)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
