@@ -71,6 +71,8 @@ static void usage() {
       "                   followup data per tick, e.g. -x 2 generates\n"
       "                   X-xx: xx for header or &xx=xx for body, where x\n"
       "                   is random character (32)\n"
+      "  -C content-type  value of Content-type header (application/x-www-urlencoded)\n"
+      "  -A accept        value of Accept header (text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5)\n"
       "\nProbe/Proxy options:\n\n"
       "  -d host:port     all traffic directed through HTTP proxy at host:port (off)\n"
       "  -e host:port     probe traffic directed through HTTP proxy at host:port (off)\n"
