@@ -99,6 +99,8 @@ class SlowHTTPTest {
   std::string random_extra_;
   std::string verb_;
   std::string user_agent_;
+  std::string content_type_;
+  std::string accept_;
   std::string csv_report_;
   std::string html_report_;
   Url base_uri_;

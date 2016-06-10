@@ -94,9 +94,10 @@ static const char* user_agents[] = {
 };
 static const char referer[] = 
     "Referer: https://github.com/shekyan/slowhttptest/\r\n";
+static const char content_type_default[] = "Content-Type: application/x-www-form-urlencoded\r\n";
+static const char accept_default[] = "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n"; 
 static const char post_request[] = "Connection: close\r\n"
-    "Content-Type: application/x-www-form-urlencoded\r\n"
-    "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n\r\n"
+    "\r\n"
     "foo=bar";
 // per RFC 2616 section 4.2, header can be any US_ASCII character (0-127),
 // but we'll start with X-
@@ -211,7 +212,8 @@ const char* SlowHTTPTest::get_random_extra() {
 }
 
 bool SlowHTTPTest::init(const char* url, const char* verb,
-    const char* path, const char* proxy) {
+    const char* path, const char* proxy,
+    const char* content_type, const char* accept) {
   if(!change_fd_limits()) {
     slowlog(LOG_INFO, "error setting open file limits\n");
     
@@ -288,6 +290,23 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   } else if(eSlowRead == test_type_) {
     verb_.append("GET");
   }
+  // Content-type
+  if(content_type != 0 && strlen(content_type)) {
+    content_type_.append("Content-type: ");
+    content_type_.append(content_type);
+    content_type_.append(crlf);
+  } else {
+    content_type_.append(content_type_default);
+  }
+  // Accept
+  if(accept != 0 && strlen(accept)) {
+    accept_.append("Accept: ");
+    accept_.append(accept);
+    accept_.append(crlf);
+  } else {
+    accept_.append(accept_default);
+  }
+
   // start building request
   request_.clear();
   request_.append(verb_);
@@ -328,6 +347,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     ss << content_length_;
     request_.append(ss.str());
     request_.append("\r\n");
+    request_.append(content_type_);
+    request_.append(accept_);
     request_.append(post_request);
   } else if(eRange == test_type_) {
     GenerateRangeHeader(range_start_, 1, range_limit_, &request_);
