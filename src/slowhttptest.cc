@@ -376,8 +376,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
       struct tm * timeinfo;
       time(&rawtime);
       timeinfo = localtime(&rawtime);
-      strftime(csv_file_name, 22, "slow_%H%M%Y%m%d.csv", timeinfo);
-      strftime(html_file_name, 23, "slow_%H%M%Y%m%d.html", timeinfo);
+      strftime(csv_file_name, 29, "slow_%Y-%m-%d_%H-%M-%S.csv", timeinfo);
+      strftime(html_file_name, 30, "slow_%Y-%m-%d_%H-%M-%S.html", timeinfo);
     }
     csv_report_.append(csv_file_name);
     html_report_.append(html_file_name);
