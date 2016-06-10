@@ -291,7 +291,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   }
   // Content-type
   if(content_type != 0 && strlen(content_type)) {
-    content_type_.append("Content-type: ");
+    content_type_.append("Content-Type: ");
     content_type_.append(content_type);
     content_type_.append(crlf);
   } else {
