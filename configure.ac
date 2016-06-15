@@ -3,6 +3,7 @@
 
 AC_PREREQ(2.61)
 AC_INIT(slowhttptest, 1.6, shekyan@gmail.com)
+AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
@@ -11,9 +12,15 @@ AM_INIT_AUTOMAKE
 AC_PROG_CXX
 AC_PROG_CC
 
+# Checks for stdc++11, required by auto_ptr and unique_ptr substitution
+AX_CXX_COMPILE_STDCXX([11], [noext], [optional])
+
 # Checks for libraries.
 # FIXME: Replace `main' with a function in `-lssl':
-AC_CHECK_LIB([ssl], [SSL_library_init], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
+AC_CHECK_LIB([ssl], [SSL_library_init], [], [
+  # Checks for OpenSSL >= 1.1.0
+  AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
+])
 
 # Checks for header files.
 AC_HEADER_STDC
