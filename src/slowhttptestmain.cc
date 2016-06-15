@@ -39,6 +39,12 @@
 
 #define DEFAULT_URL "http://localhost/"
 
+#ifdef HAVE_CXX11
+#  define UNIQUE_PTR std::unique_ptr
+#else
+#  define UNIQUE_PTR std::auto_ptr
+#endif
+
 static void info() {
   printf("Try \'%s -h\' for more information\n", PACKAGE);
 }
@@ -293,7 +299,7 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &int_handler);
   slowlog_init(debug_level, NULL);
-  std::unique_ptr<SlowHTTPTest> slow_test(
+  UNIQUE_PTR<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval,
       conn_cnt, max_random_data_len, content_length,
       type, need_stats, pipeline_factor, probe_interval,
