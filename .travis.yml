@@ -4,7 +4,9 @@ branches:
   only:
    - master
 
-before_script: ./configure
+before_script:
+  - autoreconf -fi
+  - ./configure
 
 script:
   - make
