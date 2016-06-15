@@ -50,10 +50,10 @@ static void info() {
 }
 static void usage() {
   printf(
-      "\n"PACKAGE", a tool to test for slow HTTP "
+      "\n" PACKAGE ", a tool to test for slow HTTP "
       "DoS vulnerabilities - version " VERSION "\n"
       "Usage: "
-      PACKAGE" [options ...]"
+      PACKAGE " [options ...]"
       "\n"
       "Test modes:\n"
       "  -H               slow headers a.k.a. Slowloris (default)\n"
