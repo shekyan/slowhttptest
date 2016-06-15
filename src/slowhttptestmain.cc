@@ -44,10 +44,10 @@ static void info() {
 }
 static void usage() {
   printf(
-      "\n"PACKAGE", a tool to test for slow HTTP "
+      "\n" PACKAGE ", a tool to test for slow HTTP "
       "DoS vulnerabilities - version " VERSION "\n"
       "Usage: "
-      PACKAGE" [options ...]"
+      PACKAGE " [options ...]"
       "\n"
       "Test modes:\n"
       "  -H               slow headers a.k.a. Slowloris (default)\n"
@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &int_handler);
   slowlog_init(debug_level, NULL);
-  std::auto_ptr<SlowHTTPTest> slow_test(
+  std::unique_ptr<SlowHTTPTest> slow_test(
       new SlowHTTPTest(rate, duration, interval,
       conn_cnt, max_random_data_len, content_length,
       type, need_stats, pipeline_factor, probe_interval,

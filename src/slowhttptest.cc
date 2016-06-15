@@ -31,6 +31,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <cstring>
 #include <vector>
 
 #include <netdb.h>
@@ -558,20 +559,20 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
-    slowlog(LOG_INFO, cLGN"\nslow HTTP test status on "cGRN"%d"cLGN"th second:\n\n"
-      cLGN"initializing:" cLGN"        %d\n"
-      cLGN"pending:     " cLGN"        %d\n"
-      cLGN"connected:   " cLGN"        %d\n"
-      cLGN"error:       " cLGN"        %d\n"
-      cLGN"closed:      " cLGN"        %d\n"
-      cLGN"service available:"cLGN"   %s\n"cRST,
+    slowlog(LOG_INFO, cLGN "\nslow HTTP test status on " cGRN "%d" cLGN "th second:\n\n"
+      cLGN "initializing:" cLGN "        %d\n"
+      cLGN "pending:     " cLGN "        %d\n"
+      cLGN "connected:   " cLGN "        %d\n"
+      cLGN "error:       " cLGN "        %d\n"
+      cLGN "closed:      " cLGN "        %d\n"
+      cLGN "service available:" cLGN "   %s\n" cRST,
         seconds_passed_,
         initializing_,
         connecting_,
         connected_,
         errored_,
         closed_,
-        is_dosed_ ? cLRD"NO"cRST: cLGN"YES"cRST);
+        is_dosed_ ? cLRD "NO" cRST : cLGN "YES" cRST);
   }
 }
 
