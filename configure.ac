@@ -17,7 +17,10 @@ AX_CXX_COMPILE_STDCXX([11], [noext], [optional])
 
 # Checks for libraries.
 # FIXME: Replace `main' with a function in `-lssl':
-AC_CHECK_LIB([ssl], [SSL_library_init], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
+AC_CHECK_LIB([ssl], [SSL_library_init], [], [
+  # Checks for OpenSSL >= 1.1.0
+  AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
+])
 
 # Checks for header files.
 AC_HEADER_STDC
