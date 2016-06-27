@@ -77,8 +77,8 @@ static void usage() {
       "                   followup data per tick, e.g. -x 2 generates\n"
       "                   X-xx: xx for header or &xx=xx for body, where x\n"
       "                   is random character (32)\n"
-      "  -C content-type  value of Content-type header (application/x-www-form-urlencoded)\n"
-      "  -A accept        value of Accept header (text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5)\n"
+      "  -f content-type  value of Content-type header (application/x-www-form-urlencoded)\n"
+      "  -m accept        value of Accept header (text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5)\n"
       "\nProbe/Proxy options:\n\n"
       "  -d host:port     all traffic directed through HTTP proxy at host:port (off)\n"
       "  -e host:port     probe traffic directed through HTTP proxy at host:port (off)\n"
@@ -169,14 +169,11 @@ int main(int argc, char **argv) {
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   int o;
-  while((o = getopt(argc, argv, ":HBRXghA:C:a:b:c:d:e:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
           return -1;
-        break;
-      case 'A':
-        strncpy(accept, optarg, 1023);
         break;
       case 'b':
         if(!parse_int(range_limit, 524288))
@@ -190,9 +187,6 @@ int main(int argc, char **argv) {
 #endif
           return -1;
         break;
-      case 'C':
-        strncpy(content_type, optarg, 1023);
-        break;
       case 'd':
         strncpy(proxy, optarg, 1023);
         proxy_type = slowhttptest::eHTTPProxy;
@@ -200,6 +194,9 @@ int main(int argc, char **argv) {
       case 'e':
         strncpy(proxy, optarg, 1023);
         proxy_type = slowhttptest::eProbeProxy;
+        break;
+      case 'f':
+        strncpy(content_type, optarg, 1023);
         break;
       case 'h':
         usage();
@@ -231,6 +228,9 @@ int main(int argc, char **argv) {
       case 'l':
         if(!parse_int(duration))
           return -1;
+        break;
+      case 'm':
+        strncpy(accept, optarg, 1023);
         break;
       case 'n':
         if(!parse_int(read_interval))
