@@ -1,0 +1,11 @@
+Makefile
+config.h
+config.log
+config.status
+man/Makefile
+src/.deps/
+src/Makefile
+src/*.o
+stamp-h1
+src/slowhttptest
+

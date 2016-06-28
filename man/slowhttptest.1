@@ -29,9 +29,11 @@
 .Op Fl c Ar number of connections
 .Op Fl d Ar all traffic directed through HTTP proxy at host:port
 .Op Fl e Ar probe traffic directed through HTTP proxy at host:port
+.Op Fl f Ar value of Content-type header
 .Op Fl i Ar interval in seconds
 .Op Fl k Ar request multiply factor
 .Op Fl l Ar test duration in seconds
+.Op Fl m Ar value of Accept header
 .Op Fl n Ar slow read interval in seconds
 .Op Fl o Ar output file path and/or name
 .Op Fl p Ar timeout for probe connection in seconds
@@ -96,12 +98,16 @@ Specifies the target number of connections to establish during the test.
 Specifies HTTP proxy server to connect to for all connections.
 .It Fl e Ar HTTP proxy host:port
 Specifies HTTP proxy server to connect to for probe connections.
+.It Fl f Ar content-type
+Specifies the value of Content-Type header.
 .It Fl i Ar seconds
 Specifies the interval between follow up data for slowrois and Slow POST tests.
 .It Fl k Ar pipeline factor
 Specifies number of times the resource would be requested per socket in Slow Read test.
 .It Fl l Ar seconds
 Specifies test duration in seconds.
+.It Fl m Ar accept
+Specifies the value of Accept header.
 .It Fl n Ar seconds
 Specifies the interval between read operations for Slow Read test.
 .It Fl o Ar file name

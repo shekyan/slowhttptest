@@ -77,6 +77,8 @@ static void usage() {
       "                   followup data per tick, e.g. -x 2 generates\n"
       "                   X-xx: xx for header or &xx=xx for body, where x\n"
       "                   is random character (32)\n"
+      "  -f content-type  value of Content-type header (application/x-www-form-urlencoded)\n"
+      "  -m accept        value of Accept header (text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5)\n"
       "\nProbe/Proxy options:\n\n"
       "  -d host:port     all traffic directed through HTTP proxy at host:port (off)\n"
       "  -e host:port     probe traffic directed through HTTP proxy at host:port (off)\n"
@@ -144,7 +146,9 @@ int main(int argc, char **argv) {
   char path[1024] = { 0 };
   char proxy[1024] = { 0 };
   char verb[16] = { 0 };
-  // default vaules
+  char content_type[1024] = { 0 };
+  char accept[1024] = { 0 };
+  // default values
   int conn_cnt            = 50;
   int content_length      = 4096;
   int duration            = 240;
@@ -165,7 +169,7 @@ int main(int argc, char **argv) {
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   int o;
-  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:i:k:l:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
@@ -190,6 +194,9 @@ int main(int argc, char **argv) {
       case 'e':
         strncpy(proxy, optarg, 1023);
         proxy_type = slowhttptest::eProbeProxy;
+        break;
+      case 'f':
+        strncpy(content_type, optarg, 1023);
         break;
       case 'h':
         usage();
@@ -221,6 +228,9 @@ int main(int argc, char **argv) {
       case 'l':
         if(!parse_int(duration))
           return -1;
+        break;
+      case 'm':
+        strncpy(accept, optarg, 1023);
         break;
       case 'n':
         if(!parse_int(read_interval))
@@ -305,7 +315,7 @@ int main(int argc, char **argv) {
       type, need_stats, pipeline_factor, probe_interval,
       range_start, range_limit, read_interval, read_len,
       window_lower_limit, window_upper_limit, proxy_type, debug_level));
-  if(!slow_test->init(url, verb, path, proxy)) {
+  if(!slow_test->init(url, verb, path, proxy, content_type, accept)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
