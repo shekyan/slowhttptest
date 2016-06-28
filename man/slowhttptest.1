@@ -161,13 +161,13 @@ probe connection waits 3 seconds for HTTP response before marking server as DoSe
 .Pp
 .Dl $ slowhttptest -c 8000 -X -r 200 -w 512 -y 1024 -n 5 -z 32 -k 3 -u https://host.example.com/resources/index.html -p 3
 .Pp
-Start Slow Read test of host.example.com through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test vaules are default.
+Start Slow Read test of host.example.com through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test values are default.
 .Nm
 most likely would test HTTP proxy server itself, rather than target server, but it all depends on the HTTP proxy server implementation:
 .Pp
 .Dl $ slowhttptest -d 10.10.0.1:8080 -c 8000 -X -u https://host.example.com/resources/index.html
 .Pp
-Start Slow Read test of host.example.com and direct probe traffic through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test vaules are default.
+Start Slow Read test of host.example.com and direct probe traffic through HTTP proxy server at 10.10.0.1:8080 with 8000 connections, no statistics is generated, the rest test values are default.
 Specifying another connection channel for probe connections helps to make sure that
 .Nm
 shows valid statistics for availability of server under test:
