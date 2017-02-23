@@ -2857,6 +2857,9 @@ END
 fi
 
 
+LDFLAGS="$LDFLAGS -L/usr/local/opt/openssl/lib"
+CPPFLAGS="$CPPFLAGS -I/usr/local/opt/openssl/include"
+
 # Checks for programs.
 ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'
