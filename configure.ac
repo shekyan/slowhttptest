@@ -8,6 +8,9 @@ AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
+LDFLAGS="$LDFLAGS -L/usr/local/opt/openssl/lib"
+CPPFLAGS="$CPPFLAGS -I/usr/local/opt/openssl/include"
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
