@@ -94,7 +94,7 @@ bool Url::prepare(const char* url) {
     host_len = data_.size();
   // get host
   if(is_literal_ipv6_)
-    host_.append(data_, host_start + 1, host_len - host_start - 1);
+    host_.append(data_, host_start + 1, host_len - host_start - 2);
   else
     host_.append(data_, host_start, host_len - host_start);
  if(host_.size() == 0)
