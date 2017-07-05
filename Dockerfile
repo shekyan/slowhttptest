@@ -1,0 +1,9 @@
+FROM alpine:3.6
+
+RUN apk add --no-cache build-base git openssl-dev
+RUN mkdir /slowhttptest
+WORKDIR /slowhttptest
+COPY . /slowhttptest
+RUN ./configure --prefix=/usr/local
+RUN make && make install
+ENTRYPOINT ["slowhttptest"]
