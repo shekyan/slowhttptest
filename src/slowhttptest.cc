@@ -93,7 +93,7 @@ static const char* user_agents[] = {
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2)"
 };
 static const char referer[] = 
-    "Referer: https://github.com/shekyan/slowhttptest/\r\n";
+    "Referer: TESTING_PURPOSES_ONLY\r\n";
 static const char content_type_default[] = "Content-Type: application/x-www-form-urlencoded\r\n";
 static const char accept_default[] = "Accept: text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\n"; 
 static const char post_request[] = "Connection: close\r\n"
