@@ -56,8 +56,8 @@ SlowSocket::SlowSocket()
       stop_in_millisecs_(0),
       state_(eInit),
       last_read_in_msec_(0),
-      read_interval_(0),
-      window_size_(-1) {
+      window_size_(-1),
+      read_interval_(0){
 }
 
 SlowSocket::~SlowSocket() {

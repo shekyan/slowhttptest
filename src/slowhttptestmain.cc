@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
       && !check_window_range(window_lower_limit, window_upper_limit))
     return -1;
   if(!strlen(url)) {
-    strncpy(url, DEFAULT_URL, sizeof(DEFAULT_URL));
+    strncpy(url, DEFAULT_URL, sizeof(url));
   }
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &int_handler);

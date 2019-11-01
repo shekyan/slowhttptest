@@ -441,7 +441,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         test_info));
     dumpers_.push_back(new CSVDumper(csv_file_name,
         "Seconds,Closed,Pending,Connected,Service Available\n"));
-    for (int i = 0; i < dumpers_.size(); ++i) {
+    for (uint i = 0; i < dumpers_.size(); ++i) {
       if (!dumpers_[i]->Initialize()) {
         slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
             \n\t%s\n",
@@ -571,7 +571,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
   }
 
   if(to_stats) {
-    for (int i = 0; i < dumpers_.size(); ++i) {
+    for (uint i = 0; i < dumpers_.size(); ++i) {
       dumpers_[i]->WriteStats("%d,%d,%d,%d,%d",
           seconds_passed_, 
           closed_,
