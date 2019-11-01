@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(slowhttptest, 1.7, shekyan@gmail.com)
+AC_INIT(slowhttptest, 1.8.1, shekyan@gmail.com)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])

@@ -18,7 +18,7 @@
  * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *****/
 #include "config.h"
 #include "slowhttptest.h"
@@ -478,7 +478,7 @@ void SlowHTTPTest::report_parameters() {
   }
   if(eSlowRead != test_type_) {
       slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
-      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      "\n - https://github.com/shekyan/slowhttptest -\n"
       cBLU "test type:" cLBL "                        %s\n"
       cBLU "number of connections:" cLBL "            %d\n"
       cBLU "URL:" cLBL "                              %s\n"
@@ -505,7 +505,7 @@ void SlowHTTPTest::report_parameters() {
       );
   } else { // slow read
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
-      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      "\n - https://github.com/shekyan/slowhttptest -\n"
       cBLU "test type:" cLBL "                       %s\n"
       cBLU "number of connections:" cLBL "           %d\n"
       cBLU "URL:" cLBL "                             %s\n"

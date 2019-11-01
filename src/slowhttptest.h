@@ -18,7 +18,7 @@
  * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *
  *  class SlowHTTPTest implements main functionality of slow HTTP attack
  *  vulnerability detection. before calling run_test(),

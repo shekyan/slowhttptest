@@ -19,7 +19,7 @@
  *          Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *****/
 
 #include "range-generator.h"

@@ -19,7 +19,7 @@
  *         Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ * https://github.com/shekyan/slowhttptest
  *****/
 
 #include "config.h"
