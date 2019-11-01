@@ -19,7 +19,7 @@
  *          Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *
  *  class StatsDumper and derived classes help to generate
  *  statistics of the test in CSV and Google Chart Tools

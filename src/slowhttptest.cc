@@ -18,7 +18,7 @@
  * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *****/
 #include "config.h"
 #include "slowhttptest.h"
@@ -441,7 +441,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         test_info));
     dumpers_.push_back(new CSVDumper(csv_file_name,
         "Seconds,Closed,Pending,Connected,Service Available\n"));
-    for (int i = 0; i < dumpers_.size(); ++i) {
+    for (uint i = 0; i < dumpers_.size(); ++i) {
       if (!dumpers_[i]->Initialize()) {
         slowlog(LOG_FATAL, "Stat files cannot be opened for writing:\
             \n\t%s\n",
@@ -478,7 +478,7 @@ void SlowHTTPTest::report_parameters() {
   }
   if(eSlowRead != test_type_) {
       slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
-      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      "\n - https://github.com/shekyan/slowhttptest -\n"
       cBLU "test type:" cLBL "                        %s\n"
       cBLU "number of connections:" cLBL "            %d\n"
       cBLU "URL:" cLBL "                              %s\n"
@@ -505,7 +505,7 @@ void SlowHTTPTest::report_parameters() {
       );
   } else { // slow read
     slowlog(LOG_INFO, "\n\t" cLCY PACKAGE " version " VERSION 
-      "\n - https://code.google.com/p/slowhttptest/ -\n"
+      "\n - https://github.com/shekyan/slowhttptest -\n"
       cBLU "test type:" cLBL "                       %s\n"
       cBLU "number of connections:" cLBL "           %d\n"
       cBLU "URL:" cLBL "                             %s\n"
@@ -571,7 +571,7 @@ void SlowHTTPTest::report_status(bool to_stats) {
   }
 
   if(to_stats) {
-    for (int i = 0; i < dumpers_.size(); ++i) {
+    for (uint i = 0; i < dumpers_.size(); ++i) {
       dumpers_[i]->WriteStats("%d,%d,%d,%d,%d",
           seconds_passed_, 
           closed_,

@@ -18,7 +18,7 @@
  * Author: Victor Agababov vagababov@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *
  *This file contains classes for text payload generation
  *****/

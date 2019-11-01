@@ -20,7 +20,7 @@
  *         Tigran Gevorgyan
  *
  * Slow HTTP attack  vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *
  *  class SlowSocket is a wrapper around TCP socket structure.
  *  class gives unified access to main socket operations no matter 

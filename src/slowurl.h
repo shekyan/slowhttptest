@@ -18,7 +18,7 @@
  * Author: Sergey Shekyan shekyan@gmail.com
  *
  * Slow HTTP attack  vulnerability test tool
- *  http://code.google.com/p/slowhttptest/
+ *  https://github.com/shekyan/slowhttptest
  *
  *  class that parses URI and store URI components. 
  *****/
