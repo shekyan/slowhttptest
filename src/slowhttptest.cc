@@ -152,7 +152,9 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
-  freeaddrinfo(addr_);
+  if (addr_) {
+    freeaddrinfo(addr_);
+  }
 
   for(std::vector<StatsDumper*>::iterator i = dumpers_.begin();
        i != dumpers_.end(); ++i) {
