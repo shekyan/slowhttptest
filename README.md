@@ -12,3 +12,6 @@ Use it to test your web server for DoS vulnerabilites, or just to figure out how
 SlowHTTPTest works on majority of Linux platforms, OS X and Cygwin - a Unix-like environment and command-line interface for Microsoft Windows, and comes with a Dockerfile to make things even easier.
 
 Check out [Wiki](https://github.com/shekyan/slowhttptest/wiki) for installation and usage details.
+
+Latest official image is available at [Docker Hub](https://hub.docker.com/repository/docker/shekyan/slowhttptest):
+`docker pull shekyan/slowhttptest:latest`
