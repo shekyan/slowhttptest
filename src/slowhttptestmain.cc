@@ -84,6 +84,7 @@ static void usage() {
       "  -e host:port     probe traffic directed through HTTP proxy at host:port (off)\n"
       "  -p seconds       timeout to wait for HTTP response on probe connection,\n"
       "                   after which server is considered inaccessible (5)\n"
+      "  -j cookies       value of Cookie header (ex.: -j \"user_id=1001; timeout=9000\")"
       "\nRange attack specific options:\n\n"
       "  -a start        left boundary of range in range header (5)\n"
       "  -b bytes        limit for range header right boundary values (2000)\n"
@@ -148,6 +149,7 @@ int main(int argc, char **argv) {
   char verb[16] = { 0 };
   char content_type[1024] = { 0 };
   char accept[1024] = { 0 };
+  char cookie[1024] = { 0 };
   // default values
   int conn_cnt            = 50;
   int content_length      = 4096;
@@ -169,7 +171,7 @@ int main(int argc, char **argv) {
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   int o;
-  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:j:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
@@ -220,6 +222,9 @@ int main(int argc, char **argv) {
       case 'i':
         if(!parse_int(interval))
           return -1;
+        break;
+      case 'j':
+        strncpy(cookie, optarg, 1023);
         break;
       case 'k':
         if(!parse_int(pipeline_factor, 10))
@@ -315,7 +320,7 @@ int main(int argc, char **argv) {
       type, need_stats, pipeline_factor, probe_interval,
       range_start, range_limit, read_interval, read_len,
       window_lower_limit, window_upper_limit, proxy_type, debug_level));
-  if(!slow_test->init(url, verb, path, proxy, content_type, accept)) {
+  if(!slow_test->init(url, verb, path, proxy, content_type, accept, cookie)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {
