@@ -1,8 +1,12 @@
-FROM alpine:3.9
+FROM alpine:3.9 as builder
 
 RUN apk add --no-cache build-base git openssl-dev autoconf automake
-WORKDIR /slowhttptest
-COPY . /slowhttptest
-RUN ./configure --prefix=/usr/local
-RUN make && make install
+WORKDIR /build
+COPY . /build
+RUN ./configure && make
+
+
+FROM alpine:3.9
+RUN apk add --no-cache libstdc++
+COPY --from=builder /build/src/slowhttptest /usr/local/bin/
 ENTRYPOINT ["slowhttptest"]
