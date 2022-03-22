@@ -57,7 +57,7 @@ class SlowSocket {
   }
   void close();
 
-  bool init(addrinfo* addr, const bool isSSL, int& maxfd,
+  bool init(addrinfo* addr, const char* host, const bool isSSL, int& maxfd,
       int followups_to_send, int read_interval = 0,
       int wnd_lower_limit = -1, int wnd_upper_limit = -1);
   int recv_slow(void* buf, size_t len);
@@ -122,7 +122,7 @@ class SlowSocket {
   }
 
   bool connect_plain(addrinfo* addr);
-  bool connect_ssl(addrinfo* addr);
+  bool connect_ssl(addrinfo* addr, const char* sni);
   int set_nonblocking();
   
   int sockfd_;
