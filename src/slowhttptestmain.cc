@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
   ProxyType proxy_type = slowhttptest::eNoProxy;
   long tmp;
   int o;
-  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:j:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:")) != -1) {
+  while((o = getopt(argc, argv, ":HBRXgha:b:c:d:e:f:i:j:k:l:m:n:o:p:r:s:t:u:v:w:x:y:z:1:")) != -1) {
     switch (o) {
       case 'a':
         if(!parse_int(range_start, 65539))
