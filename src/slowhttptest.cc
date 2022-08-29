@@ -215,7 +215,7 @@ const char* SlowHTTPTest::get_random_extra() {
 
 bool SlowHTTPTest::init(const char* url, const char* verb,
     const char* path, const char* proxy,
-    const char* content_type, const char* accept, const char* cookie) {
+    const char* content_type, const char* accept, const char* cookie, const char* header) {
   if(!change_fd_limits()) {
     slowlog(LOG_INFO, "error setting open file limits\n");
     
@@ -340,6 +340,12 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     request_.append(cookie_);
     request_.append(crlf);
   }
+  // Header
+  if (header != 0 && strlen(header)) {
+    header_.append(header);
+    request_.append(header_);
+    request_.append(crlf);
+  }
   // method for probe is always GET
   probe_request_.append("GET");
   if(eProbeProxy == proxy_type_) {
@@ -400,6 +406,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "<tr><td><b>Verb</b></td><td>%s</td></tr>"
           "<tr><td><b>Content-Length header value</b></td><td>%d</td></tr>"
           "<tr><td><b>Cookie</b></td><td>%s</td></tr>"
+          "<tr><td><b>Header</b></td><td>%s</td></tr>"
           "<tr><td><b>Extra data max length</b></td><td>%d</td></tr>"
           "<tr><td><b>Interval between follow up data</b></td><td>%d seconds</td></tr>"
           "<tr><td><b>Connections per seconds</b></td><td>%d</td></tr>"
@@ -412,6 +419,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           verb_.c_str(),
           content_length_,
           cookie,
+          header,
           extra_data_max_len_total_,
           followup_timing_,
           delay_,
@@ -426,6 +434,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
           "<tr><td><b>Cookie</b></td><td>%s</td></tr>"
+          "<tr><td><b>Header</b></td><td>%s</td></tr>"
           "<tr><td><b>Receive window range</b></td><td>%d - %d</td></tr>"
           "<tr><td><b>Pipeline factor</b></td><td>%d</td></tr>"
           "<tr><td><b>Read rate from receive buffer</b></td><td>%d bytes / %d sec</td></tr>"
@@ -437,6 +446,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           test_type_name[test_type_],
           num_connections_,
           cookie,
+          header,
           window_lower_limit_,
           window_upper_limit_,
           pipeline_factor_,
@@ -497,6 +507,7 @@ void SlowHTTPTest::report_parameters() {
       cBLU "URL:" cLBL "                              %s\n"
       cBLU "verb:" cLBL "                             %s\n"
       cBLU "cookie:" cLBL "                           %s\n"
+      cBLU "header:" cLBL "                           %s\n"
       cBLU "Content-Length header value:" cLBL "      %d\n"
       cBLU "follow up data max size:" cLBL "          %d\n"
       cBLU "interval between follow up data:" cLBL "  %d seconds\n"
@@ -509,6 +520,7 @@ void SlowHTTPTest::report_parameters() {
         base_uri_.getData(),
         verb_.c_str(),
         cookie_.c_str(),
+        header_.c_str(),
         content_length_,
         extra_data_max_len_total_,
         followup_timing_,
@@ -526,6 +538,7 @@ void SlowHTTPTest::report_parameters() {
       cBLU "URL:" cLBL "                             %s\n"
       cBLU "verb:" cLBL "                            %s\n"
       cBLU "cookie:" cLBL"                           %s\n"
+      cBLU "header:" cLBL "                           %s\n"      
       cBLU "receive window range:" cLBL "            %d - %d\n"
       cBLU "pipeline factor:" cLBL "                 %d\n"
       cBLU "read rate from receive buffer:" cLBL "   %d bytes / %d sec\n"
@@ -538,6 +551,7 @@ void SlowHTTPTest::report_parameters() {
         base_uri_.getData(),
         verb_.c_str(),
         cookie_.c_str(),
+        header_.c_str(),
         window_lower_limit_,
         window_upper_limit_,
         pipeline_factor_,
