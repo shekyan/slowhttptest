@@ -165,6 +165,18 @@ bool SlowSocket::connect_ssl(addrinfo* addr, const char* sni) {
     close();
     return false;
   }
+  if (getenv("SSL_CERT") && getenv("SSL_KEY")) {
+    if(SSL_CTX_use_certificate_file(ssl_ctx_, getenv("SSL_CERT"), SSL_FILETYPE_PEM) <= 0) {
+      slowlog(LOG_ERROR, "cannot use client certificate\n");
+      close();
+      return false;
+    }
+    if(SSL_CTX_use_PrivateKey_file(ssl_ctx_, getenv("SSL_KEY"), SSL_FILETYPE_PEM) <= 0) {
+      slowlog(LOG_ERROR, "cannot use client private key\n");
+      close();
+      return false;
+    }
+  }
   ssl_ = SSL_new(ssl_ctx_);
   if(!ssl_) {
     SSL_CTX_free(ssl_ctx_);
