@@ -95,6 +95,9 @@ static void usage() {
       "  -w bytes        start of the range advertised window size would be picked from (1)\n"
       "  -y bytes        end of the range advertised window size would be picked from (512)\n"
       "  -z bytes        bytes to slow read from receive buffer with single read() call (5)\n"
+      "\nEnvironment variables:\n\n"
+      "  SSL_CERT         client certificate (PEM format)\n"
+      "  SSL_KEY          client private key (PEM format)\n"
       );
 }
 

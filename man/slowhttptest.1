@@ -133,6 +133,14 @@ Specifies the end of the range the TCP advertised window size would be picked fr
 .It Fl z Ar bytes
 Specifies the number of bytes to read from receive buffer with each read() operation.
 .El
+.Sh ENVIRONMENT
+.Pp
+.Bl -tag -width Ds
+.It Ev SSL_CERT
+Specifies client certificate (PEM format)
+.It Ev SSL_KEY
+Specifies client private key (PEM format) 
+.El
 .Sh EXAMPLES
 Start a slowloris test of host.example.com with 1000 connections, statistics goes into my_header_stats,
 interval between follow up headers is 10 seconds and connection rate is 200 connections per second:
