@@ -67,7 +67,7 @@ static void usage() {
       "\nGeneral options:\n\n"
       "  -c connections   target number of connections (50)\n"
       "  -i seconds       interval between followup data in seconds (10)\n"
-      "  -l seconds       target test length in seconds (240)\n"
+      "  -l seconds       target test length in seconds (86400)\n"
       "  -r rate          connections per seconds (50)\n"
       "  -s bytes         value of Content-Length header if needed (4096)\n"
       "  -t verb          verb to use in request, default to GET for\n"
@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
   // default values
   int conn_cnt            = 50;
   int content_length      = 4096;
-  int duration            = 240;
+  int duration            = 86400;
   int interval            = 10;
   int max_random_data_len = 32;
   int probe_interval      = 5;
