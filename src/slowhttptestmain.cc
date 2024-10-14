@@ -85,7 +85,7 @@ static void usage() {
       "  -p seconds       timeout to wait for HTTP response on probe connection,\n"
       "                   after which server is considered inaccessible (5)\n"
       "  -j cookies       value of Cookie header (ex.: -j \"user_id=1001; timeout=9000\")\n"
-      "  -1 header        value of custom header (ex.: -1 \"X-SuchaHacker: tk0\")\n"
+      "  -1 header        value of custom header (ex.: -1 \"X-Custom-Header: someheader123\")\n"
       "\nRange attack specific options:\n\n"
       "  -a start        left boundary of range in range header (5)\n"
       "  -b bytes        limit for range header right boundary values (2000)\n"
