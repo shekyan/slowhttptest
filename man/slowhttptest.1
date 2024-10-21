@@ -40,6 +40,7 @@
 .Op Fl r Ar connection per second
 .Op Fl s Ar value of Content-Length header
 .Op Fl t Ar HTTP verb
+.Op Fl 1 Ar HTTP header
 .Op Fl u Ar absolute URL
 .Op Fl v Ar output verbosity level
 .Op Fl w Ar advertised window size range start 
@@ -120,6 +121,8 @@ Specifies the connection rate.
 Specifies the value of Content-Length header for Slow POST test.
 .It Fl t Ar HTTP verb
 Specifies the verb to use in HTTP request.
+.It Fl 1 Ar header
+Specifies an HTTP header to use in HTTP request.
 .It Fl u Ar URL
 Specifies the URL.
 .It Fl v Ar level

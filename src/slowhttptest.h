@@ -77,7 +77,7 @@ class SlowHTTPTest {
 
   bool init(const char* url, const char* verb,
     const char* path, const char* proxy,
-    const char* content_type, const char* accept, const char* cookie);
+    const char* content_type, const char* accept, const char* cookie, const char* header);
   void report_parameters();
   void report_status(bool to_csv);
   void report_csv();
@@ -100,6 +100,7 @@ class SlowHTTPTest {
   std::string random_extra_;
   std::string verb_;
   std::string cookie_;
+  std::string header_;
   std::string user_agent_;
   std::string content_type_;
   std::string accept_;
