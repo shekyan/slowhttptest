@@ -32,7 +32,6 @@ AC_CHECK_HEADERS([fcntl.h limits.h netdb.h netinet/in.h stdlib.h string.h sys/so
 AC_HEADER_STDBOOL
 AC_C_CONST
 AC_TYPE_SIZE_T
-AC_HEADER_TIME
 
 # Checks for library functions.
 AC_FUNC_SELECT_ARGTYPES
