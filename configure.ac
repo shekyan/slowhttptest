@@ -25,8 +25,6 @@ AC_CHECK_LIB([ssl], [SSL_new], [], [
   AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [], [AC_MSG_ERROR([OpenSSL-devel is missing])])
 ])
 
-# Checks for header files.
-AC_HEADER_STDC
 AC_DEFINE(USE_COLOR, 1, Use terminal colors)
 AC_CHECK_HEADERS([fcntl.h limits.h netdb.h netinet/in.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
 
