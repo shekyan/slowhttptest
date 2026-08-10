@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: Apache-2.0
+# CI for the ng/ C++17 rewrite. The legacy autotools build is covered separately.
+name: ng
+
+on:
+  push:
+    paths: ['ng/**', '.github/workflows/ng.yml']
+  pull_request:
+    paths: ['ng/**', '.github/workflows/ng.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both standard libraries matter: libstdc++ (GCC) and libc++ (Clang/macOS)
+        # differ in which headers they pull in transitively, which is exactly how
+        # a missing #include slips through on one platform and breaks the other.
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+          - os: macos-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: cmake -S ng -B ng/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build ng/build -j
+
+      - name: Test
+        run: ctest --test-dir ng/build --output-on-failure
+
+  sanitizers:
+    name: ubuntu / asan+ubsan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure with sanitizers
+        run: >
+          cmake -S ng -B ng/build-asan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+
+      - name: Build
+        run: cmake --build ng/build-asan -j
+
+      - name: Test
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir ng/build-asan --output-on-failure
