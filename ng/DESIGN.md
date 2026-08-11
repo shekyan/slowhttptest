@@ -245,7 +245,29 @@ staircase, HTML + JSON reporting, install rules, man page, tests, CI.
 
 Remaining:
 
-1. **epoll/kqueue reactor backends** — the abstraction exists; `poll()`'s O(n)
-   scan is the ceiling on connection counts today, and is what is left of the
-   CPU cost after the event-loop spin was fixed.
+1. **epoll/kqueue reactor backends.** Measured, rather than assumed:
+
+   | connections | held | system CPU (40 s run) | share of a core |
+   |---|---|---|---|
+   | 1 000 | 1 000 | 0.27 s | 0.7% |
+   | 2 000 | 2 000 | 0.66 s | 1.7% |
+   | 4 000 | 4 000 | 1.84 s | 4.7% |
+   | 8 000 | 8 000 | 4.42 s | 11.2% |
+
+   Cost grows about `N^1.36` — mildly superlinear, not quadratic, because
+   `fire_timers` drains every due timer per wake so wakeups batch rather than
+   scaling with N. **CPU is therefore not the reason to do this.**
+
+   The reason is that `poll()` has a hard ceiling. On Darwin it rejects
+   `nfds > OPEN_MAX` with `EINVAL`, and `OPEN_MAX` is a compile-time 10 240 that
+   no file-descriptor limit raises (measured: the syscall starts failing at
+   nfds 10 256). kqueue has no such limit. So on macOS/BSD a kqueue backend is
+   not an optimization — it is the only way past ~10 k connections, which is
+   well inside the range needed to stress a modern event-driven server (§1).
+
+   On Linux `poll()` has no `OPEN_MAX` limit, so the ceiling there is the O(n)
+   scan and `RLIMIT_NOFILE` instead. That has not been measured.
+
+   Do kqueue first: it is the platform where the wall is hard, near, and hit by
+   the maintainer's own machine.
 2. **HTTP/2** — see §5. Deliberately deferred, and where the value likely is.

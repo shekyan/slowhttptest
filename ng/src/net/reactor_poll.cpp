@@ -1,19 +1,43 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2011-2026 Sergey Shekyan and contributors
 //
-// Portable poll(2) reactor backend. This is the M0 default so the tool builds and
-// runs identically on Linux, macOS and BSD. epoll/kqueue backends implementing the
-// same Reactor interface land in M1 to scale past poll()'s per-call O(n) scan.
+// Portable poll(2) reactor backend, so the tool builds and runs identically on
+// Linux, macOS and BSD.
+//
+// Its limit is not really the per-call O(n) scan -- measured, that costs about
+// 11% of a core at 8000 connections. It is that poll() has a hard ceiling on
+// some platforms (Darwin: a fixed OPEN_MAX of 10240, immovable by ulimit), which
+// is well inside the range needed to stress a modern event-driven server. epoll
+// and kqueue backends implementing this same interface are what get past it.
 #include "slowhttp/reactor.hpp"
 
+#include <limits.h>
 #include <poll.h>
 #include <time.h>
 
+#include <cerrno>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <string>
 #include <unordered_map>
 
 namespace slowhttp {
 namespace {
+
+// How many descriptors poll(2) will accept on this platform.
+//
+// Darwin rejects nfds > OPEN_MAX with EINVAL, and its OPEN_MAX is a
+// compile-time 10240 -- a hard wall, not a tunable: raising the file descriptor
+// limit does nothing for it. Measured: the syscall starts failing at nfds 10256.
+// Elsewhere poll() is bounded only by the process descriptor limit.
+std::size_t poll_capacity() {
+#if defined(__APPLE__) && defined(OPEN_MAX)
+  return static_cast<std::size_t>(OPEN_MAX);
+#else
+  return 0;
+#endif
+}
 
 short to_poll_events(unsigned interest) {
   short e = 0;
@@ -66,7 +90,14 @@ class PollReactor : public Reactor {
     }
     int n = ::poll(fds_.data(), static_cast<nfds_t>(fds_.size()),
                    static_cast<int>(timeout.count()));
-    if (n <= 0) return 0;
+    if (n < 0) {
+      // A signal is not a failure: SIGINT arriving mid-wait is the normal way
+      // this tool is stopped, and the loop should just come round again.
+      if (errno == EINTR) return 0;
+      last_error_ = describe_failure(errno, fds_.size());
+      return -1;
+    }
+    if (n == 0) return 0;
     int produced = 0;
     for (auto& p : fds_) {
       if (p.revents == 0) continue;
@@ -81,9 +112,32 @@ class PollReactor : public Reactor {
     return produced;
   }
 
+  std::size_t max_descriptors() const override { return poll_capacity(); }
+
+  const std::string& last_error() const override { return last_error_; }
+
  private:
+  // Says what to do about it, not just what went wrong. EINVAL here is almost
+  // always the platform ceiling rather than a bug in the arguments.
+  static std::string describe_failure(int err, std::size_t nfds) {
+    char buf[320];
+    const std::size_t cap = poll_capacity();
+    if (err == EINVAL && cap > 0 && nfds > cap) {
+      std::snprintf(buf, sizeof(buf),
+                    "poll() cannot watch %zu descriptors on this platform: the "
+                    "limit is %zu (OPEN_MAX) and no file-descriptor limit raises "
+                    "it. Lower -c, or use a build with the epoll/kqueue backend.",
+                    nfds, cap);
+    } else {
+      std::snprintf(buf, sizeof(buf), "poll() failed with %zu descriptors: %s",
+                    nfds, std::strerror(err));
+    }
+    return buf;
+  }
+
   std::vector<pollfd> fds_;
   std::unordered_map<int, std::size_t> index_;
+  std::string last_error_;
 };
 
 }  // namespace

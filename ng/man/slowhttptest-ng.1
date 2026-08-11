@@ -359,7 +359,23 @@ Usage or configuration error, or an
 target on a build without TLS.
 .It 3
 No usable connection was ever established, so nothing was actually tested.
+.It 4
+The event loop failed partway through.
+No verdict and no report are produced, because measurements taken after the
+loop stopped working are not trustworthy.
 .El
+.Ss Connection ceiling
+The
+.Sy poll
+reactor cannot watch more descriptors than the platform allows, and on some
+platforms that is a fixed
+.Dv OPEN_MAX
+rather than something the file descriptor limit controls.
+.Nm Fl V
+reports the ceiling.
+A
+.Fl c
+above it is refused at startup rather than discovered thousands of sockets in.
 .Sh EXAMPLES
 Slowloris against a local server, with a report:
 .Bd -literal -offset indent

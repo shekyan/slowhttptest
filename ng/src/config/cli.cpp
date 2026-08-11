@@ -10,6 +10,7 @@
 #include <random>
 #include <string>
 
+#include "slowhttp/reactor.hpp"
 #include "slowhttp/tls.hpp"
 
 namespace slowhttp {
@@ -66,6 +67,15 @@ void print_version() {
   std::printf("slowhttptest-ng %s\n%s\nTLS: %s\n", kToolVersion, kProjectUrl,
               TlsContext::available() ? "enabled (OpenSSL)"
                                       : "disabled (built with -DSLOWHTTP_TLS=OFF)");
+  // The connection ceiling belongs here too: on some platforms it is a fixed
+  // property of the reactor backend rather than something -c or ulimit controls,
+  // and finding that out by hitting it is a bad way to learn.
+  const std::size_t cap = Reactor::create()->max_descriptors();
+  if (cap > 0)
+    std::printf("reactor: poll, max %zu connections (fixed OPEN_MAX ceiling)\n",
+                cap);
+  else
+    std::printf("reactor: poll, bounded by the file descriptor limit\n");
 }
 
 void print_usage() {

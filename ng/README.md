@@ -116,9 +116,21 @@ Installs the binary and its man page, honouring `DESTDIR` and the standard
 headers are still moving, and shipping it would be a promise of API stability
 the project isn't ready to make; it remains available for in-tree embedding.
 
-`slowhttptest-ng -V` reports the version, the project URL and whether TLS is
-compiled in — the last matters in a bug report, since a build without it
-behaves differently in a way that is otherwise invisible.
+`slowhttptest-ng -V` reports the version, the project URL, whether TLS is
+compiled in, and the reactor's connection ceiling:
+
+```
+slowhttptest-ng 2.0.0
+https://github.com/shekyan/slowhttptest
+TLS: enabled (OpenSSL)
+reactor: poll, max 10240 connections (fixed OPEN_MAX ceiling)
+```
+
+Both of the last two matter in a bug report. A build without TLS behaves
+differently in a way that is otherwise invisible, and on some platforms — macOS
+among them — `poll()` cannot watch more than a fixed `OPEN_MAX` descriptors no
+matter what `ulimit -n` says. A `-c` above that ceiling is refused at startup
+rather than discovered ten thousand sockets in.
 
 ## Try it locally — watch a real denial of service
 

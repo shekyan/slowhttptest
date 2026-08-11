@@ -104,6 +104,10 @@ add_executable(test_report tests/test_report.cpp)
 target_link_libraries(test_report PRIVATE slowhttp)
 add_test(NAME report_unit COMMAND test_report)
 
+add_executable(test_reactor tests/test_reactor.cpp)
+target_link_libraries(test_reactor PRIVATE slowhttp)
+add_test(NAME reactor_unit COMMAND test_reactor)
+
 # Smoke test: the binary builds and prints help without error.
 add_test(NAME cli_help COMMAND slowhttptest-ng -h)
 

@@ -751,6 +751,26 @@ struct Engine::Impl {
     fill_meta();
 
     reactor = Reactor::create();
+
+    // Refuse an impossible connection count before opening a single socket.
+    // Discovering the ceiling at runtime means thousands of sockets already
+    // open and a partial, misleading result; saying so now costs nothing.
+    // kReservedFds covers the probe, stdio and the resolver.
+    constexpr std::size_t kReservedFds = 8;
+    const std::size_t reactor_cap = reactor->max_descriptors();
+    if (reactor_cap > 0 &&
+        static_cast<std::size_t>(cfg.connections) + kReservedFds > reactor_cap) {
+      std::fprintf(stderr,
+                   "Error: -c %d exceeds what this platform's poll() backend can"
+                   " watch (%zu descriptors, minus %zu reserved).\n"
+                   "       This is a fixed OPEN_MAX ceiling; raising the file"
+                   " descriptor limit does not move it.\n"
+                   "       Use -c %zu or fewer.\n",
+                   cfg.connections, reactor_cap, kReservedFds,
+                   reactor_cap - kReservedFds);
+      return 2;
+    }
+
     conns.resize(static_cast<std::size_t>(cfg.connections));
     for (std::size_t i = 0; i < conns.size(); ++i)
       conns[i].id = static_cast<ConnId>(i);
@@ -821,6 +841,7 @@ struct Engine::Impl {
                         : std::chrono::milliseconds(0));
 
     bool gave_up = false;
+    bool reactor_failed = false;
     while (!g_stop.load()) {
       TimePoint now = Clock::now();
 
@@ -915,7 +936,15 @@ struct Engine::Impl {
       if (prober) timeout = std::min(timeout, std::chrono::milliseconds(100));
 
       events.clear();
-      reactor->wait(events, timeout);
+      if (reactor->wait(events, timeout) < 0) {
+        // The reactor cannot wait any more. Retrying would spin at the speed of
+        // the failing syscall, so stop -- and do not draw a conclusion from a
+        // run whose event loop stopped working partway through.
+        std::fprintf(stderr, "\n\nError: %s\n",
+                     reactor->last_error().c_str());
+        reactor_failed = true;
+        break;
+      }
 
       for (const auto& ev : events) {
         if (prober && ev.fd == probe_reg_fd && ev.fd >= 0) {
@@ -962,7 +991,8 @@ struct Engine::Impl {
     close_all();
     status_line(stop_at);
 
-    const char* why = gave_up         ? "giving up"
+    const char* why = reactor_failed  ? "event loop failed"
+                      : gave_up       ? "giving up"
                       : g_stop.load() ? "interrupted"
                                       : "finished";
     if (chatty())
@@ -985,6 +1015,17 @@ struct Engine::Impl {
       log.exit_code = 3;
     }
     scheme_mismatch_hint();
+
+    // A run whose event loop stopped working measured nothing trustworthy after
+    // that point, so it gets no verdict and no report. Printing "SERVICE HELD"
+    // because the probe went quiet along with everything else would be the worst
+    // possible failure mode for this tool.
+    if (reactor_failed) {
+      std::fprintf(stderr,
+                   "\nNo verdict: the event loop failed partway through, so"
+                   " anything measured after that point is not trustworthy.\n");
+      return 4;
+    }
 
     if (prober) {
       const Verdict v = log.evaluate(cfg.availability_threshold);
