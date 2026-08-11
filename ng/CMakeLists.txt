@@ -44,6 +44,11 @@ target_include_directories(slowhttp
 )
 target_compile_options(slowhttp PRIVATE -Wall -Wextra)
 
+# One source of truth for the version. It reaches the -V output, the help text,
+# the User-Agent and the report, so a release bump is this line in project()
+# and nothing else.
+target_compile_definitions(slowhttp PRIVATE SLOWHTTP_VERSION="${PROJECT_VERSION}")
+
 if(SLOWHTTP_TLS)
   target_compile_definitions(slowhttp PUBLIC SLOWHTTP_HAVE_TLS)
   target_link_libraries(slowhttp PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -53,6 +58,25 @@ endif()
 add_executable(slowhttptest-ng cli/main.cpp)
 target_link_libraries(slowhttptest-ng PRIVATE slowhttp)
 target_compile_options(slowhttptest-ng PRIVATE -Wall -Wextra)
+
+# ---------------------------------------------------------------------------
+# Install
+#
+# GNUInstallDirs rather than hard-coded paths, because distro packaging is the
+# reason this is C++ rather than Rust and every distro disagrees about libdir,
+# mandir and DESTDIR handling.
+#
+# The binary and its man page only. libslowhttp is deliberately NOT installed:
+# it is a static library whose headers are still moving, and shipping it would
+# be a promise of API stability the project is not ready to make. It stays
+# available for in-tree embedding.
+include(GNUInstallDirs)
+
+install(TARGETS slowhttptest-ng
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/man/slowhttptest-ng.1
+        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 
 enable_testing()
 

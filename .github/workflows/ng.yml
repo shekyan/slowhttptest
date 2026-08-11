@@ -62,6 +62,16 @@ jobs:
       - name: Test
         run: ctest --test-dir ng/build --output-on-failure
 
+      # Distro packaging is the reason this is C++ rather than Rust, so the
+      # install has to keep working -- including DESTDIR, which every packaging
+      # system relies on and which is easy to break without noticing.
+      - name: Install into a staging root
+        run: |
+          DESTDIR="$PWD/stage" cmake --install ng/build --prefix /usr/local
+          test -x stage/usr/local/bin/slowhttptest-ng
+          test -f stage/usr/local/share/man/man1/slowhttptest-ng.1
+          stage/usr/local/bin/slowhttptest-ng -V
+
   # The TLS-less build is a supported configuration, so it has to keep compiling
   # and keep refusing https with an explanation rather than failing to link.
   no-tls:

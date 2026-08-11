@@ -17,6 +17,7 @@ enum class CliResult {
 CliResult parse_cli(int argc, char** argv, Config& cfg);
 
 void print_usage();
+void print_version();
 
 // Parses an absolute URL (scheme://host[:port][/path]) into a Target.
 bool parse_url(const std::string& url, Target& out, std::string& error);

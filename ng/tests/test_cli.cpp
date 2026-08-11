@@ -513,6 +513,37 @@ static void test_user_agent() {
   }
 }
 
+static void test_version() {
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "-V"}, cfg) == CliResult::kExit,
+          "-V exits without running a test");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--version"}, cfg) == CliResult::kExit,
+          "--version is an alias for -V");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--help"}, cfg) == CliResult::kExit,
+          "--help is an alias for -h");
+  }
+  {  // The version reaches the binary from CMake's project(VERSION). A build
+     // that bypassed the build system would ship the placeholder, and the
+     // User-Agent would then advertise a version that does not exist.
+     const std::string v = slowhttp::kToolVersion;
+     check(!v.empty() && v != "0.0.0-unknown",
+           "the version was supplied by the build system");
+     check(v.find_first_not_of("0123456789.") == std::string::npos,
+           "the version is a plain dotted number");
+     Config cfg;
+     run({"slowhttptest-ng"}, cfg);
+     check(cfg.user_agent.find(v) != std::string::npos,
+           "the User-Agent carries that same version, not a second copy of it");
+  }
+}
+
 static void test_quiet() {
   {
     Config cfg;
@@ -570,6 +601,7 @@ int main() {
   test_body_data();
   test_fail_on_status();
   test_user_agent();
+  test_version();
   test_quiet();
   test_capacity_flags();
   if (failures == 0) {

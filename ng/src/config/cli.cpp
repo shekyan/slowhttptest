@@ -10,18 +10,30 @@
 #include <random>
 #include <string>
 
+#include "slowhttp/tls.hpp"
+
 namespace slowhttp {
 
-const char* const kToolVersion = "2.0.0";
+// Supplied by CMake from project(VERSION). The fallback only applies to builds
+// that bypass the build system entirely.
+#ifndef SLOWHTTP_VERSION
+#define SLOWHTTP_VERSION "0.0.0-unknown"
+#endif
+
+const char* const kToolVersion = SLOWHTTP_VERSION;
 const char* const kProjectUrl = "https://github.com/shekyan/slowhttptest";
 
 // "Mozilla/5.0 (compatible; ...)" is the shape well-behaved crawlers have used
 // for decades (Googlebot and friends). The Mozilla token keeps servers that
 // sniff for it from taking a different code path; everything after it is the
 // truth about who is calling.
-const char* const kDefaultUserAgent =
-    "Mozilla/5.0 (compatible; slowhttptest-ng/2.0.0; "
-    "+https://github.com/shekyan/slowhttptest)";
+//
+// Assembled once at startup rather than as a literal, so the version cannot
+// drift from the one CMake set.
+const std::string kDefaultUserAgentStorage =
+    std::string("Mozilla/5.0 (compatible; slowhttptest-ng/") + kToolVersion +
+    "; +" + kProjectUrl + ")";
+const char* const kDefaultUserAgent = kDefaultUserAgentStorage.c_str();
 
 // Kept deliberately short and current. Chrome and Firefox freeze the minor
 // version fields at zero, and Safari's WebKit build string has been stable for
@@ -48,10 +60,20 @@ const char* mode_name(Mode m) {
   return "unknown";
 }
 
+void print_version() {
+  // Packagers and bug reports need to know whether TLS is compiled in; a build
+  // without it behaves differently in a way that is otherwise invisible.
+  std::printf("slowhttptest-ng %s\n%s\nTLS: %s\n", kToolVersion, kProjectUrl,
+              TlsContext::available() ? "enabled (OpenSSL)"
+                                      : "disabled (built with -DSLOWHTTP_TLS=OFF)");
+}
+
 void print_usage() {
   std::printf(
-      "slowhttptest-ng - modern C++ rewrite of slowhttptest\n"
-      "Usage: slowhttptest-ng [options]\n"
+      "slowhttptest-ng %s - modern C++ rewrite of slowhttptest\n"
+      "Usage: slowhttptest-ng [options]\n",
+      kToolVersion);
+  std::printf(
       "\n"
       "Test modes:\n"
       "  -H            slow headers a.k.a. Slowloris (default)\n"
@@ -91,7 +113,9 @@ void print_usage() {
       "  -q            quiet: no console output at all. Same as -v 0. Reports are\n"
       "                still written; errors and the exit code still speak.\n"
       "                Also --quiet.\n"
-      "  -h            this help\n"
+      "  -h            this help. Also --help.\n"
+      "  -V            version, project URL and whether TLS is compiled in.\n"
+      "                Also --version.\n"
       "\n"
       "Proxy options:\n"
       "  -d host:port  route all traffic through this HTTP proxy\n"
@@ -378,6 +402,8 @@ const struct option kLongOptions[] = {
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
     {"quiet", no_argument, nullptr, 'q'},
+    {"version", no_argument, nullptr, 'V'},
+    {"help", no_argument, nullptr, 'h'},
     {"fail-on-status", required_argument, nullptr, kOptFailOnStatus},
     {"probe-interval", required_argument, nullptr, kOptProbeInterval},
     {"no-probe", no_argument, nullptr, kOptNoProbe},
@@ -417,7 +443,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   optind = 1;
   while ((o = getopt_long(
               argc, argv,
-              ":HBRXghqc:r:l:i:x:s:t:f:m:j:u:v:n:z:w:y:k:a:b:1:d:e:p:o:P:A:",
+              ":HBRXghqVc:r:l:i:x:s:t:f:m:j:u:v:n:z:w:y:k:a:b:1:d:e:p:o:P:A:",
               kLongOptions, nullptr)) != -1) {
     switch (o) {
       case 'H': cfg.mode = Mode::SlowHeaders; break;
@@ -542,6 +568,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
                 cfg.log_level = tmp;
                 cfg.verbose = tmp >= 4; break;
       case 'h': print_usage(); return CliResult::kExit;
+      case 'V': print_version(); return CliResult::kExit;
       case ':':
         std::fprintf(stderr, "Error: option -%c requires an argument\n", optopt);
         return CliResult::kError;
