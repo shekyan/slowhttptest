@@ -39,6 +39,17 @@ jobs:
         with:
           python-version: '3.x'
 
+      # OpenSSL is the only mandatory dependency. Ubuntu runners ship the dev
+      # package; macOS needs the Homebrew keg pointed at explicitly, because the
+      # system only provides LibreSSL headers-free.
+      - name: Install OpenSSL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Locate OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
       - name: Configure
         env:
           CC: ${{ matrix.cc }}
@@ -51,6 +62,37 @@ jobs:
       - name: Test
         run: ctest --test-dir ng/build --output-on-failure
 
+  # The TLS-less build is a supported configuration, so it has to keep compiling
+  # and keep refusing https with an explanation rather than failing to link.
+  no-tls:
+    name: ubuntu / without TLS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure without TLS
+        run: cmake -S ng -B ng/build-notls -DCMAKE_BUILD_TYPE=Release -DSLOWHTTP_TLS=OFF
+
+      - name: Build
+        run: cmake --build ng/build-notls -j
+
+      - name: Test
+        run: ctest --test-dir ng/build-notls --output-on-failure
+
+      - name: https must be refused with an explanation
+        run: |
+          set +e
+          out=$(./ng/build-notls/slowhttptest-ng -u https://127.0.0.1:1/ -l 1 --no-probe 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          test $code -ne 0 || { echo "expected a non-zero exit"; exit 1; }
+          echo "$out" | grep -q "no TLS backend" || { echo "expected a clear message"; exit 1; }
+
   sanitizers:
     name: ubuntu / asan+ubsan
     runs-on: ubuntu-latest
@@ -60,6 +102,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Install OpenSSL
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
 
       - name: Configure with sanitizers
         run: >
