@@ -49,6 +49,30 @@ rationale, and the roadmap.
   value is; see
   [DESIGN.md §5](DESIGN.md#5-http2-deferred-but-where-the-value-likely-is).
 
+## Migrating from `slowhttptest`
+
+`slowhttptest-ng` is intended to replace `slowhttptest`. Until it does, the two
+build and install side by side.
+
+It accepts **every flag the classic tool does, with the same meanings**, so
+existing invocations carry over unchanged. Three things differ, and all three
+can bite a script:
+
+| | classic | ng |
+|---|---|---|
+| `-o base` writes | `base.html` + `base.csv` | `base.html` + **`base.json`** |
+| errors exit with | `-1` (255) | `2` usage/config, `3` nothing tested |
+| the report is built around | socket state changes | **service availability** |
+
+**CSV output is gone.** If you have something parsing `base.csv`, move it to
+`base.json`, which carries the same run in a structured form plus the verdict
+and a CI pass/fail. There is no `--csv` compatibility shim.
+
+**Exit codes changed, and 0 now means something narrower**: the test ran to
+completion, whatever the outcome. Finding a denial of service is a successful
+run, not a failed one — gate on `.criterion.pass` in the JSON rather than on
+`$?`.
+
 ## Build
 
 OpenSSL is the only mandatory dependency.
@@ -73,6 +97,28 @@ failing to link):
 ```bash
 cmake -S . -B build -DSLOWHTTP_TLS=OFF
 ```
+
+### Installing
+
+```bash
+cmake --install build --prefix /usr/local
+```
+
+Installs the binary and its man page, honouring `DESTDIR` and the standard
+`GNUInstallDirs` layout:
+
+```
+/usr/local/bin/slowhttptest-ng
+/usr/local/share/man/man1/slowhttptest-ng.1
+```
+
+`libslowhttp` is deliberately **not** installed. It is a static library whose
+headers are still moving, and shipping it would be a promise of API stability
+the project isn't ready to make; it remains available for in-tree embedding.
+
+`slowhttptest-ng -V` reports the version, the project URL and whether TLS is
+compiled in — the last matters in a bug report, since a build without it
+behaves differently in a way that is otherwise invisible.
 
 ## Try it locally — watch a real denial of service
 

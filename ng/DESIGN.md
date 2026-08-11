@@ -213,14 +213,39 @@ test that found a denial is not a failed run. CI gates on the JSON.
 
 Not planned: CSV and JUnit output (considered, dropped).
 
-## 7. Roadmap
+## 7. Replacing the original
+
+`slowhttptest-ng` is meant to become `slowhttptest`. Both trees build today and
+install side by side; the rewrite is not a fork.
+
+Flag compatibility is complete — every classic flag, same meaning — because the
+cost of breaking it lands on the maintainer through packagers and existing
+users' scripts. Three deliberate breaks remain, each judged worth it:
+
+| Break | Why |
+|---|---|
+| CSV output dropped | JSON carries the same run plus the verdict and a CI gate; two serializations of one event log is a drift risk for no gain |
+| exit codes `2`/`3` instead of `-1` | `-1` says only "something went wrong"; `3` specifically means *nothing was tested*, which is the failure mode that silently passes CI |
+| report is availability-centric | socket-state reporting makes the reader infer the thing they came for |
+
+Packaging is deliberately conventional, because distro packaging is the whole
+reason this is C++ (§2): `GNUInstallDirs`, `DESTDIR` honoured, a man page, `-V`
+reporting whether TLS is compiled in, and OpenSSL as the only dependency.
+`libslowhttp` is *not* installed — its headers still move, and shipping them
+would promise an API stability the project cannot yet keep.
+
+The switch itself is a rename plus retiring `src/`, once the rewrite has had
+real-world exposure under its own name.
+
+## 8. Roadmap
 
 Done: all four attack modes, reactor, engine, CLI parity, TLS/https, proxying
 (`-d`/`-e`, including `CONNECT`), the availability probe (`-p`), the capacity
-staircase, HTML + JSON reporting, tests, CI.
+staircase, HTML + JSON reporting, install rules, man page, tests, CI.
 
 Remaining:
 
 1. **epoll/kqueue reactor backends** — the abstraction exists; `poll()`'s O(n)
-   scan is the ceiling on connection counts today.
+   scan is the ceiling on connection counts today, and is what is left of the
+   CPU cost after the event-loop spin was fixed.
 2. **HTTP/2** — see §5. Deliberately deferred, and where the value likely is.
