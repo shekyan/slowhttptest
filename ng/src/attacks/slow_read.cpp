@@ -55,9 +55,9 @@ std::string SlowRead::build_request() const {
   one.reserve(256);
   one += cfg_.effective_verb();
   one += ' ';
-  one += cfg_.target.path;
+  one += cfg_.request_target();
   one += " HTTP/1.1\r\n";
-  one += "Host: " + cfg_.target.host + "\r\n";
+  one += "Host: " + cfg_.target.host_in_url() + "\r\n";
   one += "User-Agent: " + cfg_.user_agent + "\r\n";
   one += "Accept: " + cfg_.accept + "\r\n";
   // Ask for an uncompressed response: the bigger the body the server has to push
@@ -66,8 +66,7 @@ std::string SlowRead::build_request() const {
   one += "Accept-Encoding: identity\r\n";
   // Keep-alive so a pipelined burst (-k) is answered on this one connection.
   one += "Connection: keep-alive\r\n";
-  if (!cfg_.cookie.empty()) one += "Cookie: " + cfg_.cookie + "\r\n";
-  if (!cfg_.extra_header.empty()) one += cfg_.extra_header + "\r\n";
+  one += cfg_.caller_headers();
   one += "\r\n";  // complete request, unlike Slowloris
 
   // Pipelining: stack -k copies so a keep-alive server queues several responses

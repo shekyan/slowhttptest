@@ -36,9 +36,10 @@ int main(int argc, char** argv) {
     case slowhttp::Mode::Range: {
       auto* range = new slowhttp::RangeAttack(cfg);
       attack.reset(range);
-      std::fprintf(stderr,
-                   "  range set: %d specs, %zu byte request\n",
-                   range->range_count(), range->request_size());
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  range set: %d specs, %zu byte request\n",
+                     range->range_count(), range->request_size());
       break;
     }
   }

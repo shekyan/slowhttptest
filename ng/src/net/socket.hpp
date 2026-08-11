@@ -4,15 +4,51 @@
 #define SLOWHTTP_NET_SOCKET_HPP_
 
 #include <cstddef>
+#include <memory>
+#include <string>
+
+#include "slowhttp/tls.hpp"
 
 struct addrinfo;
 
 namespace slowhttp {
 
-enum class SockState { Init, Connecting, Connected, Closed, Error };
+// ProxyConnect and TlsHandshake are *setup* phases: the TCP connection exists but
+// is not yet usable by an attack. Both are driven by continue_setup().
+enum class SockState {
+  Init,
+  Connecting,
+  ProxyConnect,
+  TlsHandshake,
+  Connected,
+  Closed,
+  Error
+};
 
-// Thin owning wrapper over a non-blocking TCP socket. Plain TCP only in M0; a
-// TlsBackend slots in at send_some()/recv_some() for M1 without changing callers.
+// What continue_setup() wants next. Mirrors TlsIo because a CONNECT tunnel and a
+// TLS handshake have the same shape: make progress, or say which readiness to
+// wait for.
+enum class SetupIo { Done, WantRead, WantWrite, Error };
+
+// Everything that has to happen between a completed TCP connect and the first
+// attack byte. Empty plan == plain HTTP straight to the origin.
+//
+// The order matters and is fixed: CONNECT tunnel first, TLS inside it. Putting
+// tunnel establishment here rather than in the engine keeps it below the
+// send_some()/recv_some() abstraction — by the time an attack writes a byte, the
+// bytes on the wire are already tunnelled and encrypted, and no attack has to
+// know either happened.
+struct SetupPlan {
+  std::string connect_request;      // full CONNECT request, or empty for none
+  std::shared_ptr<TlsContext> tls;  // non-null => handshake after the tunnel
+  std::string sni;                  // SNI/verification name for the handshake
+
+  bool empty() const { return connect_request.empty() && !tls; }
+};
+
+// Thin owning wrapper over a non-blocking TCP socket, optionally tunnelled
+// through an HTTP proxy and optionally wrapped in TLS. Callers above
+// send_some()/recv_some() see none of that.
 class Socket {
  public:
   Socket() = default;
@@ -21,25 +57,15 @@ class Socket {
   Socket& operator=(const Socket&) = delete;
 
   // Movable so it can live in a std::vector (transfers fd ownership).
-  Socket(Socket&& other) noexcept : fd_(other.fd_), state_(other.state_) {
-    other.fd_ = -1;
-    other.state_ = SockState::Init;
-  }
-  Socket& operator=(Socket&& other) noexcept {
-    if (this != &other) {
-      close();
-      fd_ = other.fd_;
-      state_ = other.state_;
-      other.fd_ = -1;
-      other.state_ = SockState::Init;
-    }
-    return *this;
-  }
+  Socket(Socket&& other) noexcept;
+  Socket& operator=(Socket&& other) noexcept;
 
   // Begins a non-blocking connect. `recv_buffer`, when > 0, is applied as
   // SO_RCVBUF *before* connect() -- required for it to shrink the advertised TCP
   // window during the handshake. Returns false on immediate failure.
   bool start_connect(const addrinfo* addr, int recv_buffer = 0);
+  bool start_connect(const addrinfo* addr, int recv_buffer,
+                     const SetupPlan& plan);
 
   // Actual SO_RCVBUF the kernel settled on, or -1 if unavailable. Kernels clamp
   // to a minimum and commonly return double what was requested, so the effective
@@ -47,7 +73,18 @@ class Socket {
   // than assume the requested value took effect.
   int recv_buffer_size() const;
   // Call when the socket reports writable while Connecting; checks SO_ERROR.
+  // On success the state moves to the first pending setup phase, or straight to
+  // Connected when the plan is empty.
   bool finish_connect();
+
+  // Drives ProxyConnect / TlsHandshake one step. Returns Done once the socket is
+  // Connected and ready for attack bytes.
+  SetupIo continue_setup();
+
+  // Why setup failed, for diagnostics. Empty when nothing has failed.
+  const std::string& setup_error() const { return setup_error_; }
+  // e.g. "TLSv1.3 / TLS_AES_256_GCM_SHA384"; empty for plain connections.
+  std::string tls_description() const;
 
   // Returns bytes written (>= 0; 0 means would-block), or -1 on fatal error.
   long send_some(const char* data, std::size_t len);
@@ -59,10 +96,28 @@ class Socket {
 
   int fd() const { return fd_; }
   SockState state() const { return state_; }
+  // True once the socket carries attack traffic (past every setup phase).
+  bool ready() const { return state_ == SockState::Connected; }
 
  private:
+  // Raw fd I/O, bypassing TLS. Used by the CONNECT exchange, which happens
+  // before the TLS layer exists.
+  long raw_send(const char* data, std::size_t len);
+  long raw_recv(char* buf, std::size_t len);
+
+  // Moves from a completed TCP connect into the first pending setup phase.
+  void enter_setup();
+  SetupIo drive_proxy_connect();
+  SetupIo drive_tls_handshake();
+
   int fd_ = -1;
   SockState state_ = SockState::Init;
+
+  SetupPlan plan_;
+  std::size_t connect_sent_ = 0;  // bytes of the CONNECT request already written
+  std::string connect_reply_;     // accumulated CONNECT response headers
+  std::string setup_error_;
+  TlsSession tls_;
 };
 
 }  // namespace slowhttp

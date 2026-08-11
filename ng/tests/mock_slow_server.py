@@ -45,6 +45,7 @@ Authorized local testing only.
 """
 import argparse
 import socket
+import ssl
 import threading
 import time
 
@@ -127,7 +128,7 @@ def read_body(conn, need, already, body_timeout):
     return True
 
 
-def worker(srv, cfg, response):
+def worker(srv, cfg, response, tls_ctx=None):
     global busy, served, reaped, stuck, range_bytes
     while True:
         try:
@@ -136,6 +137,21 @@ def worker(srv, cfg, response):
             return
         with lock:
             busy += 1
+        if tls_ctx is not None:
+            # The handshake runs on the worker, as it does on a real
+            # thread-per-connection server -- so a client that stalls mid
+            # handshake pins a worker just like one that stalls mid request.
+            try:
+                conn = tls_ctx.wrap_socket(conn, server_side=True)
+            except (ssl.SSLError, OSError):
+                with lock:
+                    busy -= 1
+                    reaped += 1
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                continue
         blocked = False
         try:
             ok, head, rest = read_headers(conn, cfg.header_timeout)
@@ -215,8 +231,18 @@ def main():
                     help="response body size; use a large value (e.g. 1000000) "
                          "to demo slow read, which needs a response too big to "
                          "fit in the socket buffers")
+    ap.add_argument("--tls-cert", default=None,
+                    help="PEM certificate; serves https when given with --tls-key")
+    ap.add_argument("--tls-key", default=None, help="PEM private key")
     args = ap.parse_args()
     response = build_response(args.body_bytes)
+
+    tls_ctx = None
+    if bool(args.tls_cert) != bool(args.tls_key):
+        ap.error("--tls-cert and --tls-key must be given together")
+    if args.tls_cert:
+        tls_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls_ctx.load_cert_chain(args.tls_cert, args.tls_key)
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -232,11 +258,12 @@ def main():
         defenses.append(f"send timeout {args.send_timeout}s")
     mode = "VULNERABLE (no timeouts)" if not defenses else \
         "mitigated (" + ", ".join(defenses) + ")"
-    print(f"mock HTTP server on 0.0.0.0:{args.port}  workers={args.workers}  "
+    scheme = "HTTPS" if tls_ctx else "HTTP"
+    print(f"mock {scheme} server on 0.0.0.0:{args.port}  workers={args.workers}  "
           f"body={len(response)}B  mode={mode}")
 
     for _ in range(args.workers):
-        threading.Thread(target=worker, args=(srv, args, response),
+        threading.Thread(target=worker, args=(srv, args, response, tls_ctx),
                          daemon=True).start()
     threading.Thread(target=reporter, args=(args.workers,), daemon=True).start()
 
