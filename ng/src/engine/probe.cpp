@@ -27,8 +27,14 @@ std::string build_probe_request(const Config& cfg, bool through_proxy) {
   req += "GET ";
   req += target;
   req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg.target.host_in_url() + "\r\n";
-  req += "User-Agent: " + cfg.user_agent + " (availability probe)\r\n";
+  req += "Host: " + cfg.target.host_header() + "\r\n";
+  // Exactly the run's User-Agent, with nothing appended to mark it as the probe.
+  // A distinguishable probe is the confound the report's own caveats warn about:
+  // a WAF could shed the attack traffic while still serving the probe, and the
+  // tool would then report "held" for a service that was not serving anyone else.
+  // The tool still identifies itself here -- the agent and the Referer say so --
+  // it just does not look like a different client than the one under test.
+  req += "User-Agent: " + cfg.user_agent + "\r\n";
   req += "Accept: */*\r\n";
   // The probe carries the caller's cookie and -1 headers too. Without them an
   // authenticated or host-routed target would answer the probe from a different

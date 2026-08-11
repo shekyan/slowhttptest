@@ -71,6 +71,10 @@ void print_usage() {
       "  -f type       Content-Type header value\n"
       "  -m accept     Accept header value\n"
       "  -j cookie     Cookie header value\n"
+      "  --no-referer  do not send the Referer header. It is sent by default as\n"
+      "                \"TESTING_PURPOSES_ONLY\" so the traffic is recognisable;\n"
+      "                drop it if the target rejects an unparseable Referer, or\n"
+      "                replace it with -1 \"Referer: https://...\"\n"
       "  -1 header     extra header, repeatable. Also --header.\n"
       "                e.g. -1 \"Authorization: Bearer abc\" -1 \"X-Tenant: acme\"\n"
       "                Sent on every attack request AND on the probe, so both\n"
@@ -364,6 +368,7 @@ enum {
   kOptAvailabilityThreshold,
   kOptFailOnStatus,
   kOptRandomUserAgent,
+  kOptNoReferer,
 };
 
 const struct option kLongOptions[] = {
@@ -371,6 +376,7 @@ const struct option kLongOptions[] = {
     {"data", required_argument, nullptr, 'P'},
     {"user-agent", required_argument, nullptr, 'A'},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
+    {"no-referer", no_argument, nullptr, kOptNoReferer},
     {"quiet", no_argument, nullptr, 'q'},
     {"fail-on-status", required_argument, nullptr, kOptFailOnStatus},
     {"probe-interval", required_argument, nullptr, kOptProbeInterval},
@@ -437,6 +443,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case 'j': cfg.cookie = optarg; break;
       case 'A': cfg.user_agent = optarg; break;
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
+      case kOptNoReferer: cfg.referer.clear(); break;
       // Same state as -v 0, spelled the way people look for it.
       case 'q': cfg.log_level = 0; cfg.verbose = false; break;
       case '1': {

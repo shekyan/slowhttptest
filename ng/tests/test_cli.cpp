@@ -243,6 +243,90 @@ static void test_probe_and_report_flags() {
   }
 }
 
+// The port belongs in Host whenever it is not the scheme default. Getting this
+// wrong sends name-based vhosts and Host-routing proxies to a different backend
+// than the one under test, so the run measures the wrong thing entirely.
+static void test_host_header() {
+  {
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "http://example.test:8080/"}, cfg);
+    check(cfg.target.host_header() == "example.test:8080",
+          "a non-default http port appears in Host");
+  }
+  {
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "http://example.test/"}, cfg);
+    check(cfg.target.host_header() == "example.test",
+          "the default http port is omitted from Host");
+  }
+  {
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "https://example.test/"}, cfg);
+    check(cfg.target.host_header() == "example.test",
+          "443 is the default for https and is omitted");
+  }
+  {
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "https://example.test:8443/"}, cfg);
+    check(cfg.target.host_header() == "example.test:8443",
+          "a non-default https port appears in Host");
+  }
+  {  // 80 is not the default for https, so it must be stated.
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "https://example.test:80/"}, cfg);
+    check(cfg.target.host_header() == "example.test:80",
+          "port 80 under https is not a default and is kept");
+  }
+  {  // An IPv6 literal stays bracketed once the port is appended, or the colons
+     // in the address become indistinguishable from the port separator.
+    Config cfg;
+    run({"slowhttptest-ng", "-u", "http://[::1]:8080/"}, cfg);
+    check(cfg.target.host_header() == "[::1]:8080",
+          "IPv6 Host keeps its brackets alongside the port");
+  }
+}
+
+static void test_referer() {
+  {
+    Config cfg;
+    run({"slowhttptest-ng"}, cfg);
+    check(cfg.caller_headers().find("Referer: TESTING_PURPOSES_ONLY\r\n") !=
+              std::string::npos,
+          "a Referer marker is sent by default, as the classic tool does");
+  }
+  {  // Some frameworks check Referer for same-origin on POST; the operator's own
+     // value must replace ours, not be sent alongside it.
+    Config cfg;
+    run({"slowhttptest-ng", "-1", "Referer: https://app.test/checkout"}, cfg);
+    const std::string block = cfg.caller_headers();
+    check(block.find("TESTING_PURPOSES_ONLY") == std::string::npos,
+          "an explicit Referer replaces the default");
+    check(block.find("Referer: https://app.test/checkout") != std::string::npos,
+          "the operator's Referer is the one sent");
+    std::size_t n = 0, at = 0;
+    while ((at = block.find("Referer:", at)) != std::string::npos) { ++n; ++at; }
+    check(n == 1, "exactly one Referer header ends up on the wire");
+  }
+  {  // Case-insensitively, since header names are.
+    Config cfg;
+    run({"slowhttptest-ng", "-1", "referer: https://a.test/"}, cfg);
+    check(cfg.caller_headers().find("TESTING_PURPOSES_ONLY") == std::string::npos,
+          "header name matching is case-insensitive");
+  }
+  {
+    Config cfg;
+    run({"slowhttptest-ng", "--no-referer"}, cfg);
+    check(cfg.caller_headers().find("Referer") == std::string::npos,
+          "--no-referer suppresses it entirely");
+  }
+  {  // A header whose name merely starts with the same letters must not count.
+    Config cfg;
+    run({"slowhttptest-ng", "-1", "Referer-Policy: no-referrer"}, cfg);
+    check(cfg.caller_headers().find("TESTING_PURPOSES_ONLY") != std::string::npos,
+          "a different header with a shared prefix does not suppress the default");
+  }
+}
+
 static void test_custom_headers() {
   {  // One -1 was never enough: auth *and* routing is the normal case.
     Config cfg;
@@ -276,13 +360,16 @@ static void test_custom_headers() {
     Config cfg;
     run({"slowhttptest-ng", "-j", "sid=42", "-1", "Authorization: Bearer abc"}, cfg);
     const std::string block = cfg.caller_headers();
-    check(block == "Cookie: sid=42\r\nAuthorization: Bearer abc\r\n",
-          "caller_headers renders cookie and custom headers, CRLF-terminated");
+    check(block == "Cookie: sid=42\r\nAuthorization: Bearer abc\r\n"
+                   "Referer: TESTING_PURPOSES_ONLY\r\n",
+          "caller_headers renders cookie, custom headers and the Referer marker,"
+          " each CRLF-terminated");
   }
   {
     Config cfg;
-    run({"slowhttptest-ng"}, cfg);
-    check(cfg.caller_headers().empty(), "no cookie or headers means no block");
+    run({"slowhttptest-ng", "--no-referer"}, cfg);
+    check(cfg.caller_headers().empty(),
+          "no cookie, no headers and no referer means no block at all");
   }
 }
 
@@ -476,6 +563,8 @@ int main() {
   test_url_parsing();
   test_flags();
   test_proxy_flags();
+  test_host_header();
+  test_referer();
   test_probe_and_report_flags();
   test_custom_headers();
   test_body_data();

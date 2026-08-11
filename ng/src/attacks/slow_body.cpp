@@ -61,7 +61,7 @@ std::string SlowBody::build_headers() const {
   req += ' ';
   req += cfg_.request_target();
   req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host_in_url() + "\r\n";
+  req += "Host: " + cfg_.target.host_header() + "\r\n";
   req += "User-Agent: " + cfg_.user_agent + "\r\n";
   // The promise the server will wait on: far more body than we intend to send.
   req += "Content-Length: " + std::to_string(cfg_.content_length) + "\r\n";

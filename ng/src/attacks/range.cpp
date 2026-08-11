@@ -55,7 +55,7 @@ std::string RangeAttack::build_request() {
   req += ' ';
   req += cfg_.request_target();
   req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host_in_url() + "\r\n";
+  req += "Host: " + cfg_.target.host_header() + "\r\n";
   req += "User-Agent: " + cfg_.user_agent + "\r\n";
   req += "Accept: " + cfg_.accept + "\r\n";
   req += cfg_.caller_headers();

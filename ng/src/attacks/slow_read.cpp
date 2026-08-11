@@ -57,7 +57,7 @@ std::string SlowRead::build_request() const {
   one += ' ';
   one += cfg_.request_target();
   one += " HTTP/1.1\r\n";
-  one += "Host: " + cfg_.target.host_in_url() + "\r\n";
+  one += "Host: " + cfg_.target.host_header() + "\r\n";
   one += "User-Agent: " + cfg_.user_agent + "\r\n";
   one += "Accept: " + cfg_.accept + "\r\n";
   // Ask for an uncompressed response: the bigger the body the server has to push
