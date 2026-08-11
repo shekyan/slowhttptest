@@ -182,8 +182,13 @@ Drop it if the target rejects an
 unparseable Referer, or replace it with
 .Fl 1 Dq Li "Referer: https://..." .
 .It Fl v Ar level
-Verbosity, 0 to 4.
+Verbosity, 0 to 4, on the classic scale.
 Default 1.
+In practice three levels differ: 0 is silent (as
+.Fl q ) ,
+1 is normal, and 4 adds a breakdown of connect failures by cause, which is
+useful when several are mixed together and the dominant one alone would
+mislead.
 .It Fl q , Fl -quiet
 No console output at all.
 Reports are still written and the exit status is

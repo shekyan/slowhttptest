@@ -81,6 +81,14 @@ class Socket {
   // Connected and ready for attack bytes.
   SetupIo continue_setup();
 
+  // errno from the failed socket()/connect(), or the SO_ERROR a failed
+  // asynchronous connect reported. 0 when nothing has failed.
+  //
+  // Kept because the *reason* decides who is at fault. EMFILE means this process
+  // ran out of descriptors; ECONNREFUSED means the target said no. Reporting
+  // both as "could not connect" points the operator at the wrong machine.
+  int connect_errno() const { return connect_errno_; }
+
   // Why setup failed, for diagnostics. Empty when nothing has failed.
   const std::string& setup_error() const { return setup_error_; }
   // e.g. "TLSv1.3 / TLS_AES_256_GCM_SHA384"; empty for plain connections.
@@ -117,6 +125,7 @@ class Socket {
   std::size_t connect_sent_ = 0;  // bytes of the CONNECT request already written
   std::string connect_reply_;     // accumulated CONNECT response headers
   std::string setup_error_;
+  int connect_errno_ = 0;
   TlsSession tls_;
 };
 

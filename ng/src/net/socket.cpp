@@ -54,6 +54,7 @@ Socket::Socket(Socket&& other) noexcept
       connect_sent_(other.connect_sent_),
       connect_reply_(std::move(other.connect_reply_)),
       setup_error_(std::move(other.setup_error_)),
+      connect_errno_(other.connect_errno_),
       tls_(std::move(other.tls_)) {
   other.fd_ = -1;
   other.state_ = SockState::Init;
@@ -69,6 +70,7 @@ Socket& Socket::operator=(Socket&& other) noexcept {
     connect_sent_ = other.connect_sent_;
     connect_reply_ = std::move(other.connect_reply_);
     setup_error_ = std::move(other.setup_error_);
+    connect_errno_ = other.connect_errno_;
     tls_ = std::move(other.tls_);
     other.fd_ = -1;
     other.state_ = SockState::Init;
@@ -89,14 +91,17 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
   connect_sent_ = 0;
   connect_reply_.clear();
   setup_error_.clear();
+  connect_errno_ = 0;
   tls_.reset();
 
   fd_ = ::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
   if (fd_ < 0) {
+    connect_errno_ = errno;
     state_ = SockState::Error;
     return false;
   }
   if (!set_nonblocking(fd_)) {
+    connect_errno_ = errno;
     close();
     state_ = SockState::Error;
     return false;
@@ -122,6 +127,7 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
     state_ = SockState::Connecting;
     return true;
   }
+  connect_errno_ = errno;
   close();
   state_ = SockState::Error;
   return false;
@@ -131,6 +137,9 @@ bool Socket::finish_connect() {
   int err = 0;
   socklen_t len = sizeof(err);
   if (::getsockopt(fd_, SOL_SOCKET, SO_ERROR, &err, &len) < 0 || err != 0) {
+    // SO_ERROR carries why the asynchronous connect failed; getsockopt failing
+    // is itself the answer if it does not.
+    connect_errno_ = err != 0 ? err : errno;
     close();
     state_ = SockState::Error;
     return false;

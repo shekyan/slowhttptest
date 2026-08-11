@@ -291,6 +291,67 @@ def case_inconclusive(tool, mock, port):
         terminate(server)
 
 
+def case_local_limit_not_blamed_on_target(tool, mock, port):
+    """A local descriptor limit must never be reported as a problem with the target.
+
+    This is a regression test for a real misdiagnosis: with the stock macOS soft
+    limit of 256 descriptors, every socket() failed with EMFILE, and the tool
+    said "the target may be down, firewalled, on another port" about a server
+    that was answering curl perfectly well. Being wrong in that direction sends
+    the operator to debug the wrong machine.
+    """
+    server, log = start_server(mock, port)
+    try:
+        if not wait_until(lambda: port_open(port), timeout=15):
+            return fail("local limit not blamed on target", "server never healthy")
+
+        # Hard-cap the child so the limit genuinely cannot be raised.
+        def cap_fds():
+            import resource
+            resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
+
+        proc = subprocess.Popen(
+            [tool, "-u", f"http://127.0.0.1:{port}/", "-c", "10000", "-r", "1000",
+             "-l", "8", "--no-probe"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, preexec_fn=cap_fds)
+        _, err_b = proc.communicate(timeout=120)
+        err = err_b.decode("utf-8", "replace")
+
+        if proc.returncode == 0:
+            return fail("local limit not blamed on target",
+                        "exited 0 despite being unable to run the test")
+        if "file descriptor" not in err:
+            return fail("local limit not blamed on target",
+                        f"never mentions descriptors: {err[-300:]}")
+        if "ulimit" not in err:
+            return fail("local limit not blamed on target",
+                        "does not say how to fix it")
+        # The specific wrong answer this test exists to prevent.
+        if "target may be down" in err:
+            return fail("local limit not blamed on target",
+                        "still blames the target for a local limit")
+        ok("local limit not blamed on target", "names the descriptor limit")
+    finally:
+        terminate(server)
+
+
+def case_refused_blames_target(tool, port):
+    """...but a target that really is refusing must still be named as the cause."""
+    code, err = run_tool(tool, [
+        "-u", f"http://127.0.0.1:{port}/", "-c", "5", "-r", "50", "-l", "8",
+        "--no-probe"])
+    if code == 0:
+        return fail("refusal blamed on target", "exited 0 with nothing listening")
+    if "refused" not in err.lower():
+        return fail("refusal blamed on target",
+                    f"does not report the refusal: {err[-300:]}")
+    # Must not misfile a genuine target problem as a local one.
+    if "THIS machine" in err:
+        return fail("refusal blamed on target",
+                    "blamed the local machine for the target refusing")
+    ok("refusal blamed on target")
+
+
 def case_reports(tool, mock, port, tmpdir):
     """HTML and JSON come from one event log, so they must never disagree."""
     base = os.path.join(tmpdir, "report")
@@ -342,6 +403,10 @@ def main():
     print("e2e: proxying")
     case_http_via_proxy(tool, mock, proxy_script, 8301, 8401)
     case_probe_proxy(tool, mock, proxy_script, 8302, 8402)
+
+    print("e2e: failure diagnosis")
+    case_local_limit_not_blamed_on_target(tool, mock, 8309)
+    case_refused_blames_target(tool, 9)
 
     print("e2e: availability probe and verdict")
     case_inconclusive(tool, mock, 8303)

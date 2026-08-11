@@ -3,14 +3,17 @@
 #include "slowhttp/engine.hpp"
 
 #include <signal.h>
+#include <sys/resource.h>
 #include <time.h>
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -65,6 +68,96 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 std::atomic<bool> g_stop{false};
 
 void handle_sigint(int) { g_stop.store(true); }
+
+// Who a failed connect actually implicates. The distinction is the whole point:
+// a tool that reports "the target may be down" when the operator simply ran out
+// of file descriptors sends them to debug the wrong machine.
+enum class Blame { Local, Target, Unknown };
+
+Blame blame_for(int err) {
+  switch (err) {
+    case EMFILE:
+    case ENFILE:
+    case ENOBUFS:
+    case ENOMEM:
+    case EADDRNOTAVAIL:
+    case EADDRINUSE:
+      return Blame::Local;
+    case ECONNREFUSED:
+    case ETIMEDOUT:
+    case EHOSTUNREACH:
+    case ENETUNREACH:
+    case ENETDOWN:
+    case ECONNRESET:
+      return Blame::Target;
+    default:
+      return Blame::Unknown;
+  }
+}
+
+// What to do about it, not just what it was.
+std::string advice_for(int err) {
+  switch (err) {
+    case EMFILE:
+    case ENFILE:
+      return "this process is out of file descriptors. That is a limit on this"
+             " machine, not a property of the target -- raise it with"
+             " 'ulimit -n' and re-run.";
+    case EADDRNOTAVAIL:
+    case EADDRINUSE:
+      return "the local ephemeral port range is exhausted. One connection needs"
+             " one local port per destination, and sockets in TIME_WAIT still"
+             " hold theirs -- lower -c, or wait for them to drain.";
+    case ENOBUFS:
+    case ENOMEM:
+      return "the kernel is out of socket buffer memory locally. Lower -c.";
+    case ECONNREFUSED:
+      return "the target actively refused the connection -- nothing is listening"
+             " on that port.";
+    case ETIMEDOUT:
+      return "the connection attempt timed out. The port is likely filtered by a"
+             " firewall rather than closed.";
+    case EHOSTUNREACH:
+    case ENETUNREACH:
+    case ENETDOWN:
+      return "the target is not reachable from this host -- a routing or network"
+             " problem rather than a busy server.";
+    case ECONNRESET:
+      return "the target reset the connection during setup.";
+    default:
+      return {};
+  }
+}
+
+// Raises the descriptor limit to what the run needs, as far as the hard limit
+// allows. Doing it here beats telling the operator to do it: the soft limit is
+// commonly 256 on macOS while the hard limit is enormous, so the fix is
+// mechanical and there is no reason to make a human perform it.
+bool ensure_descriptor_limit(int wanted, std::string& error) {
+  rlimit rl{};
+  if (::getrlimit(RLIMIT_NOFILE, &rl) != 0) return true;  // can't tell; proceed
+
+  if (rl.rlim_cur != RLIM_INFINITY &&
+      rl.rlim_cur < static_cast<rlim_t>(wanted)) {
+    rlimit want = rl;
+    want.rlim_cur = (rl.rlim_max == RLIM_INFINITY)
+                        ? static_cast<rlim_t>(wanted)
+                        : std::min(static_cast<rlim_t>(wanted), rl.rlim_max);
+    if (::setrlimit(RLIMIT_NOFILE, &want) != 0 ||
+        want.rlim_cur < static_cast<rlim_t>(wanted)) {
+      char buf[320];
+      std::snprintf(buf, sizeof(buf),
+                    "this run needs %d file descriptors but the limit is %llu"
+                    " (hard limit %llu). Raise it with 'ulimit -n %d', or lower"
+                    " -c.",
+                    wanted, static_cast<unsigned long long>(rl.rlim_cur),
+                    static_cast<unsigned long long>(rl.rlim_max), wanted);
+      error = buf;
+      return false;
+    }
+  }
+  return true;
+}
 
 std::string utc_now() {
   time_t now = ::time(nullptr);
@@ -144,6 +237,7 @@ struct Engine::Impl {
   bool logged_tls_ = false;
   std::uint64_t bytes_read_total = 0;
   std::string last_setup_error_;  // kept for the scheme-mismatch hint
+  std::map<int, long> connect_errnos_;  // errno -> times seen
 
   Impl(const Config& c, Attack& a) : cfg(c), attack(a) {}
 
@@ -164,11 +258,37 @@ struct Engine::Impl {
     address_pinned = true;
   }
 
-  void note_connect_failure() {
+  // `err` is errno from the failed call, or 0 when the reason is unknown.
+  void note_connect_failure(int err) {
     ++connect_failed_total;
+    if (err != 0) {
+      auto& count = connect_errnos_[err];
+      ++count;
+      // Say it once per distinct cause, the first time it happens. Repeating it
+      // ten thousand times would bury the status line, and staying silent is
+      // what made a local descriptor limit look like a dead target.
+      if (count == 1 && chatty()) {
+        const std::string advice = advice_for(err);
+        std::fprintf(stderr, "\n  connect failed (%s)%s%s\n", std::strerror(err),
+                     advice.empty() ? "" : ": ", advice.c_str());
+      }
+    }
     if (address_pinned) return;
     const auto& cands = addr.candidates();
     if (cands.size() > 1) cand_idx = (cand_idx + 1) % cands.size();
+  }
+
+  // The errno responsible for most connect failures, or 0 if none were recorded.
+  int dominant_connect_errno() const {
+    int worst = 0;
+    long best = 0;
+    for (const auto& kv : connect_errnos_) {
+      if (kv.second > best) {
+        best = kv.second;
+        worst = kv.first;
+      }
+    }
+    return worst;
   }
 
   unsigned interest_for(const Conn& c) const {
@@ -215,7 +335,7 @@ struct Engine::Impl {
     c.setup_want = 0;
     const ConnOptions opts = attack.conn_options(c.id);
     if (!c.sock.start_connect(current_addr(), opts.recv_buffer, plan)) {
-      note_connect_failure();
+      note_connect_failure(c.sock.connect_errno());
       return;  // retry on a later ramp tick, possibly on the next candidate
     }
     if (opts.recv_buffer > 0 && !logged_window_) {
@@ -377,7 +497,7 @@ struct Engine::Impl {
   void on_writable(Conn& c) {
     if (c.sock.state() == SockState::Connecting) {
       if (!c.sock.finish_connect()) {
-        note_connect_failure();
+        note_connect_failure(c.sock.connect_errno());
         close_slot(c);
         return;
       }
@@ -771,6 +891,18 @@ struct Engine::Impl {
       return 2;
     }
 
+    // Descriptors next. The soft limit is 256 on a stock macOS shell, so a
+    // -c above that fails every socket() with EMFILE -- which, before this
+    // check existed, surfaced as "the target may be down".
+    {
+      std::string fd_error;
+      if (!ensure_descriptor_limit(cfg.connections + static_cast<int>(kReservedFds),
+                                   fd_error)) {
+        std::fprintf(stderr, "Error: %s\n", fd_error.c_str());
+        return 2;
+      }
+    }
+
     conns.resize(static_cast<std::size_t>(cfg.connections));
     for (std::size_t i = 0; i < conns.size(); ++i)
       conns[i].id = static_cast<ConnId>(i);
@@ -955,7 +1087,10 @@ struct Engine::Impl {
         if (!c || !c->active) continue;
         if (ev.error) {
           if (c->sock.state() == SockState::Connecting)
-            note_connect_failure();
+            // Ask the socket why before closing it; poll() only said "error".
+            note_connect_failure(c->sock.finish_connect()
+                                     ? 0
+                                     : c->sock.connect_errno());
           else
             ++peer_closed_total;
           close_slot(*c);
@@ -1005,14 +1140,39 @@ struct Engine::Impl {
     // Never report success for a test that never reached the target: a silent
     // exit 0 here would make CI and scripts treat an unreachable host as a pass.
     if (ready_total == 0) {
+      // Name the actual cause. Blaming the target for a local descriptor or
+      // port limit sends the operator to debug the wrong machine entirely.
+      const int err = dominant_connect_errno();
+      const std::string advice = advice_for(err);
       std::fprintf(stderr,
                    "\nERROR: no usable connection was ever established to %s"
-                   " (tried %zu resolved address(es)).\n"
-                   "       The target may be down, firewalled, on another port,"
-                   " or rejecting the TLS/proxy setup -- nothing was actually"
+                   " (tried %zu resolved address(es)) -- nothing was actually"
                    " tested.\n",
                    cfg.connect_endpoint().c_str(), addr.candidates().size());
+      if (err != 0) {
+        std::fprintf(stderr, "       Every attempt failed with: %s\n",
+                     std::strerror(err));
+        if (!advice.empty())
+          std::fprintf(stderr, "       %s\n", advice.c_str());
+        if (blame_for(err) == Blame::Local)
+          std::fprintf(stderr,
+                       "       This is a limit on THIS machine. The target was"
+                       " never actually reached, so it is not implicated.\n");
+      } else {
+        std::fprintf(stderr,
+                     "       The target may be down, firewalled, on another"
+                     " port, or rejecting the TLS/proxy setup.\n");
+      }
       log.exit_code = 3;
+    }
+
+    // At -v 4 print the whole distribution: with several causes mixed together
+    // the dominant one alone can be misleading.
+    if (cfg.log_level >= 4 && !connect_errnos_.empty()) {
+      std::fprintf(stderr, "\nconnect failures by cause:\n");
+      for (const auto& kv : connect_errnos_)
+        std::fprintf(stderr, "  %8ld  %s\n", kv.second,
+                     std::strerror(kv.first));
     }
     scheme_mismatch_hint();
 
