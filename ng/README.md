@@ -467,6 +467,21 @@ refusal to conclude from an unhealthy baseline — is locked in by
 > typically report double the request, so the effective window is larger than
 > asked for. The attack still works; the number is reported rather than assumed.
 
+> **On what `held` counts.** A connection the server has already closed is in
+> `CLOSE_WAIT` — it pins nothing and is not part of the attack. Slow read cannot
+> notice that the usual way: it deliberately does not watch for readability, and
+> a peer's FIN arrives as a readable event rather than a hangup. It also cannot
+> drain to find the end-of-stream without undoing the attack. So the tool asks
+> the TCP state machine directly, once a second, and closes any connection whose
+> peer has gone.
+>
+> This matters because the alternative is silently overstating the attack.
+> Measured in the field before the fix: **5740 of a reported 10 000** connections
+> were already in `CLOSE_WAIT`, with the tool reporting `peer_closed=0`. A server
+> shedding load looked identical to one being held down. Detection is per-platform
+> (`TCP_CONNECTION_INFO` on macOS, `TCP_INFO` on Linux); elsewhere it is absent
+> rather than wrong.
+
 > **On slow read over https:** it works. Measured against the mock https server
 > (4 workers, 12 connections, 2 MB body): all four workers end up pinned mid-send
 > and the probe reports `SERVICE DENIED`.

@@ -70,24 +70,25 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // it closes nothing, writes no report, and runs no cleanup.
 //
 // Earlier versions tried to be helpful first -- stop the loop, close every
-// connection, write the report -- and were repeatedly reported as hanging. The
-// cause turned out not to be any of that code: with thousands of sockets stuck
-// in SYN_SENT, the *kernel* takes tens of seconds to reap the process, whatever
-// the program does or does not do. Measured on macOS at 10,000 such sockets:
-// 30-50 s, identical with no handler installed at all, and identical between
-// native and translated builds.
+// connection, write the report -- and were repeatedly reported as hanging. None
+// of that code was the cause. The pause is the kernel closing sockets as the
+// process exits, and against a *remote* peer that used to mean a FIN per
+// connection followed by a wait in LAST_ACK for an acknowledgement. Observed in
+// the field: thousands of sockets draining over minutes. The identical run
+// against loopback exited in 0.0 s, which is why local testing never saw it.
 //
-// So the message exists to explain that pause, since an operator watching a
-// process ignore their Ctrl-C has no way to know the program already quit and
-// the delay is the OS closing sockets on its way out.
+// SO_LINGER with a zero timeout (see Socket::start_connect) is what fixes that:
+// close becomes an RST with no waiting state. The message stays because some
+// pause is still possible with enough sockets, and an operator watching a
+// process apparently ignore their Ctrl-C has no way to know it already quit.
 //
 // The message is a fixed string written with write(2). Nothing is formatted
 // here: snprintf is not async-signal-safe, and every additional statement in a
 // handler is another one that can block.
 constexpr char kCancelMessage[] =
     "\nCancelled -- nothing written."
-    " A pause here is the OS closing sockets that\n"
-    "never finished connecting; pressing Ctrl-C again will not speed it up.\n";
+    " Any pause here is the OS closing the\n"
+    "connections; pressing Ctrl-C again will not speed it up.\n";
 
 void handle_cancel(int) {
   ssize_t ignored = ::write(2, kCancelMessage, sizeof(kCancelMessage) - 1);
@@ -631,15 +632,34 @@ struct Engine::Impl {
   // shows a large "connecting" count that never resolves. Recycling the slot
   // sends a fresh SYN instead, which is both more honest and more effective.
   void reap_stalled(TimePoint now) {
-    if (cfg.connect_timeout.count() <= 0) return;
+    const bool check_timeout = cfg.connect_timeout.count() > 0;
+    // Only slow read needs asking. Every other mode watches for readability, so
+    // a peer's FIN arrives as an ordinary readable event and is handled there.
+    const bool check_peer_closed = !attack.wants_read_events();
+    if (!check_timeout && !check_peer_closed) return;
+
     for (auto& c : conns) {
-      if (!c.active || c.sock.ready()) continue;
-      if (now - c.opened_at < cfg.connect_timeout) continue;
-      ++connect_timeout_total;
-      // Recorded as a timeout so it lands in the by-cause breakdown alongside
-      // real connect failures rather than vanishing.
-      note_connect_failure(ETIMEDOUT);
-      close_slot(c);
+      if (!c.active) continue;
+
+      if (!c.sock.ready()) {
+        if (check_timeout && now - c.opened_at >= cfg.connect_timeout) {
+          ++connect_timeout_total;
+          // Recorded as a timeout so it lands in the by-cause breakdown
+          // alongside real connect failures rather than vanishing.
+          note_connect_failure(ETIMEDOUT);
+          close_slot(c);
+        }
+        continue;
+      }
+
+      // An established connection whose peer has closed is holding nothing.
+      // Counting it as held overstates the attack -- observed in the field at
+      // 5740 of a reported 10000 -- and leaving it open wastes the slot that
+      // could carry a live connection instead.
+      if (check_peer_closed && c.sock.peer_has_closed()) {
+        ++peer_closed_total;
+        close_slot(c);
+      }
     }
   }
 

@@ -81,6 +81,19 @@ class Socket {
   // Connected and ready for attack bytes.
   SetupIo continue_setup();
 
+  // Whether the peer has closed its half of the connection, asked of the TCP
+  // state machine rather than inferred from reading.
+  //
+  // Slow read exists precisely to not read, so it cannot notice a FIN the usual
+  // way: the buffered response sits ahead of the end-of-stream, and MSG_PEEK
+  // cannot tell "data pending" from "data then FIN". Draining to find out would
+  // undo the attack. Asking the kernel for the connection state answers it
+  // directly and consumes nothing.
+  //
+  // Returns false where the platform offers no such query, which costs only the
+  // detection -- never a false positive.
+  bool peer_has_closed() const;
+
   // errno from the failed socket()/connect(), or the SO_ERROR a failed
   // asynchronous connect reported. 0 when nothing has failed.
   //

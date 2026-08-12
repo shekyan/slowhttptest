@@ -4,9 +4,15 @@
 
 #include <fcntl.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#if defined(__APPLE__)
+#include <netinet/tcp_fsm.h>
+#endif
 
 #include <cerrno>
 #include <cstdio>
@@ -118,6 +124,24 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
   int on = 1;
   ::setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
+  // Abortive close: send RST and destroy the socket, rather than the graceful
+  // FIN handshake with its FIN_WAIT and TIME_WAIT states.
+  //
+  // Two reasons, both measured rather than assumed. Closing thousands of remote
+  // sockets gracefully means the kernel transmits a FIN per connection and then
+  // waits on retransmit timers, which is why cancelling a run against a remote
+  // target could take minutes while the identical run against loopback exited
+  // instantly. And a graceful close leaves every local port in TIME_WAIT for
+  // minutes afterwards, which exhausts the ephemeral range and makes the *next*
+  // run fail to connect.
+  //
+  // The cost is that a peer sees RST instead of FIN. For a tool whose
+  // connections are abandoned by design that is both accurate and closer to what
+  // a real vanishing client does.
+  linger lin;
+  lin.l_onoff = 1;
+  lin.l_linger = 0;
+  ::setsockopt(fd_, SOL_SOCKET, SO_LINGER, &lin, sizeof(lin));
   int rc = ::connect(fd_, addr->ai_addr, addr->ai_addrlen);
   if (rc == 0) {
     enter_setup();
@@ -245,6 +269,46 @@ SetupIo Socket::drive_tls_handshake() {
 }
 
 std::string Socket::tls_description() const { return tls_.description(); }
+
+bool Socket::peer_has_closed() const {
+  if (fd_ < 0) return false;
+
+#if defined(__APPLE__) && defined(TCP_CONNECTION_INFO)
+  // Darwin. tcpi_state carries the TCPS_* values from <netinet/tcp_fsm.h>.
+  tcp_connection_info info;
+  socklen_t len = sizeof(info);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_CONNECTION_INFO, &info, &len) != 0)
+    return false;
+  switch (info.tcpi_state) {
+    case TCPS_CLOSE_WAIT:   // peer sent FIN, we have not closed -- the case
+    case TCPS_LAST_ACK:     // that accumulates in the thousands
+    case TCPS_CLOSING:
+    case TCPS_TIME_WAIT:
+    case TCPS_CLOSED:
+      return true;
+    default:
+      return false;
+  }
+#elif defined(__linux__) && defined(TCP_INFO)
+  // Linux numbers the states differently from BSD, so the constants cannot be
+  // shared: TCP_CLOSE_WAIT is 8 here and 5 there.
+  struct tcp_info info;
+  socklen_t len = sizeof(info);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_INFO, &info, &len) != 0) return false;
+  switch (info.tcpi_state) {
+    case TCP_CLOSE_WAIT:
+    case TCP_LAST_ACK:
+    case TCP_CLOSING:
+    case TCP_TIME_WAIT:
+    case TCP_CLOSE:
+      return true;
+    default:
+      return false;
+  }
+#else
+  return false;  // no query available; detection is simply absent
+#endif
+}
 
 int Socket::recv_buffer_size() const {
   if (fd_ < 0) return -1;

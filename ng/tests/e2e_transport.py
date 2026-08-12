@@ -102,6 +102,20 @@ def run_tool(tool, args, timeout=180):
     return proc.returncode, err.decode("utf-8", "replace")
 
 
+def summary_counter(err, name):
+    """Reads a counter from the final Done line.
+
+    Not with a bare search: the status line carries the same counters every
+    second, so the first match in the stream is always the zero it started at.
+    """
+    done = [l for l in err.replace(chr(13), chr(10)).split(chr(10))
+            if l.startswith("Done (")]
+    if not done:
+        return None
+    m = re.search(name + r"=(\d+)", done[-1])
+    return int(m.group(1)) if m else None
+
+
 def make_cert(tmpdir):
     """Self-signed cert for the mock https server, or None if openssl is absent."""
     if not shutil.which("openssl"):
@@ -402,6 +416,77 @@ def case_interrupt(tool, mock, port, tmpdir):
         terminate(server)
 
 
+def case_peer_close_detected(tool, mock, port):
+    """Connections the server has closed must not be counted as held.
+
+    Slow read deliberately does not watch for readability -- being woken per
+    arriving byte is the opposite of the attack -- and the code once assumed
+    poll() would report a hangup anyway. It does not: a peer's FIN is a readable
+    event, not POLLHUP. So closed connections sat in CLOSE_WAIT, counted as held,
+    forever. Observed in the field: 5740 of a reported 10000, with the tool
+    saying peer_closed=0.
+
+    That inflates the one number the whole report rests on, and would make a
+    server that is shedding load look like one that is being held down.
+
+    Here the server has many workers and a small body, so it answers and closes
+    every connection promptly. Every one of them must be noticed.
+    """
+    server, log = start_server(mock, port, workers=60)
+    try:
+        if not wait_until(lambda: port_open(port), timeout=15):
+            return fail("peer close detected", "server never became healthy")
+        code, err = run_tool(tool, [
+            "-X", "-u", f"http://127.0.0.1:{port}/", "-c", "50", "-r", "50",
+            "-w", "1", "-y", "8", "-z", "5", "-n", "30", "-l", "14",
+            "--no-probe"])
+        closed = summary_counter(err, "peer_closed")
+        if closed is None:
+            return fail("peer close detected", f"no counter in output: {err[-200:]}")
+        if closed == 0:
+            return fail("peer close detected",
+                        "reported 0 peer closes against a server that closes "
+                        "every connection -- CLOSE_WAIT is going unnoticed")
+        # Slots must be recycled too, not merely counted: more connections opened
+        # than -c means closed ones were replaced with live ones.
+        opened = summary_counter(err, "opened") or 0
+        if opened <= 50:
+            return fail("peer close detected",
+                        f"opened only {opened}; closed slots are not being reused")
+        ok("peer close detected", f"{closed} noticed, {opened} slots cycled")
+    finally:
+        terminate(server)
+
+
+def case_held_not_overcounted(tool, mock, port):
+    """...and the inverse: a peer that has NOT closed must stay counted as held.
+
+    The detection asks the TCP state machine directly, so this guards against it
+    being too eager -- a false positive here would silently weaken every attack
+    by closing connections that were doing their job.
+    """
+    server, log = start_server(mock, port, ("--body-bytes", "2000000"), workers=4)
+    try:
+        if not wait_until(lambda: port_open(port, ), timeout=15):
+            return fail("held not overcounted", "server never became healthy")
+        code, err = run_tool(tool, [
+            "-X", "-u", f"http://127.0.0.1:{port}/", "-c", "12", "-r", "50",
+            "-w", "1", "-y", "8", "-z", "5", "-n", "3", "-l", "16",
+            "-p", "2", "--probe-interval", "1"])
+        closed = summary_counter(err, "peer_closed")
+        if closed is None:
+            closed = -1
+        if closed != 0:
+            return fail("held not overcounted",
+                        f"closed {closed} connections whose peer was still sending")
+        if "SERVICE DENIED" not in err:
+            return fail("held not overcounted",
+                        "the attack stopped working, so the check is too eager")
+        ok("held not overcounted", "peer_closed=0 and service still denied")
+    finally:
+        terminate(server)
+
+
 def case_reports(tool, mock, port, tmpdir):
     """HTML and JSON come from one event log, so they must never disagree."""
     base = os.path.join(tmpdir, "report")
@@ -461,6 +546,10 @@ def main():
     print("e2e: availability probe and verdict")
     case_inconclusive(tool, mock, 8303)
     case_capacity(tool, mock, 8304)
+
+    print("e2e: connection accounting")
+    case_peer_close_detected(tool, mock, 8311)
+    case_held_not_overcounted(tool, mock, 8312)
 
     print("e2e: reporting")
     case_reports(tool, mock, 8305, tmpdir)
