@@ -222,6 +222,10 @@ struct Conn {
   bool has_timer = false;
   // When this slot started dialling, for the connect timeout.
   TimePoint opened_at{};
+  // Counted against the in-flight ceiling; cleared when it becomes usable or
+  // closes. A flag rather than a recount, since ramp() consults this every
+  // pass through the loop and rescanning every slot there would be O(n) per wake.
+  bool in_flight = false;
   // What the setup chain (proxy CONNECT / TLS handshake) is waiting for.
   unsigned setup_want = 0;
   std::multimap<TimePoint, ConnId>::iterator timer_it;
@@ -264,6 +268,7 @@ struct Engine::Impl {
   long ready_total = 0;         // connections that got past setup (proxy/TLS)
   long setup_failed_total = 0;
   long connect_timeout_total = 0;  // dropped by --connect-timeout
+  int in_flight_conns = 0;         // opened but not yet past setup
 
   // Capacity staircase state.
   std::size_t level_idx = 0;
@@ -394,6 +399,10 @@ struct Engine::Impl {
                    "  advertised window: requested %d B, kernel SO_RCVBUF %d B\n",
                    opts.recv_buffer, c.sock.recv_buffer_size());
     }
+    if (!c.sock.ready()) {
+      c.in_flight = true;
+      ++in_flight_conns;
+    }
     fd_to_id[c.sock.fd()] = c.id;
     reactor->add(c.sock.fd(), interest_for(c));
     c.active = true;
@@ -415,6 +424,10 @@ struct Engine::Impl {
       fd_to_id.erase(c.sock.fd());
     }
     c.sock.close();
+    if (c.in_flight) {
+      c.in_flight = false;
+      --in_flight_conns;
+    }
     c.active = false;
     c.outbuf.clear();
     c.outpos = 0;
@@ -490,6 +503,10 @@ struct Engine::Impl {
   // Hands the freshly usable socket to the attack for its opening bytes.
   void begin_conversation(Conn& c) {
     ++ready_total;
+    if (c.in_flight) {
+      c.in_flight = false;
+      --in_flight_conns;
+    }
     if (!logged_tls_ && cfg.target.tls()) {
       logged_tls_ = true;
       log.meta.tls_description = c.sock.tls_description();
@@ -596,6 +613,11 @@ struct Engine::Impl {
     for (auto& c : conns) {
       if (active_conns >= target_conns) break;
       if (opened_total >= allowance) break;
+      // Hold back when too many are already mid-handshake. Against a target
+      // that accepts normally this never triggers; against one that answers no
+      // SYNs it stops the pile growing without bound, which is where holding
+      // half-open sockets gets expensive.
+      if (cfg.max_connecting > 0 && in_flight_conns >= cfg.max_connecting) break;
       if (!c.active) open_slot(c);
     }
   }

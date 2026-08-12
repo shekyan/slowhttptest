@@ -121,6 +121,26 @@ applying pressure, and the status line shows a large
 .Dq connecting
 count that never resolves.
 Recycling the slot sends a fresh SYN instead.
+.It Fl -max-connecting Ar n
+Ceiling on connections simultaneously mid-handshake.
+Default 5000; 0 removes the limit.
+.Pp
+This is not here to stop you flooding a slow-accepting target \(em exhausting an
+accept queue is a real attack and worth testing.
+It is here because the cost of holding half-open sockets has a knee in it.
+Time for the operating system to reap the process on Ctrl-C, measured on macOS
+against a target answering no SYNs at all:
+.Bd -literal -offset indent
+ 2500 in flight   0.0 s     7000 in flight    7.4 s
+ 5000 in flight   0.6 s     9000 in flight   14.2 s
+ 6000 in flight   3.1 s    10000 in flight   23.5 s
+.Ed
+.Pp
+The default sits at that knee, so the ordinary case pays nothing and a larger
+flood is asked for explicitly with
+.Fl -max-connecting Cm 0 .
+Against a target that accepts normally the cap never binds: handshakes complete
+in milliseconds, so even a fast ramp keeps only a few hundred in flight.
 .It Fl l Ar seconds
 Test length.
 Default 240.

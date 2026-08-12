@@ -36,6 +36,7 @@ SECTIONS = [
         ("-l seconds", "test length (240)"),
         ("-i seconds", "interval between followup data (10)"),
         ("--connect-timeout SEC", "drop a stalled connection, reuse the slot (10)"),
+        ("--max-connecting N", "cap connections mid-handshake (5000; 0 = no cap)"),
     ]),
     ("Request", [
         ("-t verb", "request verb (GET, or POST for -B)"),

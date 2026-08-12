@@ -304,6 +304,24 @@ explained. `--connect-timeout` bounds how long a single connection may sit in
 that state — worth having, but it doesn't materially shorten the teardown, since
 the number of half-open sockets is capped by `-c` either way.
 
+**`--max-connecting` is what actually bounds it.** The cost has a knee, measured
+on macOS against a target answering no SYNs at all:
+
+| in flight | kill time | | in flight | kill time |
+|---|---|---|---|---|
+| 2 500 | 0.0 s | | 7 000 | 7.4 s |
+| 5 000 | 0.6 s | | 9 000 | 14.2 s |
+| 6 000 | 3.1 s | | 10 000 | 23.5 s |
+
+The default of 5000 sits at that knee. Verified: default → 5000 in flight and a
+0.0 s exit; `--max-connecting 0` → 10 000 in flight and 25.3 s.
+
+It is deliberately **not** there to stop you flooding a slow-accepting target —
+exhausting an accept queue is a real attack and worth testing, so
+`--max-connecting 0` keeps it available. Against a target that accepts normally
+the cap never binds at all: handshakes finish in milliseconds, so even a fast
+ramp keeps only a few hundred in flight.
+
 ## Pointed at the wrong scheme?
 
 The easiest way to get a meaningless run is the right port with the wrong

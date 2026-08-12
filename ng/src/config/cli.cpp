@@ -110,6 +110,7 @@ void print_usage() {
       "  -l seconds              test length (240)\n"
       "  -i seconds              interval between followup data (10)\n"
       "  --connect-timeout SEC   drop a stalled connection, reuse the slot (10)\n"
+      "  --max-connecting N      cap connections mid-handshake (5000; 0 = no cap)\n"
       "\n"
       "Request:\n"
       "  -t verb                 request verb (GET, or POST for -B)\n"
@@ -397,6 +398,7 @@ enum {
   kOptRandomUserAgent,
   kOptNoReferer,
   kOptConnectTimeout,
+  kOptMaxConnecting,
 };
 
 const struct option kLongOptions[] = {
@@ -406,6 +408,7 @@ const struct option kLongOptions[] = {
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
     {"connect-timeout", required_argument, nullptr, kOptConnectTimeout},
+    {"max-connecting", required_argument, nullptr, kOptMaxConnecting},
     {"quiet", no_argument, nullptr, 'q'},
     {"version", no_argument, nullptr, 'V'},
     {"help", no_argument, nullptr, 'h'},
@@ -479,6 +482,10 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         if (!parse_long_int(tmp, "connect-timeout", 0, 86400))
           return CliResult::kError;
         cfg.connect_timeout = std::chrono::seconds(tmp); break;
+      case kOptMaxConnecting:
+        if (!parse_long_int(tmp, "max-connecting", 0, 1048576))
+          return CliResult::kError;
+        cfg.max_connecting = tmp; break;
       // Same state as -v 0, spelled the way people look for it.
       case 'q': cfg.log_level = 0; cfg.verbose = false; break;
       case '1': {

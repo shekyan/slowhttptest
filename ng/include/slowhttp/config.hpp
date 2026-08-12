@@ -137,6 +137,26 @@ struct Config {
   // accumulating -- which is its own problem, since the kernel is slow to reap
   // a process holding them.
   std::chrono::seconds connect_timeout{10};
+
+  // --max-connecting: ceiling on connections simultaneously mid-handshake.
+  // 0 removes the limit.
+  //
+  // Flooding a slow-accepting target is a legitimate thing to test -- exhausting
+  // an accept queue is a real attack -- so this does not exist to prevent it.
+  // It exists because the cost of holding half-open sockets has a knee in it.
+  // Measured on macOS, time for the OS to reap the process on Ctrl-C against a
+  // target that answers no SYNs at all:
+  //
+  //     2500 in flight   0.0 s      7000 in flight    7.4 s
+  //     5000 in flight   0.6 s      9000 in flight   14.2 s
+  //     6000 in flight   3.1 s     10000 in flight   23.5 s
+  //
+  // Free below five thousand, expensive above it. The default sits at the knee,
+  // so the usual case pays nothing and an operator who wants a larger flood asks
+  // for it. Against a target that accepts normally this never binds at all:
+  // handshakes finish in milliseconds, so even a fast ramp keeps only a few
+  // hundred in flight.
+  int max_connecting = 5000;
   std::chrono::seconds duration{240};    // -l  total test length
   std::chrono::seconds interval{10};     // -i  followup dribble interval
   int max_random_data_len = 32;          // -x  max size of each random name/value

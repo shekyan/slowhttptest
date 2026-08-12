@@ -540,6 +540,34 @@ static void test_connect_timeout() {
   }
 }
 
+static void test_max_connecting() {
+  {  // A default exists, and sits below the point where holding half-open
+     // sockets starts costing tens of seconds to tear down.
+    Config cfg;
+    check(run({"slowhttptest-ng"}, cfg) == CliResult::kRun, "no flag is fine");
+    check(cfg.max_connecting > 0 && cfg.max_connecting <= 5000,
+          "there is a default in-flight cap, at or below the measured knee");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--max-connecting", "1000"}, cfg) == CliResult::kRun,
+          "--max-connecting parses");
+    check(cfg.max_connecting == 1000, "--max-connecting applied");
+  }
+  {  // Flooding a slow-accepting target is a legitimate test; zero must keep it
+     // available rather than being rejected as nonsense.
+    Config cfg;
+    check(run({"slowhttptest-ng", "--max-connecting", "0"}, cfg) == CliResult::kRun,
+          "--max-connecting 0 is accepted and means no cap");
+    check(cfg.max_connecting == 0, "zero removes the cap");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--max-connecting", "-1"}, cfg) == CliResult::kError,
+          "a negative cap is rejected");
+  }
+}
+
 static void test_version() {
   {
     Config cfg;
@@ -629,6 +657,7 @@ int main() {
   test_fail_on_status();
   test_user_agent();
   test_connect_timeout();
+  test_max_connecting();
   test_version();
   test_quiet();
   test_capacity_flags();
