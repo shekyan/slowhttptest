@@ -421,10 +421,16 @@ def case_interrupt(tool, mock, port, tmpdir):
             ok("interrupt", f"clean stop in {elapsed:.1f}s "
                             "(second-signal path not exercised: shutdown won the race)")
             return
-        if proc.returncode != 130:
+        # The second signal is meant to reach SIG_DFL and have the kernel kill
+        # us. Python reports a signal death as a negative signal number, while a
+        # shell reports 128+n for the same event -- accept either, since both say
+        # "terminated by SIGINT" and neither means the process chose to exit.
+        if proc.returncode not in (130, -sig.SIGINT):
             return fail("interrupt",
-                        f"second SIGINT exited {proc.returncode}, expected 130")
-        ok("interrupt", f"clean stop in {elapsed:.1f}s; second SIGINT exits 130")
+                        f"second SIGINT exited {proc.returncode}; expected the"
+                        f" kernel to kill it ({-sig.SIGINT} or 130)")
+        ok("interrupt",
+           f"clean stop in {elapsed:.1f}s; second SIGINT killed by the kernel")
     finally:
         terminate(server)
 

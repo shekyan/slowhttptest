@@ -68,34 +68,50 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 
 std::atomic<bool> g_stop{false};
 
-// First interrupt asks the run to stop cleanly, so the report still gets
-// written. A second one leaves immediately.
+// The first interrupt asks the run to stop cleanly, so the report still gets
+// written. A second one kills the process outright -- and crucially, does so
+// without running any of our code.
 //
-// The second is not a convenience, it is the escape hatch. The loop cannot
-// notice the flag while the process is inside a call that does not return --
-// getaddrinfo(3) being the one that bites, since it is uninterruptible and a
-// slow or unreachable resolver can hold it for many seconds. Without this, an
-// operator pressing Ctrl-C sees precisely nothing happen and concludes the tool
-// ignores them.
-void handle_sigint(int) {
-  if (g_stop.exchange(true)) {
-    static const char msg[] = "\ninterrupted again -- exiting immediately\n";
-    // Only async-signal-safe calls past this point.
-    ssize_t ignored = ::write(2, msg, sizeof(msg) - 1);
-    (void)ignored;
-    ::_exit(130);  // 128 + SIGINT, the conventional shell code
-  }
-}
+// An earlier version handled the second interrupt itself: write a message, then
+// _exit(). That has a hole. sigaction(2) masks the signal for the duration of
+// its own handler, so while the handler runs, further SIGINTs are discarded --
+// and write(2) to a terminal that is not draining blocks indefinitely. The
+// process then sits inside the handler, having printed "exiting immediately",
+// ignoring every subsequent Ctrl-C. Observed in the field, on exactly the
+// sequence it was supposed to rescue.
+//
+// SA_RESETHAND removes the possibility rather than narrowing it: the first
+// signal restores the default disposition, so the second is handled by the
+// kernel and terminates the process. Nothing in this file can block, deadlock,
+// or be masked. A force-quit path must not depend on the program being healthy
+// enough to run code.
+// Sets a flag. Nothing else -- deliberately. Every statement added here is a
+// statement that can block while the signal is masked, and the whole purpose of
+// this path is to work when the process is already stuck.
+void handle_sigint(int) { g_stop.store(true); }
 
-// Installed without SA_RESTART, so a blocking wait returns EINTR and the loop
-// re-checks the stop flag at once. signal(3) on BSD and macOS restarts syscalls
-// by default, which delays the response for no benefit.
+// Three flags, each removing a way the previous attempt failed:
+//
+//   SA_RESETHAND  after the first signal the disposition reverts to SIG_DFL, so
+//                 a second one is a kernel-level kill needing none of our code.
+//   SA_NODEFER    the signal is NOT masked while the handler runs. Without this
+//                 a second SIGINT arriving during a stuck handler merely goes
+//                 pending and is never delivered -- the disposition being
+//                 SIG_DFL makes no difference if the signal never arrives.
+//   (no SA_RESTART) a blocking wait returns EINTR so the loop re-checks the
+//                 flag at once; BSD and macOS signal(3) restarts syscalls by
+//                 default, delaying the response for nothing.
+//
+// The masking one is subtle and cost two attempts to get right. A handler that
+// wrote a message before exiting would print it, block on a terminal that was
+// not draining, and then swallow every further Ctrl-C -- printing "exiting
+// immediately" and then doing precisely the opposite.
 void install_interrupt_handler() {
   struct sigaction sa;
   std::memset(&sa, 0, sizeof(sa));
   sa.sa_handler = handle_sigint;
   sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
+  sa.sa_flags = SA_RESETHAND | SA_NODEFER;
   ::sigaction(SIGINT, &sa, nullptr);
   ::sigaction(SIGTERM, &sa, nullptr);
 }
@@ -1158,6 +1174,14 @@ struct Engine::Impl {
     log.run_end_s = elapsed(stop_at);
     log.conns.push_back(
         ConnSample{log.run_end_s, held_connections(), target_conns});
+    // Told here rather than from the signal handler, where a write to a stalled
+    // terminal would block with the signal masked and swallow every subsequent
+    // Ctrl-C. Out here it is just an ordinary print.
+    if (g_stop.load() && chatty())
+      std::fprintf(stderr,
+                   "\n\nInterrupted -- stopping cleanly. Press Ctrl-C again to"
+                   " quit immediately.\n");
+
     close_all();
     status_line(stop_at);
 
