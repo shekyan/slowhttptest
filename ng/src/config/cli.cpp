@@ -95,6 +95,10 @@ void print_usage() {
       "  -u URL        absolute URL of target, http or https (http://localhost/)\n"
       "  -c num        target number of connections (50)\n"
       "  -r rate       new connections per second (50)\n"
+      "  --connect-timeout SEC   drop a connection not established within\n"
+      "                this long and reuse the slot (10). 0 leaves it to the\n"
+      "                OS, which waits 75s on some systems -- long enough for\n"
+      "                every slot to fill with connections that never complete\n"
       "  -l seconds    test length in seconds (240)\n"
       "  -i seconds    interval between followup data (10)\n"
       "  -x bytes      max length of each random name/value pair (32)\n"
@@ -405,6 +409,7 @@ enum {
   kOptFailOnStatus,
   kOptRandomUserAgent,
   kOptNoReferer,
+  kOptConnectTimeout,
 };
 
 const struct option kLongOptions[] = {
@@ -413,6 +418,7 @@ const struct option kLongOptions[] = {
     {"user-agent", required_argument, nullptr, 'A'},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
+    {"connect-timeout", required_argument, nullptr, kOptConnectTimeout},
     {"quiet", no_argument, nullptr, 'q'},
     {"version", no_argument, nullptr, 'V'},
     {"help", no_argument, nullptr, 'h'},
@@ -482,6 +488,10 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case 'A': cfg.user_agent = optarg; break;
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
       case kOptNoReferer: cfg.referer.clear(); break;
+      case kOptConnectTimeout:
+        if (!parse_long_int(tmp, "connect-timeout", 0, 86400))
+          return CliResult::kError;
+        cfg.connect_timeout = std::chrono::seconds(tmp); break;
       // Same state as -v 0, spelled the way people look for it.
       case 'q': cfg.log_level = 0; cfg.verbose = false; break;
       case '1': {

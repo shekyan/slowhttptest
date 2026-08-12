@@ -126,6 +126,17 @@ struct Config {
 
   int connections = 50;                  // -c  target concurrent connections
   int rate = 50;                         // -r  new connections per second
+
+  // --connect-timeout: how long a connection may sit unestablished before it is
+  // dropped and the slot reused. 0 leaves it to the OS.
+  //
+  // The OS default is far too long here: macOS retries a SYN for 75 seconds, so
+  // against a target that is dropping them, slots fill with connections that
+  // will never complete and contribute nothing. Recycling them keeps the SYN
+  // pressure up and, incidentally, stops thousands of half-open sockets
+  // accumulating -- which is its own problem, since the kernel is slow to reap
+  // a process holding them.
+  std::chrono::seconds connect_timeout{10};
   std::chrono::seconds duration{240};    // -l  total test length
   std::chrono::seconds interval{10};     // -i  followup dribble interval
   int max_random_data_len = 32;          // -x  max size of each random name/value

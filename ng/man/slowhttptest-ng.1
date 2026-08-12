@@ -108,6 +108,19 @@ Default 50.
 .It Fl r Ar rate
 New connections per second.
 Default 50.
+.It Fl -connect-timeout Ar seconds
+Drop a connection that has not been established within this long and reuse the
+slot.
+Default 10; 0 leaves it to the operating system.
+.Pp
+The OS default is far too patient for this purpose \(em macOS retries a SYN for
+75 seconds.
+Against a target that drops SYNs, a rate limiter or a full accept queue, every
+slot fills with connections that will never establish, the attack quietly stops
+applying pressure, and the status line shows a large
+.Dq connecting
+count that never resolves.
+Recycling the slot sends a fresh SYN instead.
 .It Fl l Ar seconds
 Test length.
 Default 240.
@@ -378,15 +391,34 @@ loop stopped working are not trustworthy.
 .Dv SIGINT
 (Ctrl-C) or
 .Dv SIGTERM
-stops the run cleanly: connections are closed, the verdict is printed and any
-report is still written, so an interrupted run is not a wasted one.
+quits at once.
+Nothing is closed, nothing is written: no verdict, no report.
+A test the operator abandoned has no conclusion worth recording, and earlier
+versions that tried to tidy up first were repeatedly reported as hanging.
 .Pp
-A second
-.Dv SIGINT
-exits immediately.
-That exists because the event loop cannot notice the first one while the process
-is inside a call that does not return \(em name resolution being the one that
-blocks in practice \(em so pressing Ctrl-C twice always works.
+One line is printed, and then the process exits:
+.Bd -literal -offset indent
+Cancelled -- nothing written. A pause here is the OS closing sockets that
+never finished connecting; pressing Ctrl-C again will not speed it up.
+.Ed
+.Pp
+That pause is real and lies outside this program's control.
+When many connections are stuck mid-handshake \(em against a target dropping
+SYNs, for instance \(em the operating system takes tens of seconds to reap
+the process, whatever signal is used and whether or not the signal is handled
+at all.
+Measured on macOS: immediate with connections established, but around 30
+seconds with ten thousand in
+.Dv SYN_SENT .
+The message is printed within milliseconds regardless, so the delay is
+explained rather than mysterious.
+.Pp
+.Fl -connect-timeout
+bounds how long any one connection may sit in that state, which keeps the
+attack applying pressure; it does not materially shorten the teardown, since
+the number of half-open sockets is bounded by
+.Fl c
+either way.
 .Ss Connection ceiling
 The
 .Sy poll

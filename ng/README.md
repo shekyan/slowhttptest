@@ -279,6 +279,31 @@ still written, and errors and the exit code still speak:
 jq -e '.criterion.pass' report.json
 ```
 
+## Cancelling a run
+
+Ctrl-C quits at once. Nothing is closed, nothing is written — no verdict, no
+report. A test you abandoned has no conclusion worth recording, and earlier
+versions that tried to tidy up first were repeatedly reported as hanging.
+
+One line is printed first:
+
+```
+Cancelled -- nothing written. A pause here is the OS closing sockets that
+never finished connecting; pressing Ctrl-C again will not speed it up.
+```
+
+That pause is real and outside the tool's control. When many connections are
+stuck mid-handshake — against a target dropping SYNs, say — the operating system
+takes tens of seconds to reap the process, whatever signal you send and whether
+or not the tool handles it at all. Measured on macOS: instant with connections
+established, **~30 s with ten thousand in `SYN_SENT`**, identical with no signal
+handler installed and identical on native and Rosetta builds.
+
+The message appears within milliseconds regardless, so the wait is at least
+explained. `--connect-timeout` bounds how long a single connection may sit in
+that state — worth having, but it doesn't materially shorten the teardown, since
+the number of half-open sockets is capped by `-c` either way.
+
 ## Pointed at the wrong scheme?
 
 The easiest way to get a meaningless run is the right port with the wrong

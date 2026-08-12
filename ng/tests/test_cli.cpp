@@ -513,6 +513,33 @@ static void test_user_agent() {
   }
 }
 
+static void test_connect_timeout() {
+  {  // The OS default (75s on macOS) is long enough that every slot fills with
+     // connections that will never establish, so the tool bounds it itself.
+    Config cfg;
+    check(run({"slowhttptest-ng"}, cfg) == CliResult::kRun, "no flag is fine");
+    check(cfg.connect_timeout.count() > 0 && cfg.connect_timeout.count() <= 30,
+          "there is a default connect timeout, and it is well under the OS one");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--connect-timeout", "45"}, cfg) == CliResult::kRun,
+          "--connect-timeout parses");
+    check(cfg.connect_timeout.count() == 45, "--connect-timeout applied");
+  }
+  {  // Zero is meaningful, not an error: it hands the decision back to the OS.
+    Config cfg;
+    check(run({"slowhttptest-ng", "--connect-timeout", "0"}, cfg) == CliResult::kRun,
+          "--connect-timeout 0 is accepted as 'let the OS decide'");
+    check(cfg.connect_timeout.count() == 0, "zero disables the tool's own timeout");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--connect-timeout", "-5"}, cfg) == CliResult::kError,
+          "a negative connect timeout is rejected");
+  }
+}
+
 static void test_version() {
   {
     Config cfg;
@@ -601,6 +628,7 @@ int main() {
   test_body_data();
   test_fail_on_status();
   test_user_agent();
+  test_connect_timeout();
   test_version();
   test_quiet();
   test_capacity_flags();

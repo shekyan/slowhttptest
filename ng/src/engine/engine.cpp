@@ -66,50 +66,44 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
   return std::chrono::milliseconds(std::max(500L, ms + 500L));
 }
 
-std::atomic<bool> g_stop{false};
+// Cancelling means cancelling. The handler prints one fixed line and leaves;
+// it closes nothing, writes no report, and runs no cleanup.
+//
+// Earlier versions tried to be helpful first -- stop the loop, close every
+// connection, write the report -- and were repeatedly reported as hanging. The
+// cause turned out not to be any of that code: with thousands of sockets stuck
+// in SYN_SENT, the *kernel* takes tens of seconds to reap the process, whatever
+// the program does or does not do. Measured on macOS at 10,000 such sockets:
+// 30-50 s, identical with no handler installed at all, and identical between
+// native and translated builds.
+//
+// So the message exists to explain that pause, since an operator watching a
+// process ignore their Ctrl-C has no way to know the program already quit and
+// the delay is the OS closing sockets on its way out.
+//
+// The message is a fixed string written with write(2). Nothing is formatted
+// here: snprintf is not async-signal-safe, and every additional statement in a
+// handler is another one that can block.
+constexpr char kCancelMessage[] =
+    "\nCancelled -- nothing written."
+    " A pause here is the OS closing sockets that\n"
+    "never finished connecting; pressing Ctrl-C again will not speed it up.\n";
 
-// The first interrupt asks the run to stop cleanly, so the report still gets
-// written. A second one kills the process outright -- and crucially, does so
-// without running any of our code.
-//
-// An earlier version handled the second interrupt itself: write a message, then
-// _exit(). That has a hole. sigaction(2) masks the signal for the duration of
-// its own handler, so while the handler runs, further SIGINTs are discarded --
-// and write(2) to a terminal that is not draining blocks indefinitely. The
-// process then sits inside the handler, having printed "exiting immediately",
-// ignoring every subsequent Ctrl-C. Observed in the field, on exactly the
-// sequence it was supposed to rescue.
-//
-// SA_RESETHAND removes the possibility rather than narrowing it: the first
-// signal restores the default disposition, so the second is handled by the
-// kernel and terminates the process. Nothing in this file can block, deadlock,
-// or be masked. A force-quit path must not depend on the program being healthy
-// enough to run code.
-// Sets a flag. Nothing else -- deliberately. Every statement added here is a
-// statement that can block while the signal is masked, and the whole purpose of
-// this path is to work when the process is already stuck.
-void handle_sigint(int) { g_stop.store(true); }
+void handle_cancel(int) {
+  ssize_t ignored = ::write(2, kCancelMessage, sizeof(kCancelMessage) - 1);
+  (void)ignored;
+  ::_exit(130);  // 128 + SIGINT, the conventional shell code
+}
 
-// Three flags, each removing a way the previous attempt failed:
-//
-//   SA_RESETHAND  after the first signal the disposition reverts to SIG_DFL, so
-//                 a second one is a kernel-level kill needing none of our code.
-//   SA_NODEFER    the signal is NOT masked while the handler runs. Without this
-//                 a second SIGINT arriving during a stuck handler merely goes
-//                 pending and is never delivered -- the disposition being
-//                 SIG_DFL makes no difference if the signal never arrives.
-//   (no SA_RESTART) a blocking wait returns EINTR so the loop re-checks the
-//                 flag at once; BSD and macOS signal(3) restarts syscalls by
-//                 default, delaying the response for nothing.
-//
-// The masking one is subtle and cost two attempts to get right. A handler that
-// wrote a message before exiting would print it, block on a terminal that was
-// not draining, and then swallow every further Ctrl-C -- printing "exiting
-// immediately" and then doing precisely the opposite.
-void install_interrupt_handler() {
+// SA_RESETHAND and SA_NODEFER together mean that even if the write above blocks
+// -- a terminal that is not draining will do it -- a second Ctrl-C still gets
+// through to the default disposition and kills the process. Without SA_NODEFER
+// the signal would merely go pending while the handler sat there, which is
+// exactly how an earlier version of this made itself unkillable.
+void install_cancel_handler() {
   struct sigaction sa;
   std::memset(&sa, 0, sizeof(sa));
-  sa.sa_handler = handle_sigint;
+  sa.sa_handler = handle_cancel;
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = SA_RESETHAND | SA_NODEFER;
   ::sigaction(SIGINT, &sa, nullptr);
@@ -226,6 +220,8 @@ struct Conn {
   std::size_t outpos = 0;
   bool active = false;
   bool has_timer = false;
+  // When this slot started dialling, for the connect timeout.
+  TimePoint opened_at{};
   // What the setup chain (proxy CONNECT / TLS handshake) is waiting for.
   unsigned setup_want = 0;
   std::multimap<TimePoint, ConnId>::iterator timer_it;
@@ -267,6 +263,7 @@ struct Engine::Impl {
   long connected_total = 0;     // TCP connects that succeeded
   long ready_total = 0;         // connections that got past setup (proxy/TLS)
   long setup_failed_total = 0;
+  long connect_timeout_total = 0;  // dropped by --connect-timeout
 
   // Capacity staircase state.
   std::size_t level_idx = 0;
@@ -380,6 +377,7 @@ struct Engine::Impl {
     c.outbuf.clear();
     c.outpos = 0;
     c.setup_want = 0;
+    c.opened_at = Clock::now();
     const ConnOptions opts = attack.conn_options(c.id);
     if (!c.sock.start_connect(current_addr(), opts.recv_buffer, plan)) {
       note_connect_failure(c.sock.connect_errno());
@@ -599,6 +597,27 @@ struct Engine::Impl {
       if (active_conns >= target_conns) break;
       if (opened_total >= allowance) break;
       if (!c.active) open_slot(c);
+    }
+  }
+
+  // Drops connections that never finished connecting, so the slot can be reused.
+  //
+  // Without this the OS decides, and it is very patient: macOS retries a SYN for
+  // 75 seconds. Against a target that drops SYNs -- a rate limiter, a full
+  // backlog -- every slot silently fills with connections that will never
+  // establish, the attack quietly stops applying pressure, and the status line
+  // shows a large "connecting" count that never resolves. Recycling the slot
+  // sends a fresh SYN instead, which is both more honest and more effective.
+  void reap_stalled(TimePoint now) {
+    if (cfg.connect_timeout.count() <= 0) return;
+    for (auto& c : conns) {
+      if (!c.active || c.sock.ready()) continue;
+      if (now - c.opened_at < cfg.connect_timeout) continue;
+      ++connect_timeout_total;
+      // Recorded as a timeout so it lands in the by-cause breakdown alongside
+      // real connect failures rather than vanishing.
+      note_connect_failure(ETIMEDOUT);
+      close_slot(c);
     }
   }
 
@@ -1003,10 +1022,10 @@ struct Engine::Impl {
                  cfg.rate, static_cast<long long>(cfg.interval.count()),
                  static_cast<long long>(cfg.duration.count()), probe_desc);
 
-    // Everything that can block for a long time without being
-    // interruptible -- name resolution, above all -- is behind us now, so
-    // catching the interrupt from here on cannot swallow it.
-    install_interrupt_handler();
+    // Installed only now: name resolution is behind us, and getaddrinfo(3)
+    // cannot be interrupted, so catching the signal any earlier would swallow a
+    // Ctrl-C for as long as a slow resolver takes.
+    install_cancel_handler();
 
     start = Clock::now();
     if (prober) prober->set_epoch(start);
@@ -1025,7 +1044,7 @@ struct Engine::Impl {
 
     bool gave_up = false;
     bool reactor_failed = false;
-    while (!g_stop.load()) {
+    for (;;) {
       TimePoint now = Clock::now();
 
       switch (phase) {
@@ -1163,6 +1182,7 @@ struct Engine::Impl {
         last_conn_sample = now;
       }
       if (now >= next_status) {
+        reap_stalled(now);
         status_line(now);
         next_status = now + kStatusInterval;
       }
@@ -1174,27 +1194,20 @@ struct Engine::Impl {
     log.run_end_s = elapsed(stop_at);
     log.conns.push_back(
         ConnSample{log.run_end_s, held_connections(), target_conns});
-    // Told here rather than from the signal handler, where a write to a stalled
-    // terminal would block with the signal masked and swallow every subsequent
-    // Ctrl-C. Out here it is just an ordinary print.
-    if (g_stop.load() && chatty())
-      std::fprintf(stderr,
-                   "\n\nInterrupted -- stopping cleanly. Press Ctrl-C again to"
-                   " quit immediately.\n");
-
     close_all();
     status_line(stop_at);
 
-    const char* why = reactor_failed  ? "event loop failed"
-                      : gave_up       ? "giving up"
-                      : g_stop.load() ? "interrupted"
-                                      : "finished";
+    const char* why = reactor_failed ? "event loop failed"
+                      : gave_up      ? "giving up"
+                                     : "finished";
     if (chatty())
       std::fprintf(stderr,
                  "\n\nDone (%s). opened=%ld connected=%ld ready=%ld"
-                 " peer_closed=%ld connect_failed=%ld setup_failed=%ld\n",
+                 " peer_closed=%ld connect_failed=%ld setup_failed=%ld"
+                 " connect_timeout=%ld\n",
                  why, opened_total, connected_total, ready_total,
-                 peer_closed_total, connect_failed_total, setup_failed_total);
+                 peer_closed_total, connect_failed_total, setup_failed_total,
+                 connect_timeout_total);
 
     // Never report success for a test that never reached the target: a silent
     // exit 0 here would make CI and scripts treat an unreachable host as a pass.
