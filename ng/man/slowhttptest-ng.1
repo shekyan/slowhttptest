@@ -412,33 +412,30 @@ loop stopped working are not trustworthy.
 (Ctrl-C) or
 .Dv SIGTERM
 quits at once.
-Nothing is closed, nothing is written: no verdict, no report.
-A test the operator abandoned has no conclusion worth recording, and earlier
-versions that tried to tidy up first were repeatedly reported as hanging.
+Nothing is closed and nothing is written: no verdict, no report.
 .Pp
-One line is printed, and then the process exits:
+A run that appears not to have exited has almost certainly exited already.
+A finished process the shell has not yet reaped remains visible as a zombie,
+which is easily mistaken for a hang: it is listed by
+.Xr ps 1
+with its command name in parentheses because its argument vector is gone, it
+consumes no processor time,
+.Dv SIGKILL
+has no effect on it, and it vanishes the moment its parent shell does.
+.Pp
+To tell the two apart:
 .Bd -literal -offset indent
-Cancelled -- nothing written. A pause here is the OS closing sockets that
-never finished connecting; pressing Ctrl-C again will not speed it up.
+lsof -p <pid> | wc -l
 .Ed
 .Pp
-That pause is real and lies outside this program's control.
-When many connections are stuck mid-handshake \(em against a target dropping
-SYNs, for instance \(em the operating system takes tens of seconds to reap
-the process, whatever signal is used and whether or not the signal is handled
-at all.
-Measured on macOS: immediate with connections established, but around 30
-seconds with ten thousand in
-.Dv SYN_SENT .
-The message is printed within milliseconds regardless, so the delay is
-explained rather than mysterious.
-.Pp
-.Fl -connect-timeout
-bounds how long any one connection may sit in that state, which keeps the
-attack applying pressure; it does not materially shorten the teardown, since
-the number of half-open sockets is bounded by
-.Fl c
-either way.
+No open descriptors means a zombie.
+Sockets still listed by
+.Xr netstat 1
+at that point belong to the kernel's own teardown and to no process.
+.Xr pgrep 1
+with
+.Fl f
+will not match it either, there being no command line left to match.
 .Ss Connection ceiling
 The
 .Sy poll

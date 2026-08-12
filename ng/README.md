@@ -282,45 +282,64 @@ jq -e '.criterion.pass' report.json
 ## Cancelling a run
 
 Ctrl-C quits at once. Nothing is closed, nothing is written — no verdict, no
-report. A test you abandoned has no conclusion worth recording, and earlier
-versions that tried to tidy up first were repeatedly reported as hanging.
+report. A test you abandoned has no conclusion worth recording.
 
 One line is printed first:
 
 ```
-Cancelled -- nothing written. A pause here is the OS closing sockets that
-never finished connecting; pressing Ctrl-C again will not speed it up.
+Cancelled -- nothing written. Any pause here is the OS closing the
+connections; pressing Ctrl-C again will not speed it up.
 ```
 
-That pause is real and outside the tool's control. When many connections are
-stuck mid-handshake — against a target dropping SYNs, say — the operating system
-takes tens of seconds to reap the process, whatever signal you send and whether
-or not the tool handles it at all. Measured on macOS: instant with connections
-established, **~30 s with ten thousand in `SYN_SENT`**, identical with no signal
-handler installed and identical on native and Rosetta builds.
+### If it looks like it hasn't exited
 
-The message appears within milliseconds regardless, so the wait is at least
-explained. `--connect-timeout` bounds how long a single connection may sit in
-that state — worth having, but it doesn't materially shorten the teardown, since
-the number of half-open sockets is capped by `-c` either way.
+It almost certainly has. A finished process that the shell has not yet reaped
+stays visible as a **zombie**, and a zombie looks alarmingly like a hang:
 
-**`--max-connecting` is what actually bounds it.** The cost has a knee, measured
-on macOS against a target answering no SYNs at all:
+```
+45997 ?E+  (slowhttptest-ng)
+```
 
-| in flight | kill time | | in flight | kill time |
-|---|---|---|---|---|
-| 2 500 | 0.0 s | | 7 000 | 7.4 s |
-| 5 000 | 0.6 s | | 9 000 | 14.2 s |
-| 6 000 | 3.1 s | | 10 000 | 23.5 s |
+The parentheses mean its command line is already gone; `E` means it is past
+exit; it uses no CPU; `kill -9` does nothing, because there is nothing left to
+kill; and it disappears the instant its parent shell does. Check with:
 
-The default of 5000 sits at that knee. Verified: default → 5000 in flight and a
-0.0 s exit; `--max-connecting 0` → 10 000 in flight and 25.3 s.
+```bash
+lsof -p <pid> | wc -l
+```
 
-It is deliberately **not** there to stop you flooding a slow-accepting target —
-exhausting an accept queue is a real attack and worth testing, so
-`--max-connecting 0` keeps it available. Against a target that accepts normally
-the cap never binds at all: handshakes finish in milliseconds, so even a fast
-ramp keeps only a few hundred in flight.
+**Zero descriptors means it is a zombie** — it exited, and it holds none of the
+sockets you may still see in `netstat`. Those are the kernel's to clean up and
+belong to no process. `pgrep -f` will not find it either, since there is no
+command line left to match.
+
+This cost several rounds of misdiagnosis during development, so it is written
+down here rather than rediscovered.
+
+### What the tool does control
+
+`SO_LINGER` with a zero timeout, so closing is abortive: the peer receives RST
+rather than FIN. No `LAST_ACK` wait per socket, and — more usefully — no
+`TIME_WAIT` left behind. Without it, a run at high `-c` leaves thousands of
+local ports tied up for minutes and the *next* run fails to connect with
+`EADDRNOTAVAIL`.
+
+```bash
+netstat -an | grep -c TIME_WAIT
+```
+
+should stay near zero across runs.
+
+The cancel handler also never blocks. It sets stderr non-blocking before
+writing, because a terminal that is not draining — scrolled back,
+flow-controlled, or a pipe nobody reads — makes `write()` block, and a signal
+handler that blocks traps the process in the one place whose entire job is to
+leave. The message is best-effort; the exit is not.
+
+`--connect-timeout` and `--max-connecting` bound how many connections may sit
+unestablished at once. Both are worth having on their own merits — they keep the
+attack applying pressure instead of accumulating dead slots — but neither is
+needed to make Ctrl-C work.
 
 ## Pointed at the wrong scheme?
 

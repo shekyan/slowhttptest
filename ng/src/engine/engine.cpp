@@ -2,6 +2,7 @@
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/engine.hpp"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/resource.h>
@@ -69,28 +70,47 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // Cancelling means cancelling. The handler prints one fixed line and leaves;
 // it closes nothing, writes no report, and runs no cleanup.
 //
-// Earlier versions tried to be helpful first -- stop the loop, close every
-// connection, write the report -- and were repeatedly reported as hanging. None
-// of that code was the cause. The pause is the kernel closing sockets as the
-// process exits, and against a *remote* peer that used to mean a FIN per
-// connection followed by a wait in LAST_ACK for an acknowledgement. Observed in
-// the field: thousands of sockets draining over minutes. The identical run
-// against loopback exited in 0.0 s, which is why local testing never saw it.
+// Two things are worth recording here, because this path was misdiagnosed
+// repeatedly and the evidence was misleading each time.
 //
-// SO_LINGER with a zero timeout (see Socket::start_connect) is what fixes that:
-// close becomes an RST with no waiting state. The message stays because some
-// pause is still possible with enough sockets, and an operator watching a
-// process apparently ignore their Ctrl-C has no way to know it already quit.
+// First, the handler must never be able to block. write(2) to a terminal that
+// is not draining does block, and blocking here traps the process inside the
+// very handler whose job is to leave -- reproduced with stderr on a pipe nobody
+// reads, where the process survived SIGINT entirely. Hence the non-blocking
+// stderr below: the message is best-effort, the exit is not.
 //
-// The message is a fixed string written with write(2). Nothing is formatted
-// here: snprintf is not async-signal-safe, and every additional statement in a
-// handler is another one that can block.
+// Second, the reports of the tool "hanging on Ctrl-C for minutes" turned out not
+// to be hangs at all. The process had exited; it was a zombie the shell had not
+// reaped, which holds no descriptors (lsof reported none) and dies the moment
+// its parent does. It merely looks alive: ps lists it, its argv is gone so the
+// name shows in parentheses, and SIGKILL does nothing because there is nothing
+// left to kill. Sockets still visible in netstat at that point belong to the
+// kernel's teardown, not to the process.
+//
+// So the several fixes aimed at making shutdown faster were aimed at a problem
+// that did not exist. What they did produce is worth keeping anyway: no cleanup
+// work on cancel, and SO_LINGER with a zero timeout in Socket::start_connect so
+// close is abortive -- verified by the peer receiving RST rather than FIN, which
+// also stops each run leaving thousands of ports in TIME_WAIT for the next one.
+//
+// The message is a fixed string. Nothing is formatted here: snprintf is not
+// async-signal-safe, and every additional statement in a handler is another one
+// that can block.
 constexpr char kCancelMessage[] =
     "\nCancelled -- nothing written."
     " Any pause here is the OS closing the\n"
     "connections; pressing Ctrl-C again will not speed it up.\n";
 
 void handle_cancel(int) {
+  // Make stderr non-blocking before writing to it. A terminal that is not
+  // draining -- scrolled back, flow-controlled, or a pipe nobody is reading --
+  // makes write(2) block, and blocking here traps the process inside the very
+  // handler whose job is to leave. The message is best-effort; the exit is not.
+  //
+  // fcntl and write are async-signal-safe, so this is legitimate in a handler.
+  // Restoring the flag afterwards would be pointless: the next statement exits.
+  const int flags = ::fcntl(2, F_GETFL, 0);
+  if (flags != -1) ::fcntl(2, F_SETFL, flags | O_NONBLOCK);
   ssize_t ignored = ::write(2, kCancelMessage, sizeof(kCancelMessage) - 1);
   (void)ignored;
   ::_exit(130);  // 128 + SIGINT, the conventional shell code
