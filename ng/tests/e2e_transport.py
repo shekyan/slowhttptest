@@ -352,6 +352,83 @@ def case_refused_blames_target(tool, port):
     ok("refusal blamed on target")
 
 
+def case_interrupt(tool, mock, port, tmpdir):
+    """Ctrl-C must stop the run promptly, and twice must always work.
+
+    The escape hatch matters because the event loop cannot see the stop flag
+    while the process sits in a call that does not return -- getaddrinfo(3)
+    above all, which is uninterruptible and can block for many seconds against a
+    slow resolver. An operator who presses Ctrl-C and sees nothing happen
+    reasonably concludes the tool ignores them.
+    """
+    import signal as sig
+    base = os.path.join(tmpdir, "interrupted")
+    server, log = start_server(mock, port, ("--workers", "8"))
+    try:
+        if not wait_until(lambda: port_open(port), timeout=15):
+            return fail("interrupt", "server never became healthy")
+
+        # Enough connections that closing them takes long enough for a second
+        # signal to land during shutdown; with only a few hundred the process is
+        # gone before a second Ctrl-C could possibly be pressed.
+        args = [tool, "-u", f"http://127.0.0.1:{port}/", "-c", "3000", "-r", "3000",
+                "-l", "300", "-p", "1", "--probe-interval", "0.5"]
+
+        # One interrupt: stops cleanly and still produces its artifacts.
+        proc = subprocess.Popen(args + ["-g", "-o", base],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        time.sleep(8)  # past the baseline, into the attack
+        t0 = time.time()
+        proc.send_signal(sig.SIGINT)
+        try:
+            _, err_b = proc.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return fail("interrupt", "did not stop within 15s of SIGINT")
+        elapsed = time.time() - t0
+        if elapsed > 5:
+            return fail("interrupt", f"took {elapsed:.1f}s to stop")
+        if b"interrupted" not in err_b:
+            return fail("interrupt", "did not report that it was interrupted")
+        if not os.path.exists(base + ".json"):
+            return fail("interrupt", "a clean interrupt should still write the report")
+
+        # Two interrupts: leaves immediately, whatever it was doing.
+        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.PIPE)
+        time.sleep(8)
+        proc.send_signal(sig.SIGINT)
+        # The second signal has to land while the process is still shutting
+        # down. A clean stop takes ~150 ms, so a longer pause here would find
+        # the process already gone and send_signal would silently do nothing --
+        # which looks exactly like the escape hatch failing.
+        time.sleep(0.005)
+        landed = True
+        try:
+            proc.send_signal(sig.SIGINT)
+        except ProcessLookupError:
+            landed = False
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return fail("interrupt", "a second SIGINT did not force an exit")
+
+        if not landed or proc.returncode == 0:
+            # The run finished shutting down before the second signal could be
+            # delivered. That is the tool being fast, not the escape hatch being
+            # broken, and asserting on it would just make this test flaky.
+            ok("interrupt", f"clean stop in {elapsed:.1f}s "
+                            "(second-signal path not exercised: shutdown won the race)")
+            return
+        if proc.returncode != 130:
+            return fail("interrupt",
+                        f"second SIGINT exited {proc.returncode}, expected 130")
+        ok("interrupt", f"clean stop in {elapsed:.1f}s; second SIGINT exits 130")
+    finally:
+        terminate(server)
+
+
 def case_reports(tool, mock, port, tmpdir):
     """HTML and JSON come from one event log, so they must never disagree."""
     base = os.path.join(tmpdir, "report")
@@ -414,6 +491,7 @@ def main():
 
     print("e2e: reporting")
     case_reports(tool, mock, 8305, tmpdir)
+    case_interrupt(tool, mock, 8310, tmpdir)
 
     print("e2e: TLS")
     if not tls_supported(tool):

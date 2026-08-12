@@ -364,11 +364,29 @@ Usage or configuration error, or an
 target on a build without TLS.
 .It 3
 No usable connection was ever established, so nothing was actually tested.
+.It 130
+Interrupted twice.
+The second
+.Dv SIGINT
+exits immediately without writing anything.
 .It 4
 The event loop failed partway through.
 No verdict and no report are produced, because measurements taken after the
 loop stopped working are not trustworthy.
 .El
+.Ss Interrupting a run
+.Dv SIGINT
+(Ctrl-C) or
+.Dv SIGTERM
+stops the run cleanly: connections are closed, the verdict is printed and any
+report is still written, so an interrupted run is not a wasted one.
+.Pp
+A second
+.Dv SIGINT
+exits immediately.
+That exists because the event loop cannot notice the first one while the process
+is inside a call that does not return \(em name resolution being the one that
+blocks in practice \(em so pressing Ctrl-C twice always works.
 .Ss Connection ceiling
 The
 .Sy poll

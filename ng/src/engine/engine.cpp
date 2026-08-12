@@ -3,6 +3,7 @@
 #include "slowhttp/engine.hpp"
 
 #include <signal.h>
+#include <unistd.h>
 #include <sys/resource.h>
 #include <time.h>
 
@@ -67,7 +68,37 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 
 std::atomic<bool> g_stop{false};
 
-void handle_sigint(int) { g_stop.store(true); }
+// First interrupt asks the run to stop cleanly, so the report still gets
+// written. A second one leaves immediately.
+//
+// The second is not a convenience, it is the escape hatch. The loop cannot
+// notice the flag while the process is inside a call that does not return --
+// getaddrinfo(3) being the one that bites, since it is uninterruptible and a
+// slow or unreachable resolver can hold it for many seconds. Without this, an
+// operator pressing Ctrl-C sees precisely nothing happen and concludes the tool
+// ignores them.
+void handle_sigint(int) {
+  if (g_stop.exchange(true)) {
+    static const char msg[] = "\ninterrupted again -- exiting immediately\n";
+    // Only async-signal-safe calls past this point.
+    ssize_t ignored = ::write(2, msg, sizeof(msg) - 1);
+    (void)ignored;
+    ::_exit(130);  // 128 + SIGINT, the conventional shell code
+  }
+}
+
+// Installed without SA_RESTART, so a blocking wait returns EINTR and the loop
+// re-checks the stop flag at once. signal(3) on BSD and macOS restarts syscalls
+// by default, which delays the response for no benefit.
+void install_interrupt_handler() {
+  struct sigaction sa;
+  std::memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = handle_sigint;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  ::sigaction(SIGINT, &sa, nullptr);
+  ::sigaction(SIGTERM, &sa, nullptr);
+}
 
 // Who a failed connect actually implicates. The distinction is the whole point:
 // a tool that reports "the target may be down" when the operator simply ran out
@@ -908,7 +939,6 @@ struct Engine::Impl {
       conns[i].id = static_cast<ConnId>(i);
 
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT, handle_sigint);
 
     if (cfg.probe_enabled) {
       prober.reset(new Prober(cfg, tls));
@@ -956,6 +986,11 @@ struct Engine::Impl {
                  cfg.proxy.enabled() ? " via proxy" : "", cfg.connections,
                  cfg.rate, static_cast<long long>(cfg.interval.count()),
                  static_cast<long long>(cfg.duration.count()), probe_desc);
+
+    // Everything that can block for a long time without being
+    // interruptible -- name resolution, above all -- is behind us now, so
+    // catching the interrupt from here on cannot swallow it.
+    install_interrupt_handler();
 
     start = Clock::now();
     if (prober) prober->set_epoch(start);
