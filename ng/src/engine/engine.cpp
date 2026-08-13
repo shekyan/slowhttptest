@@ -1271,7 +1271,11 @@ struct Engine::Impl {
             log.note(log.attack_end_s, Availability::Ok, "Attack stopped",
                      gave_up ? "giving up: no connection could be established"
                              : "test duration reached");
-            close_all();
+            // Only when there is a probe to watch recovery with. Taking the
+            // load off is the point of closing here, and with no probe nothing
+            // observes the result -- while closing thousands of remote sockets
+            // can itself take minutes, which would be spent for nothing.
+            if (prober) close_all();
             target_conns = 0;
             if (prober) {
               prober->set_active(true);
@@ -1380,7 +1384,11 @@ struct Engine::Impl {
     log.run_end_s = elapsed(stop_at);
     log.conns.push_back(
         ConnSample{log.run_end_s, held_connections(), target_conns});
-    close_all();
+    // Deliberately not closing anything here. The process is about to exit and
+    // the kernel closes every descriptor anyway; doing it first only postpones
+    // the results by however long it takes, which against a remote target has
+    // been measured at 105 ms per socket. The run's findings are what the
+    // operator is waiting for, so they come first.
     status_line(stop_at);
 
     const char* why = reactor_failed ? "event loop failed"
@@ -1455,7 +1463,12 @@ struct Engine::Impl {
                    "\nNo report written: reporting describes availability, and"
                    " the availability probe was disabled or unavailable.\n");
     }
-    return log.exit_code;
+    // _exit rather than return: unwinding would run ~Socket() on every slot and
+    // close them one at a time, which is exactly the delay just avoided. The
+    // report files are already closed by write_reports, and stderr is unbuffered,
+    // so nothing is lost by skipping the usual teardown.
+    std::fflush(nullptr);
+    ::_exit(log.exit_code);
   }
 };
 
