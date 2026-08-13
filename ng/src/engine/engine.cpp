@@ -2,6 +2,9 @@
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/engine.hpp"
 
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -58,6 +61,17 @@ constexpr std::chrono::milliseconds kSweepBudget{50};
 // slots to fill.
 constexpr std::chrono::milliseconds kRampBudget{20};
 
+// Connection count above which cancelling a run against a remote target becomes
+// noticeably slow. Not a limit and not enforced -- the tool simply says so up
+// front, because the delay is otherwise indistinguishable from a hang.
+//
+// The cost is the kernel closing sockets in the exiting process's own context
+// once _exit() runs, which nothing in user space can shorten. Measured against a
+// remote target: runs at 500 and 1000 connections completed normally, 2000 did
+// not come back for minutes. Against loopback the same counts exit instantly,
+// which is why this only warns when the target is not local.
+constexpr int kSlowTeardownConnections = 1500;
+
 // Probes taken before any load is applied. Three is the minimum that lets a
 // single unlucky sample be seen as an outlier rather than as the baseline.
 constexpr int kBaselineProbes = 3;
@@ -89,13 +103,18 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // reads, where the process survived SIGINT entirely. Hence the non-blocking
 // stderr below: the message is best-effort, the exit is not.
 //
-// Second, the reports of the tool "hanging on Ctrl-C for minutes" turned out not
-// to be hangs at all. The process had exited; it was a zombie the shell had not
-// reaped, which holds no descriptors (lsof reported none) and dies the moment
-// its parent does. It merely looks alive: ps lists it, its argv is gone so the
-// name shows in parentheses, and SIGKILL does nothing because there is nothing
-// left to kill. Sockets still visible in netstat at that point belong to the
-// kernel's teardown, not to the process.
+// Second, the pause after cancelling is real, and nothing here can shorten it.
+// _exit() is reached immediately -- the message appears within milliseconds --
+// and the kernel then closes every remaining socket in the exiting process's own
+// context, which is where the time goes. Measured against a remote target: runs
+// holding 500 and 1000 connections exited normally, 2000 did not come back for
+// minutes; the same counts against loopback exit instantly. Hence the warning at
+// startup rather than a surprise on Ctrl-C.
+//
+// A leftover zombie is a separate thing and a convincing impostor: ps lists it,
+// its argv is gone so the name shows in parentheses, SIGKILL does nothing, and
+// it dies when its parent shell does. lsof settles which one is being looked at
+// -- no open descriptors means the process is already finished.
 //
 // The socket options that were added chasing this have since been removed. The
 // classic tool sets only SO_RCVBUF and O_NONBLOCK and has run this workload for
@@ -232,6 +251,21 @@ bool ensure_descriptor_limit(int wanted, std::string& error) {
     }
   }
   return true;
+}
+
+// Whether the resolved peer is on this machine. Teardown cost is a property of
+// closing *remote* sockets; loopback is free.
+bool addr_is_loopback(const addrinfo* ai) {
+  if (!ai || !ai->ai_addr) return false;
+  if (ai->ai_family == AF_INET) {
+    const auto* in4 = reinterpret_cast<const sockaddr_in*>(ai->ai_addr);
+    return (ntohl(in4->sin_addr.s_addr) >> 24) == 127;
+  }
+  if (ai->ai_family == AF_INET6) {
+    const auto* in6 = reinterpret_cast<const sockaddr_in6*>(ai->ai_addr);
+    return IN6_IS_ADDR_LOOPBACK(&in6->sin6_addr) != 0;
+  }
+  return false;
 }
 
 std::string utc_now() {
@@ -1125,6 +1159,20 @@ struct Engine::Impl {
                  cfg.proxy.enabled() ? " via proxy" : "", cfg.connections,
                  cfg.rate, static_cast<long long>(cfg.interval.count()),
                  static_cast<long long>(cfg.duration.count()), probe_desc);
+
+    // Warned about here rather than discovered on Ctrl-C, where a multi-minute
+    // wait is indistinguishable from the tool having crashed.
+    if (chatty() && cfg.connections >= kSlowTeardownConnections &&
+        !addr_is_loopback(current_addr())) {
+      std::fprintf(stderr,
+                   "  note: at %d connections to a remote target, cancelling"
+                   " can take minutes.\n"
+                   "        The delay is the OS closing sockets as the process"
+                   " exits and cannot be\n"
+                   "        interrupted. Use a lower -c if you need to stop"
+                   " quickly.\n",
+                   cfg.connections);
+    }
 
     // Installed only now: name resolution is behind us, and getaddrinfo(3)
     // cannot be interrupted, so catching the signal any earlier would swallow a
