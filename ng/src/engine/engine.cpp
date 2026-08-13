@@ -53,6 +53,11 @@ constexpr std::chrono::milliseconds kStatusInterval{1000};
 // work in a single pass is not an event loop.
 constexpr std::chrono::milliseconds kSweepBudget{50};
 
+// The same ceiling for opening them. connect() can be slow when local ports are
+// scarce, and the catch-up allowance means a late pass may have thousands of
+// slots to fill.
+constexpr std::chrono::milliseconds kRampBudget{20};
+
 // Probes taken before any load is applied. Three is the minimum that lets a
 // single unlucky sample be seen as an outlier rather than as the baseline.
 constexpr int kBaselineProbes = 3;
@@ -633,22 +638,42 @@ struct Engine::Impl {
     return &conns[static_cast<std::size_t>(it->second)];
   }
 
-  void ramp(TimePoint now) {
-    if (target_conns <= 0) return;
+  // Opens connections toward the target, bounded by a time budget.
+  //
+  // Returns true if it stopped on the budget with slots still to open, so the
+  // caller knows to come straight back rather than sleeping.
+  //
+  // The budget is not a nicety. The catch-up allowance grows with elapsed time,
+  // so late in a run a single pass could try to open thousands of sockets, and
+  // connect() is not always cheap: with the local ephemeral range heavily
+  // occupied the kernel scans for a free port, and each call costs tens of
+  // milliseconds. Measured against a real target, one unbounded pass wedged the
+  // loop for 25 seconds -- the status line jumped straight from 11 s to 36 s,
+  // and a profile put every sample inside start_connect.
+  //
+  // Bounding the pass does not slow the ramp down. The work still happens, just
+  // interleaved with servicing events and printing progress, which is the whole
+  // point of an event loop.
+  bool ramp(TimePoint now) {
+    if (target_conns <= 0) return false;
     long elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
     // Allow an initial burst of `rate`, then `rate` more per elapsed second.
     long allowance = cfg.rate + (elapsed_ms * cfg.rate) / 1000;
+    const TimePoint deadline = now + kRampBudget;
     for (auto& c : conns) {
-      if (active_conns >= target_conns) break;
-      if (opened_total >= allowance) break;
+      if (active_conns >= target_conns) return false;
+      if (opened_total >= allowance) return false;
       // Hold back when too many are already mid-handshake. Against a target
       // that accepts normally this never triggers; against one that answers no
       // SYNs it stops the pile growing without bound, which is where holding
       // half-open sockets gets expensive.
-      if (cfg.max_connecting > 0 && in_flight_conns >= cfg.max_connecting) break;
+      if (cfg.max_connecting > 0 && in_flight_conns >= cfg.max_connecting)
+        return false;
+      if (Clock::now() >= deadline) return true;  // more to open, yield first
       if (!c.active) open_slot(c);
     }
+    return false;
   }
 
   // Drops connections that never finished connecting, so the slot can be reused.
@@ -1122,6 +1147,9 @@ struct Engine::Impl {
                         : std::chrono::milliseconds(0));
 
     bool gave_up = false;
+    // Set when ramp() ran out of budget with slots still to fill; the loop
+    // then skips its sleep so opening continues without stalling anything.
+    bool ramp_pending = false;
     bool reactor_failed = false;
     for (;;) {
       TimePoint now = Clock::now();
@@ -1153,7 +1181,7 @@ struct Engine::Impl {
           } else {
             done = now >= phase_deadline;
           }
-          ramp(now);
+          ramp_pending = ramp(now);
           // Fail fast instead of burning the whole duration against a target that
           // is simply not there (wrong port, nothing listening, every candidate
           // refused), or a setup chain that can never complete.
@@ -1215,6 +1243,9 @@ struct Engine::Impl {
       if (timeout.count() < 0) timeout = std::chrono::milliseconds(0);
       // Never sleep past the next probe deadline check.
       if (prober) timeout = std::min(timeout, std::chrono::milliseconds(100));
+      // Still ramping: come straight back after servicing whatever is ready,
+      // rather than idling until the next timer.
+      if (ramp_pending) timeout = std::chrono::milliseconds(0);
 
       events.clear();
       if (reactor->wait(events, timeout) < 0) {
