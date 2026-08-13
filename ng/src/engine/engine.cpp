@@ -503,8 +503,36 @@ struct Engine::Impl {
     attack.on_close(c.id);
   }
 
+  // Closes everything still open at the end of a run, reporting progress.
+  //
+  // The progress line is not decoration. close() on an established remote socket
+  // has been measured at around 100 ms on macOS -- 1500 of them took 157 seconds
+  // -- and until this printed something, the status line simply froze between
+  // the end of the attack and the final summary, which is indistinguishable from
+  // the tool having hung. Bounding the loop would not make it faster; the work
+  // is the work. Saying what it is doing costs nothing and is the honest option.
   void close_all() {
-    for (auto& c : conns) close_slot(c);
+    int remaining = 0;
+    for (const auto& c : conns)
+      if (c.active) ++remaining;
+    if (remaining == 0) return;
+
+    const bool worth_reporting = chatty() && remaining >= 100;
+    TimePoint next_note = Clock::now() + std::chrono::seconds(1);
+    int closed = 0;
+    for (auto& c : conns) {
+      if (!c.active) continue;
+      close_slot(c);
+      ++closed;
+      if (worth_reporting && Clock::now() >= next_note) {
+        std::fprintf(stderr, "\r  closing connections: %d/%d   ", closed,
+                     remaining);
+        std::fflush(stderr);
+        next_note = Clock::now() + std::chrono::seconds(1);
+      }
+    }
+    if (worth_reporting)
+      std::fprintf(stderr, "\r  closed %d connections%20s\n", closed, "");
   }
 
   void flush(Conn& c) {
