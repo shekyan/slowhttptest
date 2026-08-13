@@ -91,6 +91,19 @@ it isn't found automatically:
 cmake -S . -B build -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
 ```
 
+On Apple Silicon, check what you built:
+
+```bash
+file build/slowhttptest-ng
+```
+
+It should say `arm64`. If it says `x86_64`, the binary runs under Rosetta — which
+is worth avoiding in a tool that measures someone else's timing. The usual cause
+is a `cmake` installed by Intel Homebrew: it is itself an x86_64 binary, so it
+reports the host as x86_64 and builds to match. The build now detects that and
+targets `arm64` anyway, but it cannot fix a build directory that was already
+configured the other way; delete `build/` and configure again.
+
 To build without TLS (https is then refused with an explanation rather than
 failing to link):
 

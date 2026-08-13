@@ -13,6 +13,58 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# ---------------------------------------------------------------------------
+# Apple Silicon: build native even when cmake itself is not.
+#
+# A cmake installed by Intel Homebrew is an x86_64 binary, so on Apple Silicon
+# it runs under Rosetta. Everything it reports about the host is then x86_64 --
+# uname(3) included -- and it silently produces an x86_64 binary that runs
+# emulated, then finds the x86_64 OpenSSL under /usr/local to match.
+#
+# That is worth catching rather than tolerating. A tool whose job is measuring
+# someone else's timing has no business being emulated, and the mismatch is
+# invisible: the build succeeds, the tests pass, and only `file` on the result
+# gives it away. It cost a long debugging session here, comparing an emulated
+# build against a native one and reading the difference as a bug.
+#
+# hw.optional.arm64 is the one thing Rosetta does not lie about, so ask it
+# rather than uname. Only applied when the caller has expressed no preference;
+# -DCMAKE_OSX_ARCHITECTURES=x86_64 still gets exactly what it asked for.
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+  execute_process(COMMAND sysctl -n hw.optional.arm64
+                  OUTPUT_VARIABLE _shng_native_arm64
+                  OUTPUT_STRIP_TRAILING_WHITESPACE
+                  ERROR_QUIET)
+  if(_shng_native_arm64 STREQUAL "1" AND
+     NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+    set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING
+        "Build architectures for macOS" FORCE)
+    message(STATUS
+      "Host is Apple Silicon but cmake is running translated; "
+      "targeting arm64 so the binary is not emulated")
+    # An existing cache cannot come along. This branch only runs when the
+    # architecture is changing, and a build directory configured for the other
+    # one has already recorded which OpenSSL it found; find_package will reuse
+    # that path, and clearing the entry is not enough, because the pkg-config
+    # results it was derived from are cached separately under undocumented
+    # names. The link then fails on every OpenSSL symbol, which reads as a
+    # broken OpenSSL rather than a stale build directory.
+    if(DEFINED CACHE{OPENSSL_SSL_LIBRARY})
+      message(FATAL_ERROR
+        "This build directory was configured for a different architecture "
+        "(${CMAKE_HOST_SYSTEM_PROCESSOR}). Delete it and configure again:\n"
+        "    rm -rf ${CMAKE_BINARY_DIR} && cmake -S ${CMAKE_SOURCE_DIR} -B ${CMAKE_BINARY_DIR}")
+    endif()
+
+    # The matching OpenSSL lives under the Apple Silicon Homebrew prefix. Left
+    # to itself, find_package would keep the /usr/local one it can see and fail
+    # to link.
+    if(NOT OPENSSL_ROOT_DIR AND IS_DIRECTORY /opt/homebrew/opt/openssl@3)
+      set(OPENSSL_ROOT_DIR /opt/homebrew/opt/openssl@3)
+    endif()
+  endif()
+endif()
+
 # TLS is on by default and OpenSSL is the only mandatory dependency. Turning it
 # off is supported for constrained builds -- the binary still builds and runs,
 # and refuses https targets with an explanation rather than failing to link.

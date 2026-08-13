@@ -61,17 +61,6 @@ constexpr std::chrono::milliseconds kSweepBudget{50};
 // slots to fill.
 constexpr std::chrono::milliseconds kRampBudget{20};
 
-// Connection count above which cancelling a run against a remote target becomes
-// noticeably slow. Not a limit and not enforced -- the tool simply says so up
-// front, because the delay is otherwise indistinguishable from a hang.
-//
-// The cost is the kernel closing sockets in the exiting process's own context
-// once _exit() runs, which nothing in user space can shorten. Measured against a
-// remote target: runs at 500 and 1000 connections completed normally, 2000 did
-// not come back for minutes. Against loopback the same counts exit instantly,
-// which is why this only warns when the target is not local.
-constexpr int kSlowTeardownConnections = 1500;
-
 // Probes taken before any load is applied. Three is the minimum that lets a
 // single unlucky sample be seen as an outlier rather than as the baseline.
 constexpr int kBaselineProbes = 3;
@@ -103,27 +92,18 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // reads, where the process survived SIGINT entirely. Hence the non-blocking
 // stderr below: the message is best-effort, the exit is not.
 //
-// Second, the pause after cancelling is real, and nothing here can shorten it.
-// _exit() is reached immediately -- the message appears within milliseconds --
-// and the kernel then closes every remaining socket in the exiting process's own
-// context, which is where the time goes. Measured against a remote target: runs
-// holding 500 and 1000 connections exited normally, 2000 did not come back for
-// minutes; the same counts against loopback exit instantly. Hence the warning at
-// startup rather than a surprise on Ctrl-C.
+// Second, _exit() is reached immediately after the message, so any pause the
+// operator sees after that is the kernel, not this code: the process is already
+// in its exit path with sockets still open. Whether that pause is avoidable is
+// an open question and not one this handler can answer -- what it can do is not
+// add to it, which is why it closes nothing.
 //
-// A leftover zombie is a separate thing and a convincing impostor: ps lists it,
-// its argv is gone so the name shows in parentheses, SIGKILL does nothing, and
-// it dies when its parent shell does. lsof settles which one is being looked at
-// -- no open descriptors means the process is already finished.
-//
-// The socket options that were added chasing this have since been removed. The
-// classic tool sets only SO_RCVBUF and O_NONBLOCK and has run this workload for
-// fifteen years, which is better evidence than any reasoning offered here; and
-// SO_LINGER turned out to buy nothing, because closing a socket with unread
-// data already forces RST (RFC 1122) and slow read always has unread data by
-// construction. Verified: with no SO_LINGER anywhere, the peer still observes
-// RST. What remains is no cleanup work on cancel, which is the part that was
-// actually right.
+// Two things that look like this bug but are not. A leftover zombie is a
+// convincing impostor: ps lists it, its argv is gone so the name shows in
+// parentheses, SIGKILL does nothing, and it dies when its parent shell does --
+// lsof settles it, since no open descriptors means the process is finished. And
+// a process shown by ps as state "E" is already inside kernel exit, which is why
+// no profiler can attach to it and no signal will hurry it.
 //
 // The message is a fixed string. Nothing is formatted here: snprintf is not
 // async-signal-safe, and every additional statement in a handler is another one
@@ -251,21 +231,6 @@ bool ensure_descriptor_limit(int wanted, std::string& error) {
     }
   }
   return true;
-}
-
-// Whether the resolved peer is on this machine. Teardown cost is a property of
-// closing *remote* sockets; loopback is free.
-bool addr_is_loopback(const addrinfo* ai) {
-  if (!ai || !ai->ai_addr) return false;
-  if (ai->ai_family == AF_INET) {
-    const auto* in4 = reinterpret_cast<const sockaddr_in*>(ai->ai_addr);
-    return (ntohl(in4->sin_addr.s_addr) >> 24) == 127;
-  }
-  if (ai->ai_family == AF_INET6) {
-    const auto* in6 = reinterpret_cast<const sockaddr_in6*>(ai->ai_addr);
-    return IN6_IS_ADDR_LOOPBACK(&in6->sin6_addr) != 0;
-  }
-  return false;
 }
 
 std::string utc_now() {
@@ -1187,20 +1152,6 @@ struct Engine::Impl {
                  cfg.proxy.enabled() ? " via proxy" : "", cfg.connections,
                  cfg.rate, static_cast<long long>(cfg.interval.count()),
                  static_cast<long long>(cfg.duration.count()), probe_desc);
-
-    // Warned about here rather than discovered on Ctrl-C, where a multi-minute
-    // wait is indistinguishable from the tool having crashed.
-    if (chatty() && cfg.connections >= kSlowTeardownConnections &&
-        !addr_is_loopback(current_addr())) {
-      std::fprintf(stderr,
-                   "  note: at %d connections to a remote target, cancelling"
-                   " can take minutes.\n"
-                   "        The delay is the OS closing sockets as the process"
-                   " exits and cannot be\n"
-                   "        interrupted. Use a lower -c if you need to stop"
-                   " quickly.\n",
-                   cfg.connections);
-    }
 
     // Installed only now: name resolution is behind us, and getaddrinfo(3)
     // cannot be interrupted, so catching the signal any earlier would swallow a

@@ -124,20 +124,12 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
   int on = 1;
   ::setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
-  // Abortive close: send RST and destroy the socket, rather than the graceful
-  // FIN handshake with its FIN_WAIT and TIME_WAIT states.
-  //
-  // Two reasons, both measured rather than assumed. Closing thousands of remote
-  // sockets gracefully means the kernel transmits a FIN per connection and then
-  // waits on retransmit timers, which is why cancelling a run against a remote
-  // target could take minutes while the identical run against loopback exited
-  // instantly. And a graceful close leaves every local port in TIME_WAIT for
-  // minutes afterwards, which exhausts the ephemeral range and makes the *next*
-  // run fail to connect.
-  //
-  // The cost is that a peer sees RST instead of FIN. For a tool whose
-  // connections are abandoned by design that is both accurate and closer to what
-  // a real vanishing client does.
+  // Nothing else is set here on purpose. SO_LINGER was tried, to force an
+  // abortive close instead of the FIN handshake, and removed again: closing a
+  // socket that still has unread data already sends RST (RFC 1122), and slow
+  // read always has unread data by construction. It changed nothing observable
+  // at the peer. The classic tool sets only SO_RCVBUF and O_NONBLOCK and has
+  // run this workload for fifteen years.
   int rc = ::connect(fd_, addr->ai_addr, addr->ai_addrlen);
   if (rc == 0) {
     enter_setup();
