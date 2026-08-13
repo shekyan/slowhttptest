@@ -94,6 +94,9 @@ class Socket {
   // detection -- never a false positive.
   bool peer_has_closed() const;
 
+  // Platform-numbered TCP state, or -1 if unavailable. Diagnostic only.
+  int tcp_state() const;
+
   // errno from the failed socket()/connect(), or the SO_ERROR a failed
   // asynchronous connect reported. 0 when nothing has failed.
   //

@@ -449,14 +449,26 @@ struct Engine::Impl {
     }
   }
 
+  // Split so teardown can be attributed. Closing 1500 established remote sockets
+  // has been measured at 168 s here, most of it concentrated in a few hundred of
+  // them, and "close_slot is slow" is not a diagnosis: the descriptor work, the
+  // reactor bookkeeping and the close(2) itself are three different suspects.
+  double close_syscall_s = 0;
+  double close_bookkeep_s = 0;
+
   void close_slot(Conn& c) {
     if (!c.active) return;
+    const TimePoint t0 = Clock::now();
     cancel_timer(c);
     if (c.sock.fd() >= 0) {
       reactor->remove(c.sock.fd());
       fd_to_id.erase(c.sock.fd());
     }
+    const TimePoint t1 = Clock::now();
     c.sock.close();
+    const TimePoint t2 = Clock::now();
+    close_bookkeep_s += std::chrono::duration<double>(t1 - t0).count();
+    close_syscall_s += std::chrono::duration<double>(t2 - t1).count();
     if (c.in_flight) {
       c.in_flight = false;
       --in_flight_conns;
@@ -468,36 +480,84 @@ struct Engine::Impl {
     attack.on_close(c.id);
   }
 
-  // Closes everything still open at the end of a run, reporting progress.
+  // Closes everything still open, reporting progress.
   //
-  // The progress line is not decoration. close() on an established remote socket
-  // has been measured at around 100 ms on macOS -- 1500 of them took 157 seconds
-  // -- and until this printed something, the status line simply froze between
-  // the end of the attack and the final summary, which is indistinguishable from
-  // the tool having hung. Bounding the loop would not make it faster; the work
-  // is the work. Saying what it is doing costs nothing and is the honest option.
-  void close_all() {
+  // The progress line is not decoration. Closing thousands of established remote
+  // sockets has been slow enough here to look like a hang, and a frozen status
+  // line is indistinguishable from one. Bounding the loop would not make it
+  // faster; saying what it is doing costs nothing.
+  int close_all() {
     int remaining = 0;
     for (const auto& c : conns)
       if (c.active) ++remaining;
-    if (remaining == 0) return;
+    if (remaining == 0) return 0;
 
     const bool worth_reporting = chatty() && remaining >= 100;
     TimePoint next_note = Clock::now() + std::chrono::seconds(1);
     int closed = 0;
+    // Where the time falls across the sweep, not just how much of it there is.
+    // Observed by hand: the first ~1200 of 1500 closed instantly and the rest
+    // crawled, which is a different fault from a uniform per-socket cost and
+    // rules out the obvious O(n^2) explanations. Quarters are enough resolution
+    // to tell those two shapes apart without turning this into a profiler.
+    double quarter_s[4] = {0, 0, 0, 0};
+    int slow_closes = 0;      // individual closes over 10 ms
+    double slowest_close = 0;
+    // TCP state, sampled before the close and tallied after, split by whether
+    // that close turned out to be slow. If the expensive ones are all sitting in
+    // one state the answer is in the connection; if they are spread across every
+    // state it is not, and the cost is coming from somewhere outside TCP.
+    std::map<int, long> slow_states, fast_states;
+    TimePoint mark = Clock::now();
     for (auto& c : conns) {
       if (!c.active) continue;
+      const int state = c.sock.tcp_state();
+      const double before = close_syscall_s;
       close_slot(c);
+      const double took = close_syscall_s - before;
+      if (took > 0.010) {
+        ++slow_closes;
+        ++slow_states[state];
+      } else {
+        ++fast_states[state];
+      }
+      if (took > slowest_close) slowest_close = took;
+      const int q = std::min(3, closed * 4 / remaining);
+      const TimePoint now = Clock::now();
+      quarter_s[q] += std::chrono::duration<double>(now - mark).count();
+      mark = now;
       ++closed;
-      if (worth_reporting && Clock::now() >= next_note) {
+      if (worth_reporting && now >= next_note) {
         std::fprintf(stderr, "\r  closing connections: %d/%d   ", closed,
                      remaining);
         std::fflush(stderr);
-        next_note = Clock::now() + std::chrono::seconds(1);
+        next_note = now + std::chrono::seconds(1);
       }
     }
     if (worth_reporting)
       std::fprintf(stderr, "\r  closed %d connections%20s\n", closed, "");
+    // The breakdown is for diagnosing a slow teardown, which is a question
+    // about the machine and its network rather than about the run, so it stays
+    // at -v 4. It earned its keep: it showed the cost was entirely in close(2)
+    // and not in this engine's bookkeeping, and that the expensive closes were
+    // a handful of one-second stalls rather than a per-socket price.
+    if (cfg.log_level >= 4) {
+      std::fprintf(stderr,
+                   "  by quarter: %.2fs %.2fs %.2fs %.2fs"
+                   "   (%d close(2) over 10ms, slowest %.0f ms)\n",
+                   quarter_s[0], quarter_s[1], quarter_s[2], quarter_s[3],
+                   slow_closes, slowest_close * 1000.0);
+      auto dump_states = [](const char* label, const std::map<int, long>& m) {
+        if (m.empty()) return;
+        std::fprintf(stderr, "  %s by tcp state:", label);
+        for (const auto& kv : m)
+          std::fprintf(stderr, " %d=%ld", kv.first, kv.second);
+        std::fputc('\n', stderr);
+      };
+      dump_states("slow", slow_states);
+      dump_states("fast", fast_states);
+    }
+    return closed;
   }
 
   void flush(Conn& c) {
@@ -1335,11 +1395,9 @@ struct Engine::Impl {
     log.run_end_s = elapsed(stop_at);
     log.conns.push_back(
         ConnSample{log.run_end_s, held_connections(), target_conns});
-    // Deliberately not closing anything here. The process is about to exit and
-    // the kernel closes every descriptor anyway; doing it first only postpones
-    // the results by however long it takes, which against a remote target has
-    // been measured at 105 ms per socket. The run's findings are what the
-    // operator is waiting for, so they come first.
+    // Nothing is closed here on purpose. The results are what the operator is
+    // waiting for and they cost microseconds; teardown happens below, once they
+    // are on screen.
     status_line(stop_at);
 
     const char* why = reactor_failed ? "event loop failed"
@@ -1414,9 +1472,33 @@ struct Engine::Impl {
                    "\nNo report written: reporting describes availability, and"
                    " the availability probe was disabled or unavailable.\n");
     }
-    // _exit rather than return: unwinding would run ~Socket() on every slot and
-    // close them one at a time, which is exactly the delay just avoided. The
-    // report files are already closed by write_reports, and stderr is unbuffered,
+    // Teardown, timed, after the results rather than before them.
+    //
+    // Closing every socket explicitly is what the classic tool does, and it is
+    // the cheaper of the two ways out: 1500 established remote connections close
+    // in well under a second, where leaving them to the kernel at _exit() left
+    // the process alive for another 59 after its results were on screen.
+    //
+    // It stays timed and printed. Teardown against a real peer has taken
+    // anywhere from 0.07 s to 169 s for identical runs -- it depends on what
+    // else is in the socket path, and on this machine a Network Extension
+    // content filter is -- so an operator who waits is told what they are
+    // waiting for rather than left watching a frozen prompt.
+    const TimePoint teardown_start = Clock::now();
+    const int torn_down = close_all();
+    if (chatty() && torn_down > 0) {
+      const double secs =
+          std::chrono::duration<double>(Clock::now() - teardown_start).count();
+      std::fprintf(stderr, "  teardown: %.2fs to close %d connection(s)\n",
+                   secs, torn_down);
+      if (cfg.log_level >= 4)
+        std::fprintf(stderr, "    close(2) %.2fs, bookkeeping %.2fs\n",
+                     close_syscall_s, close_bookkeep_s);
+    }
+
+    // _exit rather than return: unwinding would run ~Socket() on every slot a
+    // second time. The report files are already closed by write_reports, and
+    // stderr is unbuffered,
     // so nothing is lost by skipping the usual teardown.
     std::fflush(nullptr);
     ::_exit(log.exit_code);

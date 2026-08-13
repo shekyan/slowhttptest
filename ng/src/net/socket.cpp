@@ -16,6 +16,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <utility>
 
 namespace slowhttp {
@@ -124,12 +125,26 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
   int on = 1;
   ::setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
-  // Nothing else is set here on purpose. SO_LINGER was tried, to force an
-  // abortive close instead of the FIN handshake, and removed again: closing a
-  // socket that still has unread data already sends RST (RFC 1122), and slow
-  // read always has unread data by construction. It changed nothing observable
-  // at the peer. The classic tool sets only SO_RCVBUF and O_NONBLOCK and has
-  // run this workload for fifteen years.
+  // Nothing else is set here on purpose, and SO_LINGER in particular is not.
+  //
+  // Forcing an abortive close -- SO_LINGER {1, 0}, so the stack sends RST
+  // instead of FIN -- looks like the obvious way to make teardown cheap, and it
+  // is the opposite. Measured against a remote peer, alternating the two arms
+  // within one session so both saw the same network, closing 1500 established
+  // connections took:
+  //
+  //     abortive (RST)   2.29s   30.90s   47.89s
+  //     graceful (FIN)   0.30s    0.59s    0.07s
+  //
+  // Every stall was in the abortive arm, each one blocking close(2) for very
+  // close to exactly one second; the graceful arm's worst single close was
+  // 19 ms. A quantised one-second wait is a timeout rather than work, and it
+  // gets worse run over run, which suggests something on the path is accounting
+  // for the resets. The peer sees FIN, the operator waits a fraction of a
+  // second, and both are better outcomes.
+  //
+  // The classic tool sets only SO_RCVBUF and O_NONBLOCK and has run this
+  // workload for fifteen years, which pointed the right way the whole time.
   int rc = ::connect(fd_, addr->ai_addr, addr->ai_addrlen);
   if (rc == 0) {
     enter_setup();
@@ -258,6 +273,28 @@ SetupIo Socket::drive_tls_handshake() {
 
 std::string Socket::tls_description() const { return tls_.description(); }
 
+// The raw TCP state, for attributing behaviour to it rather than guessing.
+// Returns -1 where the platform offers no way to ask. The numbering is the
+// platform's own and is not comparable across them -- callers report it, they do
+// not interpret it.
+int Socket::tcp_state() const {
+  if (fd_ < 0) return -1;
+#if defined(__APPLE__) && defined(TCP_CONNECTION_INFO)
+  tcp_connection_info info;
+  socklen_t len = sizeof(info);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_CONNECTION_INFO, &info, &len) != 0)
+    return -1;
+  return info.tcpi_state;
+#elif defined(__linux__) && defined(TCP_INFO)
+  struct tcp_info info;
+  socklen_t len = sizeof(info);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_INFO, &info, &len) != 0) return -1;
+  return info.tcpi_state;
+#else
+  return -1;
+#endif
+}
+
 bool Socket::peer_has_closed() const {
   if (fd_ < 0) return false;
 
@@ -331,6 +368,8 @@ long Socket::recv_some(char* buf, std::size_t len) {
   return raw_recv(buf, len);
 }
 
+// Plain close, and deliberately so. See the note in start_connect: SO_LINGER
+// with a zero timeout was tried twice here and is measurably worse.
 void Socket::close() {
   // Free the SSL object before the fd it refers to.
   tls_.reset();
