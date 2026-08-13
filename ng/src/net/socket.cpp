@@ -138,10 +138,6 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
   // The cost is that a peer sees RST instead of FIN. For a tool whose
   // connections are abandoned by design that is both accurate and closer to what
   // a real vanishing client does.
-  linger lin;
-  lin.l_onoff = 1;
-  lin.l_linger = 0;
-  ::setsockopt(fd_, SOL_SOCKET, SO_LINGER, &lin, sizeof(lin));
   int rc = ::connect(fd_, addr->ai_addr, addr->ai_addrlen);
   if (rc == 0) {
     enter_setup();

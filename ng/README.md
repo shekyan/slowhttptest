@@ -318,28 +318,29 @@ down here rather than rediscovered.
 
 ### What the tool does control
 
-`SO_LINGER` with a zero timeout, so closing is abortive: the peer receives RST
-rather than FIN. No `LAST_ACK` wait per socket, and — more usefully — no
-`TIME_WAIT` left behind. Without it, a run at high `-c` leaves thousands of
-local ports tied up for minutes and the *next* run fails to connect with
-`EADDRNOTAVAIL`.
+Very little, and that is deliberate. The classic tool sets only `SO_RCVBUF` and
+`O_NONBLOCK` on its sockets and has run this workload for fifteen years; ng now
+matches it. An earlier version here added `SO_LINGER` with a zero timeout to
+force an abortive close, and it turned out to buy nothing — closing a socket
+with unread data already forces RST (RFC 1122), and slow read always has unread
+data by construction. Verified: with no `SO_LINGER` set anywhere, the peer still
+observes RST.
 
-```bash
-netstat -an | grep -c TIME_WAIT
-```
+The cancel handler never blocks. It sets stderr non-blocking before writing,
+because a terminal that is not draining — scrolled back, flow-controlled, or a
+pipe nobody reads — makes `write()` block, and a signal handler that blocks traps
+the process in the one place whose entire job is to leave. The message is
+best-effort; the exit is not.
 
-should stay near zero across runs.
-
-The cancel handler also never blocks. It sets stderr non-blocking before
-writing, because a terminal that is not draining — scrolled back,
-flow-controlled, or a pipe nobody reads — makes `write()` block, and a signal
-handler that blocks traps the process in the one place whose entire job is to
-leave. The message is best-effort; the exit is not.
+Maintenance sweeps are bounded by a time budget rather than closing every
+eligible connection in one pass. `close()` can block against an unresponsive
+peer, and with thousands of candidates a single unbounded sweep stalls the event
+loop — observed as the status line jumping from 10 s straight to 35 s, with a
+profile showing every sample inside `close()`.
 
 `--connect-timeout` and `--max-connecting` bound how many connections may sit
-unestablished at once. Both are worth having on their own merits — they keep the
-attack applying pressure instead of accumulating dead slots — but neither is
-needed to make Ctrl-C work.
+unestablished at once. They keep the attack applying pressure instead of
+accumulating dead slots, which is worth having on its own merits.
 
 ## Pointed at the wrong scheme?
 

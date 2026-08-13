@@ -48,6 +48,11 @@ constexpr int kMaxActionDepth = 8;
 // on a shorter grid than it refreshes on gets handed a zero timeout and spins.
 constexpr std::chrono::milliseconds kStatusInterval{1000};
 
+// Ceiling on how long one maintenance sweep may spend closing connections
+// before yielding back to the event loop. An event loop that does unbounded
+// work in a single pass is not an event loop.
+constexpr std::chrono::milliseconds kSweepBudget{50};
+
 // Probes taken before any load is applied. Three is the minimum that lets a
 // single unlucky sample be seen as an outlier rather than as the baseline.
 constexpr int kBaselineProbes = 3;
@@ -87,11 +92,14 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // left to kill. Sockets still visible in netstat at that point belong to the
 // kernel's teardown, not to the process.
 //
-// So the several fixes aimed at making shutdown faster were aimed at a problem
-// that did not exist. What they did produce is worth keeping anyway: no cleanup
-// work on cancel, and SO_LINGER with a zero timeout in Socket::start_connect so
-// close is abortive -- verified by the peer receiving RST rather than FIN, which
-// also stops each run leaving thousands of ports in TIME_WAIT for the next one.
+// The socket options that were added chasing this have since been removed. The
+// classic tool sets only SO_RCVBUF and O_NONBLOCK and has run this workload for
+// fifteen years, which is better evidence than any reasoning offered here; and
+// SO_LINGER turned out to buy nothing, because closing a socket with unread
+// data already forces RST (RFC 1122) and slow read always has unread data by
+// construction. Verified: with no SO_LINGER anywhere, the peer still observes
+// RST. What remains is no cleanup work on cancel, which is the part that was
+// actually right.
 //
 // The message is a fixed string. Nothing is formatted here: snprintf is not
 // async-signal-safe, and every additional statement in a handler is another one
@@ -658,8 +666,17 @@ struct Engine::Impl {
     const bool check_peer_closed = !attack.wants_read_events();
     if (!check_timeout && !check_peer_closed) return;
 
+    // Closing is not free -- a single close() has been measured blocking for
+    // milliseconds against an unresponsive peer -- and this sweep can have
+    // thousands of candidates at once. Doing them all in one pass stalls the
+    // event loop for as long as that takes: observed as the status line jumping
+    // from 10 s straight to 35 s, with a profile showing every sample inside
+    // close(). Whatever is left is picked up on the next sweep.
+    const TimePoint sweep_deadline = now + kSweepBudget;
+
     for (auto& c : conns) {
       if (!c.active) continue;
+      if (Clock::now() >= sweep_deadline) break;
 
       if (!c.sock.ready()) {
         if (check_timeout && now - c.opened_at >= cfg.connect_timeout) {
