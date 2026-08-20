@@ -15,10 +15,10 @@ ResolvedAddr::~ResolvedAddr() {
 }
 
 bool ResolvedAddr::resolve(const std::string& host, const std::string& port,
-                           std::string& error) {
+                           std::string& error, int family) {
   addrinfo hints;
   std::memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_UNSPEC;      // v4 or v6
+  hints.ai_family = family != 0 ? family : AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;  // TCP
   hints.ai_protocol = IPPROTO_TCP;
 
@@ -31,7 +31,10 @@ bool ResolvedAddr::resolve(const std::string& host, const std::string& port,
   for (addrinfo* ai = list_; ai != nullptr; ai = ai->ai_next)
     candidates_.push_back(ai);
   if (candidates_.empty()) {
-    error = "resolver returned no usable addresses";
+    error = family == AF_INET
+                ? "no IPv4 address for this host"
+                : family == AF_INET6 ? "no IPv6 address for this host"
+                                     : "resolver returned no usable addresses";
     return false;
   }
   return true;

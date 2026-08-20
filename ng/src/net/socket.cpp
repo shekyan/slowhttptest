@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -16,7 +17,7 @@
 
 #include <cerrno>
 #include <cstdio>
-#include <cstdlib>
+#include <string>
 #include <utility>
 
 namespace slowhttp {
@@ -122,6 +123,9 @@ bool Socket::start_connect(const addrinfo* addr, int recv_buffer,
     // attack still works with a larger-than-requested window, just less sharply.
   }
 #ifdef SO_NOSIGPIPE
+  // Writing to a connection the peer has already closed must return EPIPE, not
+  // raise SIGPIPE and kill the process. Investigated as a possible cause of slow
+  // teardown and cleared: runs with it disabled were indistinguishable.
   int on = 1;
   ::setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
@@ -273,6 +277,16 @@ SetupIo Socket::drive_tls_handshake() {
 
 std::string Socket::tls_description() const { return tls_.description(); }
 
+// Bytes sitting unread in the receive buffer, or -1 if it cannot be asked.
+// Slow read exists to leave this number high, so it is the first thing to
+// correlate against when some closes are expensive and others are free.
+long Socket::unread_bytes() const {
+  if (fd_ < 0) return -1;
+  int n = 0;
+  if (::ioctl(fd_, FIONREAD, &n) != 0) return -1;
+  return n;
+}
+
 // The raw TCP state, for attributing behaviour to it rather than guessing.
 // Returns -1 where the platform offers no way to ask. The numbering is the
 // platform's own and is not comparable across them -- callers report it, they do
@@ -292,6 +306,49 @@ int Socket::tcp_state() const {
   return info.tcpi_state;
 #else
   return -1;
+#endif
+}
+
+long Socket::kernel_tx_bytes() const {
+  if (fd_ < 0) return -1;
+#if defined(__APPLE__) && defined(TCP_CONNECTION_INFO)
+  tcp_connection_info i;
+  socklen_t len = sizeof(i);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_CONNECTION_INFO, &i, &len) != 0)
+    return -1;
+  return static_cast<long>(i.tcpi_txbytes);
+#elif defined(__linux__) && defined(TCP_INFO)
+  struct tcp_info i;
+  socklen_t len = sizeof(i);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_INFO, &i, &len) != 0) return -1;
+  return static_cast<long>(i.tcpi_bytes_sent);
+#else
+  return -1;
+#endif
+}
+
+std::string Socket::tcp_diag() const {
+  if (fd_ < 0) return {};
+#if defined(__APPLE__) && defined(TCP_CONNECTION_INFO)
+  tcp_connection_info i;
+  socklen_t len = sizeof(i);
+  if (::getsockopt(fd_, IPPROTO_TCP, TCP_CONNECTION_INFO, &i, &len) != 0)
+    return {};
+  char buf[320];
+  // snd_sbbytes is the one worth staring at: bytes still sitting in the send
+  // socket buffer, in-flight data included. A close that has to dispose of
+  // those takes a different path from one that does not.
+  std::snprintf(buf, sizeof(buf),
+                "state=%u snd_sb=%u snd_wnd=%u cwnd=%u rcv_wnd=%u rto=%u"
+                " srtt=%u tx=%llu rtx=%llu rx=%llu flags=0x%x",
+                i.tcpi_state, i.tcpi_snd_sbbytes, i.tcpi_snd_wnd,
+                i.tcpi_snd_cwnd, i.tcpi_rcv_wnd, i.tcpi_rto, i.tcpi_srtt,
+                (unsigned long long)i.tcpi_txbytes,
+                (unsigned long long)i.tcpi_txretransmitbytes,
+                (unsigned long long)i.tcpi_rxbytes, i.tcpi_flags);
+  return buf;
+#else
+  return {};
 #endif
 }
 
@@ -366,6 +423,14 @@ long Socket::send_some(const char* data, std::size_t len) {
 long Socket::recv_some(char* buf, std::size_t len) {
   if (tls_.active()) return tls_.recv_some(buf, len);
   return raw_recv(buf, len);
+}
+
+int Socket::release_fd() {
+  tls_.reset();  // free the SSL object before the fd it refers to
+  const int fd = fd_;
+  fd_ = -1;
+  if (state_ != SockState::Error) state_ = SockState::Closed;
+  return fd;
 }
 
 // Plain close, and deliberately so. See the note in start_connect: SO_LINGER

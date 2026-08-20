@@ -136,6 +136,12 @@ struct Config {
   // pressure up and, incidentally, stops thousands of half-open sockets
   // accumulating -- which is its own problem, since the kernel is slow to reap
   // a process holding them.
+  // AF_UNSPEC, AF_INET or AF_INET6. Pins which resolved address family a run
+  // uses. Left unpinned, the resolver's first answer wins -- and it is free to
+  // give a different one each time, which silently moves a run onto a different
+  // network path between invocations.
+  int address_family = 0;  // 0 == AF_UNSPEC
+
   std::chrono::seconds connect_timeout{10};
 
   // --max-connecting: ceiling on connections simultaneously mid-handshake.

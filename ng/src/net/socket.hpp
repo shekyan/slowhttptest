@@ -97,6 +97,19 @@ class Socket {
   // Platform-numbered TCP state, or -1 if unavailable. Diagnostic only.
   int tcp_state() const;
 
+  // Bytes the kernel says it has actually transmitted on this connection, or
+  // -1 where unavailable. Not the same as what the caller wrote: on a socket
+  // held by a content filter, send() succeeds into the filter and this stays 0.
+  long kernel_tx_bytes() const;
+
+  // One line of whatever the kernel will say about this connection. Empty where
+  // the platform offers nothing. Diagnostic only -- callers report it verbatim
+  // and do not parse it.
+  std::string tcp_diag() const;
+
+  // Bytes unread in the receive buffer, or -1. Diagnostic only.
+  long unread_bytes() const;
+
   // errno from the failed socket()/connect(), or the SO_ERROR a failed
   // asynchronous connect reported. 0 when nothing has failed.
   //
@@ -117,6 +130,15 @@ class Socket {
   long recv_some(char* buf, std::size_t len);
 
   void close();
+
+  // Gives up the descriptor without closing it, leaving the socket in the same
+  // state close() would. The caller owns the fd and must close it.
+  //
+  // Exists because close(2) is not reliably fast: with a macOS content filter
+  // attached it blocks for up to net.cfil.close_wait_timeout (1 s) per socket,
+  // and the engine closes connections from inside its event loop. Handing the
+  // descriptor to another thread keeps that latency out of the loop.
+  int release_fd();
 
   int fd() const { return fd_; }
   SockState state() const { return state_; }

@@ -68,6 +68,10 @@ endif()
 # TLS is on by default and OpenSSL is the only mandatory dependency. Turning it
 # off is supported for constrained builds -- the binary still builds and runs,
 # and refuses https targets with an explanation rather than failing to link.
+# The engine closes descriptors on worker threads; see Closer in engine.cpp.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 option(SLOWHTTP_TLS "Build with TLS/https support (system OpenSSL)" ON)
 if(SLOWHTTP_TLS)
   find_package(OpenSSL REQUIRED)
@@ -95,6 +99,7 @@ target_include_directories(slowhttp
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_compile_options(slowhttp PRIVATE -Wall -Wextra)
+target_link_libraries(slowhttp PUBLIC Threads::Threads)
 
 # One source of truth for the version. It reaches the -V output, the help text,
 # the User-Agent and the report, so a release bump is this line in project()
