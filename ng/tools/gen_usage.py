@@ -29,6 +29,8 @@ SECTIONS = [
         ("-u URL", "absolute URL of target (http://localhost/)"),
         ("-d host:port", "route all traffic through this HTTP proxy"),
         ("-e host:port", "route only the availability probe through a proxy"),
+        ("-4, --ipv4", "use IPv4 only; pins the run to one network path"),
+        ("-6, --ipv6", "use IPv6 only; pins the run to one network path"),
     ]),
     ("Load", [
         ("-c num", "target number of concurrent connections (50)"),

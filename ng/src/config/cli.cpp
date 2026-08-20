@@ -3,6 +3,7 @@
 #include "slowhttp/cli.hpp"
 
 #include <getopt.h>
+#include <sys/socket.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -103,6 +104,8 @@ void print_usage() {
       "  -u URL                  absolute URL of target (http://localhost/)\n"
       "  -d host:port            route all traffic through this HTTP proxy\n"
       "  -e host:port            route only the availability probe through a proxy\n"
+      "  -4, --ipv4              use IPv4 only; pins the run to one network path\n"
+      "  -6, --ipv6              use IPv6 only; pins the run to one network path\n"
       "\n"
       "Load:\n"
       "  -c num                  target number of concurrent connections (50)\n"
@@ -402,6 +405,8 @@ enum {
 };
 
 const struct option kLongOptions[] = {
+    {"ipv4", no_argument, nullptr, '4'},
+    {"ipv6", no_argument, nullptr, '6'},
     {"header", required_argument, nullptr, '1'},
     {"data", required_argument, nullptr, 'P'},
     {"user-agent", required_argument, nullptr, 'A'},
@@ -451,7 +456,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   optind = 1;
   while ((o = getopt_long(
               argc, argv,
-              ":HBRXghqVc:r:l:i:x:s:t:f:m:j:u:v:n:z:w:y:k:a:b:1:d:e:p:o:P:A:",
+              ":HBRXghqV46c:r:l:i:x:s:t:f:m:j:u:v:n:z:w:y:k:a:b:1:d:e:p:o:P:A:",
               kLongOptions, nullptr)) != -1) {
     switch (o) {
       case 'H': cfg.mode = Mode::SlowHeaders; break;
@@ -486,6 +491,13 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         if (!parse_long_int(tmp, "max-connecting", 0, 1048576))
           return CliResult::kError;
         cfg.max_connecting = tmp; break;
+      // Pinning the family is about reproducibility, not connectivity. A
+      // dual-stack host's resolver may answer with either family first, and the
+      // two can be completely different network paths -- against one target here
+      // the v4 path dropped SYNs where the v6 path did not, so consecutive
+      // identical runs disagreed for reasons nothing in the output explained.
+      case '4': cfg.address_family = AF_INET; break;
+      case '6': cfg.address_family = AF_INET6; break;
       // Same state as -v 0, spelled the way people look for it.
       case 'q': cfg.log_level = 0; cfg.verbose = false; break;
       case '1': {

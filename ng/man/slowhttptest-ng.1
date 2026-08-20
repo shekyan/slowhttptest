@@ -244,6 +244,19 @@ requests use absolute-URI form.
 .It Fl e Ar host : Ns Ar port
 Route only the availability probe through this proxy, to measure availability
 from a different network path than the one being saturated.
+.It Fl 4 , Fl \-ipv4
+.It Fl 6 , Fl \-ipv6
+Resolve the target to IPv4 or IPv6 addresses only.
+.Pp
+This is about reproducibility rather than connectivity.
+On a dual-stack host the resolver may answer with either family first, and it is
+free to answer differently on the next invocation; the two families can be
+entirely different network paths, with different routing, MTU and filtering.
+A run that is not pinned can therefore land somewhere else than the previous one
+and disagree with it for reasons nothing in the output explains.
+Pin the family when comparing runs, and note that
+.Nm
+prints the address it actually used.
 .El
 .Ss Availability probe
 The probe is what the verdict is based on.
