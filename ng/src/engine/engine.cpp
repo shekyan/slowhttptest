@@ -9,18 +9,26 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <time.h>
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <condition_variable>
+#include <cstdarg>
 #include <cstring>
+#include <deque>
 #include <map>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -60,6 +68,13 @@ constexpr std::chrono::milliseconds kSweepBudget{50};
 // scarce, and the catch-up allowance means a late pass may have thousands of
 // slots to fill.
 constexpr std::chrono::milliseconds kRampBudget{20};
+
+// How long the loop may sleep while it still has connections to open. At -r 500
+// this spends the allowance about five at a time instead of five hundred. The
+// classic tool sleeps 1/rate between single connects, which is smoother still,
+// but it also polls that often; this keeps the wake-up rate bounded no matter
+// how large -r is.
+constexpr std::chrono::milliseconds kRampWake{10};
 
 // Probes taken before any load is applied. Three is the minimum that lets a
 // single unlucky sample be seen as an outlier rather than as the baseline.
@@ -108,10 +123,30 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
 // The message is a fixed string. Nothing is formatted here: snprintf is not
 // async-signal-safe, and every additional statement in a handler is another one
 // that can block.
+// "nothing written" used to lead this line and was read, reasonably, as nothing
+// having been written to the connections. It meant no report file and no
+// verdict, which is a different statement and worth making in those words.
+// Says plainly that there is no faster way out, because there is not, and an
+// earlier version of this message implied kill -9 was one. It is not: SIGKILL
+// cannot be caught, so nothing here runs, but the kernel still closes every
+// remaining descriptor in the exit path -- one at a time, paying the content
+// filter's timeout on each. That is the same path a second Ctrl-C used to take,
+// measured at 2h09m and 3h48m against runs that finish in about 30 s when left
+// alone. It does not even return the shell any sooner: the process is not
+// reaped until that teardown completes.
 constexpr char kCancelMessage[] =
-    "\nCancelled -- nothing written."
-    " Any pause here is the OS closing the\n"
-    "connections; pressing Ctrl-C again will not speed it up.\n";
+    "\nCancelled. No report or verdict written -- a partial run measures\n"
+    "nothing worth reporting. Closing the open connections now.\n"
+    "The count below will not move for the first second or so; that is\n"
+    "normal, and this is the fastest way out. Ctrl-C again is ignored,\n"
+    "and kill -9 is not a shortcut: it makes the OS close the remaining\n"
+    "sockets one at a time, which takes far longer, and your shell waits\n"
+    "for that either way.\n";
+
+// Set by the handler, read by the event loop. sig_atomic_t and volatile are what
+// make that legal: the loop must see the store, and the handler may write
+// nothing more complicated.
+volatile sig_atomic_t g_cancelled = 0;
 
 void handle_cancel(int) {
   // Make stderr non-blocking before writing to it. A terminal that is not
@@ -125,7 +160,18 @@ void handle_cancel(int) {
   if (flags != -1) ::fcntl(2, F_SETFL, flags | O_NONBLOCK);
   ssize_t ignored = ::write(2, kCancelMessage, sizeof(kCancelMessage) - 1);
   (void)ignored;
-  ::_exit(130);  // 128 + SIGINT, the conventional shell code
+  // Deliberately not _exit(). This used to leave immediately on the theory that
+  // the kernel closes the descriptors anyway, so doing it here only delayed the
+  // inevitable. That is wrong, and expensively so: the kernel's exit path closes
+  // them one at a time, and each close of a filter-held socket waits up to a
+  // second. Cancelling a run holding 3000 connections that way took 2h09m, and
+  // once the process is inside exit no further signal can reach it -- which is
+  // why pressing Ctrl-C again appeared to do nothing.
+  //
+  // So the loop is told to stop and closes them through the closer pool
+  // instead, which does the same work N at a time. All this handler does is
+  // set the flag.
+  ++g_cancelled;
 }
 
 // SA_RESETHAND and SA_NODEFER together mean that even if the write above blocks
@@ -133,14 +179,249 @@ void handle_cancel(int) {
 // through to the default disposition and kills the process. Without SA_NODEFER
 // the signal would merely go pending while the handler sat there, which is
 // exactly how an earlier version of this made itself unkillable.
+//
+// That second Ctrl-C is an escape hatch, not a speed-up: it kills the process
+// mid-teardown and hands the remaining descriptors back to the kernel, which
+// closes them one at a time. The message says so.
 void install_cancel_handler() {
   struct sigaction sa;
   std::memset(&sa, 0, sizeof(sa));
   sa.sa_handler = handle_cancel;
   sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESETHAND | SA_NODEFER;
+  // Deliberately no SA_RESETHAND. It used to be here so a second Ctrl-C would
+  // reach the default disposition and kill the process outright, which sounds
+  // like the right escape hatch and is in fact the worst available outcome:
+  // killing mid-teardown hands every remaining descriptor to the kernel, which
+  // closes them one at a time. Measured on the same run: about a minute if left
+  // alone, 3h48m after a second Ctrl-C. There is no fast way out of a process
+  // holding thousands of filter-held sockets, so the handler stays installed and
+  // repeated interrupts are absorbed and explained. SIGKILL from another
+  // terminal is still available to anyone who insists, at the same cost.
+  sa.sa_flags = SA_NODEFER;
   ::sigaction(SIGINT, &sa, nullptr);
   ::sigaction(SIGTERM, &sa, nullptr);
+}
+
+// How many content filters the OS reports as active, or -1 where it does not
+// say. A filter intercepts sockets between send() and the wire, which shows up
+// as connections that carry no traffic and as a per-socket wait on close.
+long active_content_filters() {
+#if defined(__APPLE__)
+  int value = 0;
+  std::size_t len = sizeof(value);
+  if (::sysctlbyname("net.cfil.active_count", &value, &len, nullptr, 0) != 0)
+    return -1;
+  return value;
+#else
+  return -1;
+#endif
+}
+
+// Closes descriptors on other threads, so the event loop never blocks on one.
+//
+// This is not an optimisation. close(2) on a socket held by a macOS content
+// filter blocks in cfil_sock_close_wait() for up to net.cfil.close_wait_timeout
+// -- 1000 ms, measured here to three decimal places -- and the engine closes
+// connections from inside its event loop: on error events, on connect timeouts,
+// and when the peer-closed sweep finds a dead connection. Each one froze the
+// loop for a second. Observed against a real target: a run asked for -l 20 that
+// executed for 1080 seconds, because roughly a thousand blocking closes landed
+// during it. A run that ignores its own duration reports a test that never
+// happened.
+//
+// Bounding the work per pass cannot fix it -- the budget is checked before a
+// close, so a single one still overshoots by a full second. The only fix is to
+// stop doing it on this thread.
+//
+// The threads touch nothing but the descriptors handed to them. All engine
+// bookkeeping stays on the event loop.
+class Closer {
+ public:
+  explicit Closer(unsigned threads) {
+    for (unsigned i = 0; i < threads; ++i)
+      workers_.emplace_back([this] { run(); });
+  }
+
+  ~Closer() {
+    {
+      std::lock_guard<std::mutex> lk(m_);
+      stop_ = true;
+    }
+    cv_.notify_all();
+    for (auto& t : workers_) if (t.joinable()) t.join();
+  }
+
+  void submit(int fd) {
+    if (fd < 0) return;
+    {
+      std::lock_guard<std::mutex> lk(m_);
+      queue_.push_back(fd);
+      ++pending_;
+    }
+    cv_.notify_one();
+  }
+
+  long pending() const {
+    std::lock_guard<std::mutex> lk(m_);
+    return pending_;
+  }
+
+  // Waits until every submitted descriptor is closed, calling `tick` about once
+  // a second so a long wait can report progress rather than look like a hang.
+  template <typename F>
+  void drain(F tick) {
+    std::unique_lock<std::mutex> lk(m_);
+    bool told = false;
+    while (pending_ > 0) {
+      // Report before the first wait, not after it. A teardown that sits silent
+      // even for a second reads as a hang, and the operator's remedy for a hang
+      // -- another Ctrl-C -- is the one action that makes this slower.
+      if (!told) {
+        const long left = pending_;
+        lk.unlock();
+        tick(left);
+        lk.lock();
+        told = true;
+        continue;
+      }
+      if (idle_.wait_for(lk, std::chrono::milliseconds(250)) ==
+          std::cv_status::timeout) {
+        const long left = pending_;
+        lk.unlock();
+        tick(left);
+        lk.lock();
+      }
+    }
+  }
+
+ private:
+  void run() {
+    for (;;) {
+      int fd = -1;
+      {
+        std::unique_lock<std::mutex> lk(m_);
+        cv_.wait(lk, [this] { return stop_ || !queue_.empty(); });
+        if (queue_.empty()) return;  // stopping, nothing left
+        fd = queue_.front();
+        queue_.pop_front();
+      }
+      ::close(fd);
+      {
+        std::lock_guard<std::mutex> lk(m_);
+        --pending_;
+      }
+      idle_.notify_all();
+    }
+  }
+
+  mutable std::mutex m_;
+  std::condition_variable cv_;
+  std::condition_variable idle_;
+  std::deque<int> queue_;
+  std::vector<std::thread> workers_;
+  long pending_ = 0;
+  bool stop_ = false;
+};
+
+// Enough to hide a one-second stall behind ongoing work without turning
+// teardown into a thundering herd. Teardown of n connections costs about
+// n/threads seconds in the worst case where every close blocks.
+
+// Ceiling on descriptors waiting to be closed. Handing a descriptor to the
+// closer returns immediately, so without a bound a run that churns connections
+// faster than they close would accumulate open descriptors and eventually fail
+// with EMFILE -- reported as a local limit, which is true but avoidable.
+//
+// Kept small deliberately. It is added to the descriptor reserve below, and on
+// Darwin that total has to stay under OPEN_MAX (10240) at the largest usable
+// -c: an earlier attempt used 256 and pushed -c 10000 past the ceiling, which
+// silently changed which error a descriptor-starved run reported.
+// Teardown costs about connections/threads seconds when every close blocks for
+// the filter's full timeout, so the pool is sized to the run. Threads waiting on
+// a condition variable or inside close(2) cost nothing but stack.
+unsigned closer_threads(int connections) {
+  // Teardown takes about connections/threads seconds when every close waits out
+  // the filter's full timeout, so the pool has to be large enough that the wait
+  // is one a person will sit through. At -c 5000 this is 256 threads and about
+  // 15 seconds; with 64 it was a minute, and a minute of apparently frozen
+  // output is long enough that the operator kills the process -- which hands
+  // every remaining descriptor to the kernel's serial close and turns a minute
+  // into hours. Threads parked on a condition variable or blocked in close(2)
+  // cost stack and nothing else.
+  const unsigned want = static_cast<unsigned>(connections / 16);
+  return want < 8u ? 8u : (want > 256u ? 256u : want);
+}
+constexpr long kMaxPendingCloses = 64;
+
+// Colour, but only onto a terminal.
+//
+// The classic tool emits escapes unconditionally, which is why its output is
+// unreadable in a file and why parsing its own numbers back out needs the codes
+// stripped first -- a pattern that skips non-digits lands on the 1 in "[1;32m"
+// and reports that as the value. Asking isatty costs nothing and keeps captured
+// output plain.
+bool use_colour() {
+  static const bool yes = ::isatty(2) == 1;
+  return yes;
+}
+const char* C(const char* code) { return use_colour() ? code : ""; }
+
+// The classic tool's palette, same names, so the two look alike side by side.
+constexpr const char* kBlue = "\x1b[0;34m";
+constexpr const char* kLBlue = "\x1b[1;34m";
+constexpr const char* kGreen = "\x1b[0;32m";
+constexpr const char* kLGreen = "\x1b[1;32m";
+constexpr const char* kLRed = "\x1b[1;31m";
+constexpr const char* kReset = "\x1b[0m";
+
+// Wall-clock stamp in the classic tool's format, e.g. "Thu Aug 13 12:30:12
+// 2026". ctime_r rather than ctime for thread safety, and the trailing newline
+// it appends has to come off.
+std::string stamp_now() {
+  const time_t now = ::time(nullptr);
+  char buf[32] = {0};
+  if (::ctime_r(&now, buf) == nullptr) return "";
+  std::string out(buf);
+  while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
+    out.pop_back();
+  return out;
+}
+
+// The classic tool's exit statuses, same words, so the two agree on what
+// happened. Anything this engine can end in maps onto one of them.
+enum class ExitStatus {
+  TimeLimit,        // "Hit test time limit"
+  AllClosed,        // "No open connections left"
+  CannotConnect,    // "Cannot establish connection"
+  ConnectionRefused,
+  Cancelled,
+  Unexpected
+};
+
+// 1st, 2nd, 3rd, 4th. The classic tool prints "%dth" unconditionally and so
+// says "3th second"; that is a wording bug rather than a format worth matching,
+// and both places in this tool use the same helper so they cannot disagree.
+const char* ordinal_suffix(long n) {
+  const long tens = n % 100;
+  if (tens >= 11 && tens <= 13) return "th";
+  switch (n % 10) {
+    case 1:  return "st";
+    case 2:  return "nd";
+    case 3:  return "rd";
+    default: return "th";
+  }
+}
+
+const char* exit_status_text(ExitStatus e) {
+  switch (e) {
+    case ExitStatus::TimeLimit:         return "Hit test time limit";
+    case ExitStatus::AllClosed:         return "No open connections left";
+    case ExitStatus::CannotConnect:     return "Cannot establish connection";
+    case ExitStatus::ConnectionRefused: return "Connection refused";
+    case ExitStatus::Cancelled:         return "Cancelled by user";
+    case ExitStatus::Unexpected:
+    default:                            return "Unexpected error";
+  }
 }
 
 // Who a failed connect actually implicates. The distinction is the whole point:
@@ -261,6 +542,13 @@ struct Conn {
   bool in_flight = false;
   // What the setup chain (proxy CONNECT / TLS handshake) is waiting for.
   unsigned setup_want = 0;
+  // Bytes this engine has successfully written to the socket, which is not the
+  // same as bytes that reached the network. Against a filtered path the two
+  // diverge: send() returns success into the filter's queue while the kernel
+  // reports tcpi_txbytes == 0 for the life of the connection. Comparing them is
+  // how a connection that carried no load at all gets noticed instead of being
+  // counted as held.
+  long sent_bytes = 0;
   std::multimap<TimePoint, ConnId>::iterator timer_it;
 };
 
@@ -276,6 +564,7 @@ struct Engine::Impl {
   Attack& attack;
   ResolvedAddr addr;
   std::unique_ptr<Reactor> reactor;
+  std::unique_ptr<Closer> closer;
   std::vector<Conn> conns;
   std::unordered_map<int, ConnId> fd_to_id;
   std::multimap<TimePoint, ConnId> timers;
@@ -351,6 +640,7 @@ struct Engine::Impl {
       // what made a local descriptor limit look like a dead target.
       if (count == 1 && chatty()) {
         const std::string advice = advice_for(err);
+        interrupt_status();
         std::fprintf(stderr, "\n  connect failed (%s)%s%s\n", std::strerror(err),
                      advice.empty() ? "" : ": ", advice.c_str());
       }
@@ -414,6 +704,7 @@ struct Engine::Impl {
   void open_slot(Conn& c) {
     c.outbuf.clear();
     c.outpos = 0;
+    c.sent_bytes = 0;
     c.setup_want = 0;
     c.opened_at = Clock::now();
     const ConnOptions opts = attack.conn_options(c.id);
@@ -423,6 +714,7 @@ struct Engine::Impl {
     }
     if (opts.recv_buffer > 0 && !logged_window_) {
       logged_window_ = true;
+      interrupt_status();
       log.meta.kernel_rcvbuf = c.sock.recv_buffer_size();
       // Report what the kernel actually granted: it clamps to its own floor and
       // typically reports double the request, so the effective window is bigger
@@ -465,7 +757,9 @@ struct Engine::Impl {
       fd_to_id.erase(c.sock.fd());
     }
     const TimePoint t1 = Clock::now();
-    c.sock.close();
+    // Handed off rather than closed here: see Closer. This call must not block,
+    // because every caller of close_slot is on the event loop.
+    closer->submit(c.sock.release_fd());
     const TimePoint t2 = Clock::now();
     close_bookkeep_s += std::chrono::duration<double>(t1 - t0).count();
     close_syscall_s += std::chrono::duration<double>(t2 - t1).count();
@@ -492,7 +786,9 @@ struct Engine::Impl {
       if (c.active) ++remaining;
     if (remaining == 0) return 0;
 
-    const bool worth_reporting = chatty() && remaining >= 100;
+    // Nothing is reported from here. These descriptors are queued, not closed,
+    // and the caller reports the truth once the pool has actually finished.
+    const bool worth_reporting = false;
     TimePoint next_note = Clock::now() + std::chrono::seconds(1);
     int closed = 0;
     // Where the time falls across the sweep, not just how much of it there is.
@@ -508,18 +804,44 @@ struct Engine::Impl {
     // one state the answer is in the connection; if they are spread across every
     // state it is not, and the cost is coming from somewhere outside TCP.
     std::map<int, long> slow_states, fast_states;
+    // Slow read's entire purpose is to leave the receive buffer full, so the
+    // obvious guess is that the full ones are what cost time to close. Measured,
+    // it is the reverse: the expensive closes averaged zero bytes unread and the
+    // free ones a couple of thousand. The costly connections are the ones that
+    // never carried traffic at all.
+    long slow_unread = 0, fast_unread = 0;
+    std::vector<std::string> slow_diag;
+    std::string one_fast_diag;
     TimePoint mark = Clock::now();
     for (auto& c : conns) {
       if (!c.active) continue;
       const int state = c.sock.tcp_state();
+      const long unread = c.sock.unread_bytes();
+      // The kernel's own view, kept only long enough to print. Everything
+      // cheaper than asking it has already been ruled out.
+      std::string diag;
+      if (cfg.log_level >= 4) {
+        char mine[64];
+        std::snprintf(mine, sizeof(mine), "ng_sent=%ld ng_queued=%zu ",
+                      c.sent_bytes, c.outbuf.size() - c.outpos);
+        diag = std::string(mine) + c.sock.tcp_diag();
+      }
       const double before = close_syscall_s;
       close_slot(c);
       const double took = close_syscall_s - before;
       if (took > 0.010) {
         ++slow_closes;
         ++slow_states[state];
+        if (unread > 0) slow_unread += unread;
+        if (slow_diag.size() < 8 && !diag.empty()) {
+          char pfx[32];
+          std::snprintf(pfx, sizeof(pfx), "took %6.3fs  ", took);
+          slow_diag.push_back(std::string(pfx) + diag);
+        }
       } else {
         ++fast_states[state];
+        if (unread > 0) fast_unread += unread;
+        if (one_fast_diag.empty()) one_fast_diag = diag;
       }
       if (took > slowest_close) slowest_close = took;
       const int q = std::min(3, closed * 4 / remaining);
@@ -556,6 +878,15 @@ struct Engine::Impl {
       };
       dump_states("slow", slow_states);
       dump_states("fast", fast_states);
+      if (!one_fast_diag.empty())
+        std::fprintf(stderr, "  fast close:  %s\n", one_fast_diag.c_str());
+      for (const auto& d : slow_diag)
+        std::fprintf(stderr, "  SLOW close:  %s\n", d.c_str());
+      const int fast_closes = closed - slow_closes;
+      std::fprintf(stderr,
+                   "  unread bytes at close: slow avg %ld, fast avg %ld\n",
+                   slow_closes ? slow_unread / slow_closes : 0,
+                   fast_closes ? fast_unread / fast_closes : 0);
     }
     return closed;
   }
@@ -566,6 +897,7 @@ struct Engine::Impl {
                                 c.outbuf.size() - c.outpos);
       if (n > 0) {
         c.outpos += static_cast<std::size_t>(n);
+        c.sent_bytes += n;
       } else if (n == 0) {
         break;  // would block; wait for next writable
       } else {
@@ -668,6 +1000,7 @@ struct Engine::Impl {
             // refusing CONNECT would otherwise look like a target that simply
             // drops connections, which is a completely different finding.
             if (chatty())
+              interrupt_status(),
               std::fprintf(stderr, "\n  connection setup failed: %s\n",
                          c.sock.setup_error().c_str());
           }
@@ -745,8 +1078,20 @@ struct Engine::Impl {
     if (target_conns <= 0) return false;
     long elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-    // Allow an initial burst of `rate`, then `rate` more per elapsed second.
-    long allowance = cfg.rate + (elapsed_ms * cfg.rate) / 1000;
+    // Strictly `rate` per elapsed second, with no initial burst.
+    //
+    // There used to be an allowance of `cfg.rate` at t=0, which meant -r 500
+    // opened 500 connections in one pass and 1000 within the first second. That
+    // is not what -r documents, and it is not what the classic tool does: it
+    // opens one at a time with usleep(1/rate) between them. Against a target
+    // behind a stateful path the burst is visibly worse -- 86 to 135 SYNs still
+    // unanswered at the end of a run where the classic had 0 to 2 pending.
+    //
+    // The leading 1 is what lets the first connection go immediately. Without
+    // it a run opens nothing until a full 1/rate has elapsed, which at -r 1 is a
+    // dead first second and at -r 1 -l 1 is a run that never connects at all.
+    // The classic tool opens one, then sleeps 1/rate; this is the same shape.
+    long allowance = 1 + (elapsed_ms * cfg.rate) / 1000;
     const TimePoint deadline = now + kRampBudget;
     for (auto& c : conns) {
       if (active_conns >= target_conns) return false;
@@ -757,6 +1102,10 @@ struct Engine::Impl {
       // half-open sockets gets expensive.
       if (cfg.max_connecting > 0 && in_flight_conns >= cfg.max_connecting)
         return false;
+      // Descriptors queued for closing are still open. Opening more while the
+      // closer is behind trades a bounded wait for EMFILE. Returning false
+      // rather than true yields to the event loop instead of spinning.
+      if (closer && closer->pending() >= kMaxPendingCloses) return false;
       if (Clock::now() >= deadline) return true;  // more to open, yield first
       if (!c.active) open_slot(c);
     }
@@ -921,6 +1270,7 @@ struct Engine::Impl {
     log.capacity.push_back(lvl);
 
     if (chatty())
+      interrupt_status(),
       std::fprintf(stderr, "\n  level %d: %d/%d probes served, median %ld ms -> %s\n",
                  lvl.connections, lvl.probes_served, lvl.probes_total,
                  lvl.median_ms, lvl.denied ? "DENIED" : "held");
@@ -1017,6 +1367,31 @@ struct Engine::Impl {
     }
   }
 
+  // The live census, in the classic tool's shape: one counter per line, redrawn
+  // in place. Its labels map onto this engine's states almost exactly --
+  // initializing is setup, pending is mid-handshake, connected is holding --
+  // so the same numbers people already read mean the same things here.
+  //
+  // Redrawn by moving the cursor up rather than clearing the screen. The classic
+  // clears, which wipes the banner and any warning printed before it; several
+  // times this session that destroyed output that mattered. Off a terminal it
+  // degrades to one plain line per update, so a captured log stays readable
+  // instead of filling with escape sequences.
+  int status_lines_ = 0;
+
+  // Call before printing anything else while the run is live. The status block
+  // is redrawn by moving the cursor up over its own lines; a message printed
+  // into the middle of it would be overwritten on the next tick, and the count
+  // would be wrong from then on. Forgetting this does not crash anything, it
+  // quietly eats the message -- which is the kind of bug that hides a warning
+  // precisely when it matters.
+  void interrupt_status() {
+    if (status_lines_ > 0) {
+      std::fputc('\n', stderr);
+      status_lines_ = 0;
+    }
+  }
+
   void status_line(TimePoint now) {
     if (!chatty()) return;
     int connecting = 0, setting_up = 0, held = 0;
@@ -1029,28 +1404,79 @@ struct Engine::Impl {
       else
         ++held;
     }
-    long secs =
+    const long secs =
         std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
-    const char* phase_name = phase == Phase::Baseline  ? "baseline"
-                             : phase == Phase::Attack  ? "attack  "
+    const char* phase_name = phase == Phase::Baseline   ? "baseline"
+                             : phase == Phase::Attack   ? "attack"
                              : phase == Phase::Recovery ? "recovery"
-                                                        : "done    ";
-    char probe_txt[48] = "  probe=off";
-    if (prober && !log.probes.empty()) {
+                                                        : "done";
+    const long failed = connect_failed_total + setup_failed_total;
+
+    // "service available" is the whole point of the run, so it says what it
+    // knows and, when there is no probe, that it does not know.
+    char avail[64];
+    if (!prober) {
+      std::snprintf(avail, sizeof(avail), "%s", "not measured (--no-probe)");
+    } else if (log.probes.empty()) {
+      std::snprintf(avail, sizeof(avail), "%s", "waiting for first probe");
+    } else {
       const auto& p = log.probes.back();
+      const bool up = p.state == Availability::Ok;
       if (p.ms >= 0)
-        std::snprintf(probe_txt, sizeof(probe_txt), "  probe=%s %ldms",
-                      availability_name(p.state), p.ms);
+        std::snprintf(avail, sizeof(avail), "%s%s%s (%ld ms)",
+                      C(up ? kLGreen : kLRed), up ? "YES" : "NO", C(kReset),
+                      p.ms);
       else
-        std::snprintf(probe_txt, sizeof(probe_txt), "  probe=%s",
-                      availability_name(p.state));
+        std::snprintf(avail, sizeof(avail), "%s%s%s", C(up ? kLGreen : kLRed),
+                      up ? "YES" : "NO", C(kReset));
     }
-    std::fprintf(stderr,
-                 "\r[%4lds %s] target=%d held=%d (connecting=%d setup=%d)"
-                 " peer_closed=%ld failed=%ld%s   ",
-                 secs, phase_name, target_conns, held, connecting, setting_up,
-                 peer_closed_total, connect_failed_total + setup_failed_total,
-                 probe_txt);
+
+    if (!use_colour()) {
+      // Appended, not redrawn: a log wants one line per second, in order.
+      char clock[16] = {0};
+      const time_t wall = ::time(nullptr);
+      struct tm tmv;
+      if (::localtime_r(&wall, &tmv) != nullptr)
+        std::strftime(clock, sizeof(clock), "%H:%M:%S", &tmv);
+      std::fprintf(stderr,
+                   "%s [%4lds %-8s] initializing=%d pending=%d connected=%d"
+                   " error=%ld closed=%ld available=%s\n",
+                   clock,
+                   secs, phase_name, setting_up, connecting, held, failed,
+                   peer_closed_total, avail);
+      std::fflush(stderr);
+      return;
+    }
+
+    if (status_lines_ > 0) std::fprintf(stderr, "\x1b[%dA", status_lines_);
+    int lines = 0;
+    auto row = [&](const char* label, const char* fmt, ...) {
+      char value[96];
+      va_list ap;
+      va_start(ap, fmt);
+      std::vsnprintf(value, sizeof(value), fmt, ap);
+      va_end(ap);
+      std::fprintf(stderr, "\x1b[2K%s%-21s%s%s\n", C(kLGreen), label, value,
+                   C(kReset));
+      ++lines;
+    };
+
+    // The stamp is part of the redrawn block, so it counts towards the lines to
+    // move back over. The classic prints one above every status dump.
+    std::fprintf(stderr, "\x1b[2K%s%s:%s\n", C(kBlue), stamp_now().c_str(),
+                 C(kReset));
+    std::fprintf(stderr, "\x1b[2K%sslow HTTP test status on %s%ld%s%s second"
+                         " (%s)%s\n\x1b[2K\n",
+                 C(kLGreen), C(kGreen), secs, C(kLGreen),
+                 ordinal_suffix(secs), phase_name, C(kReset));
+    lines += 3;
+    row("initializing:", "%d", setting_up);
+    row("pending:", "%d", connecting);
+    row("connected:", "%d", held);
+    row("error:", "%ld", failed);
+    row("closed:", "%ld", peer_closed_total);
+    row("service available:", "%s", avail);
+    status_lines_ = lines;
     std::fflush(stderr);
   }
 
@@ -1115,25 +1541,38 @@ struct Engine::Impl {
   }
 
   int run() {
+    // Wall-clock milestones for the whole process, not just the measured run.
+    //
+    // Every instrument so far covered one segment and the cost kept turning up
+    // outside it: a run whose teardown took 0.10 s still took 959 s in total,
+    // and nothing in the output accounted for the difference. This brackets
+    // each phase so the next unexplained wait names itself.
+    const TimePoint t_enter = Clock::now();
+    TimePoint t_resolved = t_enter;
     std::string err;
     if (!build_setup_plan(err)) {
       std::fprintf(stderr, "Error: %s\n", err.c_str());
       return 2;
     }
-    if (!addr.resolve(cfg.connect_host(), cfg.connect_port(), err)) {
+    if (!addr.resolve(cfg.connect_host(), cfg.connect_port(), err,
+                      cfg.address_family)) {
       std::fprintf(stderr, "Error: cannot resolve %s (%s)\n",
                    cfg.connect_endpoint().c_str(), err.c_str());
       return 2;
     }
+    t_resolved = Clock::now();
     fill_meta();
 
     reactor = Reactor::create();
+    closer.reset(new Closer(closer_threads(cfg.connections)));
 
     // Refuse an impossible connection count before opening a single socket.
     // Discovering the ceiling at runtime means thousands of sockets already
     // open and a partial, misleading result; saying so now costs nothing.
     // kReservedFds covers the probe, stdio and the resolver.
-    constexpr std::size_t kReservedFds = 8;
+    // Covers stdio, the probe, the resolver, and the bounded close queue --
+    // those descriptors are open until a closer thread gets to them.
+    const std::size_t kReservedFds = 8 + static_cast<std::size_t>(kMaxPendingCloses);
     const std::size_t reactor_cap = reactor->max_descriptors();
     if (reactor_cap > 0 &&
         static_cast<std::size_t>(cfg.connections) + kReservedFds > reactor_cap) {
@@ -1198,20 +1637,54 @@ struct Engine::Impl {
                     "every %.2gs, timeout %llds", cfg.probe_interval.count() / 1000.0,
                     static_cast<long long>(cfg.probe_timeout.count()));
     }
-    if (chatty())
-      std::fprintf(stderr,
-                 "slowhttptest-ng: %s -> %s\n"
-                 "  resolved %s to %s (%zu candidate(s))%s\n"
-                 "  connections=%d rate=%d/s interval=%llds duration=%llds\n"
-                 "  probe: %s\n"
-                 "  (authorized testing only)\n\n",
-                 attack.name(), log.meta.target_url.c_str(),
-                 cfg.connect_endpoint().c_str(),
-                 ResolvedAddr::describe(current_addr()).c_str(),
-                 addr.candidates().size(),
-                 cfg.proxy.enabled() ? " via proxy" : "", cfg.connections,
-                 cfg.rate, static_cast<long long>(cfg.interval.count()),
-                 static_cast<long long>(cfg.duration.count()), probe_desc);
+    // Laid out like the classic tool's banner: one aligned label per setting,
+    // in the same order and mostly the same words, so anyone who has read one
+    // can read the other. The additions are the ones this session showed were
+    // worth having -- the address actually chosen (a dual-stack host can send
+    // consecutive runs down different networks) and the effective mode.
+    if (chatty()) {
+      auto row = [](const char* label, const char* fmt, ...) {
+        char value[256];
+        va_list ap;
+        va_start(ap, fmt);
+        std::vsnprintf(value, sizeof(value), fmt, ap);
+        va_end(ap);
+        std::fprintf(stderr, "%s%-32s%s%s%s\n", C(kBlue), label, C(kLBlue),
+                     value, C(kReset));
+      };
+
+      std::fprintf(stderr, "%s\tslowhttptest-ng version %s%s\n", C(kLBlue),
+                   kToolVersion, C(kReset));
+      std::fprintf(stderr, " - %s -\n\n", kProjectUrl);
+
+      // Upper-cased to match the classic tool, which prints SLOW READ.
+      std::string type = attack.name();
+      for (char& ch : type) ch = static_cast<char>(::toupper(ch));
+      row("test type:", "%s", type.c_str());
+      row("number of connections:", "%d", cfg.connections);
+      row("URL:", "%s", log.meta.target_url.c_str());
+      row("verb:", "%s", cfg.effective_verb().c_str());
+      row("resolved address:", "%s (%zu candidate%s)",
+          ResolvedAddr::describe(current_addr()).c_str(),
+          addr.candidates().size(),
+          addr.candidates().size() == 1 ? "" : "s");
+      if (cfg.mode == Mode::SlowRead) {
+        row("receive window range:", "%d - %d", cfg.window_lower,
+            cfg.window_upper);
+        row("read rate from receive buffer:", "%d bytes / %lld sec",
+            cfg.read_len, static_cast<long long>(cfg.read_interval.count()));
+      } else {
+        row("interval between follow up data:", "%lld seconds",
+            static_cast<long long>(cfg.interval.count()));
+      }
+      row("connections per seconds:", "%d", cfg.rate);
+      row("probe:", "%s", probe_desc);
+      row("test duration:", "%lld seconds",
+          static_cast<long long>(cfg.duration.count()));
+      row("using proxy:", "%s",
+          cfg.proxy.enabled() ? cfg.proxy.host.c_str() : "no proxy");
+      std::fprintf(stderr, "\n");
+    }
 
     // Installed only now: name resolution is behind us, and getaddrinfo(3)
     // cannot be interrupted, so catching the signal any earlier would swallow a
@@ -1238,8 +1711,17 @@ struct Engine::Impl {
     // then skips its sleep so opening continues without stalling anything.
     bool ramp_pending = false;
     bool reactor_failed = false;
+    bool cancelled = false;
     for (;;) {
       TimePoint now = Clock::now();
+
+      // Cancel is handled here rather than in the signal handler: closing
+      // thousands of filter-held descriptors has to go through the closer pool,
+      // and none of that is legal in a handler.
+      if (g_cancelled) {
+        cancelled = true;
+        break;
+      }
 
       switch (phase) {
         case Phase::Baseline:
@@ -1337,6 +1819,14 @@ struct Engine::Impl {
       // Still ramping: come straight back after servicing whatever is ready,
       // rather than idling until the next timer.
       if (ramp_pending) timeout = std::chrono::milliseconds(0);
+      // While connections are still being opened, wake often enough that the
+      // per-second allowance is spent in small handfuls rather than saved up and
+      // released in one burst. Removing the initial burst above achieves nothing
+      // on its own: a loop that sleeps a full second between ramp passes then
+      // finds a whole second of allowance waiting and opens it all at once,
+      // which is the same burst arriving later.
+      if (target_conns > 0 && active_conns < target_conns)
+        timeout = std::min(timeout, kRampWake);
 
       events.clear();
       if (reactor->wait(events, timeout) < 0) {
@@ -1389,6 +1879,44 @@ struct Engine::Impl {
       }
     }
 
+    // Cancelled runs measured nothing worth reporting, so nothing is written.
+    // The descriptors still have to be closed, and doing it here through the
+    // pool is what keeps it minutes rather than hours.
+    if (cancelled) {
+      interrupt_status();
+      if (chatty()) {
+        const long ended_s = std::chrono::duration_cast<std::chrono::seconds>(
+                                 Clock::now() - start).count();
+        std::fprintf(stderr, "\n%s%s:%s\n", C(kBlue), stamp_now().c_str(),
+                     C(kReset));
+        std::fprintf(stderr, "%sTest ended on %ld%s second%s\n", C(kLBlue),
+                     ended_s, ordinal_suffix(ended_s), C(kReset));
+        std::fprintf(stderr, "%sExit status:%s %s%s\n", C(kLBlue), C(kReset),
+                     exit_status_text(ExitStatus::Cancelled), C(kReset));
+      }
+      const int left = close_all();
+      if (closer && left > 0) {
+        const TimePoint began = Clock::now();
+        // Every worker starts a close at the same instant and each one waits out
+        // the same timeout, so for the first second the count does not move at
+        // all. Elapsed time is what shows the process is alive during exactly
+        // the window in which someone decides whether to kill it.
+        closer->drain([&](long remaining) {
+          const long secs = std::chrono::duration_cast<std::chrono::seconds>(
+                                Clock::now() - began).count();
+          std::fprintf(stderr,
+                       "\r  closing %ld of %d connections (%lds elapsed)%s   ",
+                       remaining, left, secs,
+                       g_cancelled > 1 ? " -- still working, killing is slower"
+                                       : "");
+          std::fflush(stderr);
+        });
+        std::fprintf(stderr, "\r  closed %d connection(s)%40s\n", left, "");
+      }
+      std::fflush(nullptr);
+      ::_exit(130);  // 128 + SIGINT, the conventional shell code
+    }
+
     const TimePoint stop_at = Clock::now();
     if (log.attack_end_s == 0 && log.attack_start_s > 0)
       log.attack_end_s = elapsed(stop_at);
@@ -1399,6 +1927,58 @@ struct Engine::Impl {
     // waiting for and they cost microseconds; teardown happens below, once they
     // are on screen.
     status_line(stop_at);
+    interrupt_status();
+
+    // Connections the engine wrote to and the kernel never transmitted on.
+    //
+    // Measured against a real target: ~10% of a 1500-connection run ended with
+    // send() having returned success, nothing queued, an empty send buffer, and
+    // the kernel reporting zero bytes ever sent. Those connections were counted
+    // as held while applying no load at all, which overstates the test -- the
+    // single worst failure mode for a tool whose output people put in reports.
+    //
+    // On macOS this is what a content filter looks like from inside the process:
+    // send() succeeds into the filter's queue and the bytes never reach the
+    // wire. See net.cfil.* -- and note that the same filter bills close(2) up to
+    // net.cfil.close_wait_timeout per socket on the way out.
+    long undelivered = 0;
+    for (const auto& c : conns) {
+      if (!c.active || !c.sock.ready() || c.sent_bytes <= 0) continue;
+      const long tx = c.sock.kernel_tx_bytes();
+      if (tx == 0) ++undelivered;
+    }
+
+    // The classic tool's closing lines, same words and order. They say what
+    // happened in a form anyone who has used that tool already reads; the
+    // machine-readable "Done (...)" line below stays for scripts and tests.
+    if (chatty()) {
+      ExitStatus status = ExitStatus::TimeLimit;
+      if (reactor_failed) {
+        status = ExitStatus::Unexpected;
+      } else if (ready_total == 0) {
+        // Never got a usable connection. Keyed on that rather than on gave_up,
+        // which only trips after a run of consecutive failures -- a short run
+        // against a dead port can reach its duration first and would otherwise
+        // report "Hit test time limit", which is true and useless.
+        //
+        // "nothing is listening" and "it never answered" are separate answers
+        // with separate remedies, and the classic separates them too.
+        status = dominant_connect_errno() == ECONNREFUSED
+                     ? ExitStatus::ConnectionRefused
+                     : ExitStatus::CannotConnect;
+      } else if (held_connections() == 0 && peer_closed_total > 0) {
+        status = ExitStatus::AllClosed;
+      }
+      const long ended_s =
+          std::chrono::duration_cast<std::chrono::seconds>(stop_at - start)
+              .count();
+      std::fprintf(stderr, "\n%s%s:%s\n", C(kBlue), stamp_now().c_str(),
+                   C(kReset));
+      std::fprintf(stderr, "%sTest ended on %ld%s second%s\n", C(kLBlue),
+                   ended_s, ordinal_suffix(ended_s), C(kReset));
+      std::fprintf(stderr, "%sExit status:%s %s%s\n", C(kLBlue), C(kReset),
+                   exit_status_text(status), C(kReset));
+    }
 
     const char* why = reactor_failed ? "event loop failed"
                       : gave_up      ? "giving up"
@@ -1411,6 +1991,29 @@ struct Engine::Impl {
                  why, opened_total, connected_total, ready_total,
                  peer_closed_total, connect_failed_total, setup_failed_total,
                  connect_timeout_total);
+
+    if (undelivered > 0 && chatty()) {
+      std::fprintf(stderr,
+                   "\nWARNING: %ld connection(s) never put their request on the"
+                   " wire.\n"
+                   "         The request was written and accepted locally, but"
+                   " the kernel reports\n"
+                   "         zero bytes sent -- something between this process"
+                   " and the network is\n"
+                   "         holding them. They applied no load, so the effective"
+                   " connection count\n"
+                   "         was %d, not %d.\n",
+                   undelivered, cfg.connections - static_cast<int>(undelivered),
+                   cfg.connections);
+      const long cfil = active_content_filters();
+      if (cfil > 0)
+        std::fprintf(stderr,
+                     "         macOS reports %ld active content filter(s)"
+                     " (net.cfil.active_count).\n"
+                     "         That is the usual cause here, and it also slows"
+                     " connection teardown.\n",
+                     cfil);
+    }
 
     // Never report success for a test that never reached the target: a silent
     // exit 0 here would make CI and scripts treat an unreachable host as a pass.
@@ -1486,6 +2089,20 @@ struct Engine::Impl {
     // waiting for rather than left watching a frozen prompt.
     const TimePoint teardown_start = Clock::now();
     const int torn_down = close_all();
+    // close_all only hands the descriptors over now, so the cost is here. The
+    // threads absorb the per-socket stall in parallel; what is left is a wait
+    // that says what it is waiting for rather than a frozen prompt.
+    if (closer && torn_down > 0) {
+      closer->drain([&](long left) {
+        if (chatty()) {
+          std::fprintf(stderr, "\r  closing connections: %ld of %d left   ",
+                       left, torn_down);
+          std::fflush(stderr);
+        }
+      });
+      if (chatty() && torn_down >= 100)
+        std::fprintf(stderr, "\r%50s\r", "");
+    }
     if (chatty() && torn_down > 0) {
       const double secs =
           std::chrono::duration<double>(Clock::now() - teardown_start).count();
@@ -1500,6 +2117,19 @@ struct Engine::Impl {
     // second time. The report files are already closed by write_reports, and
     // stderr is unbuffered,
     // so nothing is lost by skipping the usual teardown.
+    if (chatty()) {
+      const TimePoint t_end = Clock::now();
+      auto seg = [](TimePoint a, TimePoint b) {
+        return std::chrono::duration<double>(b - a).count();
+      };
+      // Anything the shell reports beyond this total happened after _exit(),
+      // in the kernel's own teardown of the process.
+      std::fprintf(stderr,
+                   "  timeline: resolve %.2fs, run %.2fs, teardown %.2fs"
+                   " -- %.2fs in process\n",
+                   seg(t_enter, t_resolved), seg(t_resolved, teardown_start),
+                   seg(teardown_start, t_end), seg(t_enter, t_end));
+    }
     std::fflush(nullptr);
     ::_exit(log.exit_code);
   }
