@@ -90,6 +90,7 @@ add_library(slowhttp STATIC
   src/attacks/slow_read.cpp
   src/attacks/slow_read_h2.cpp
   src/attacks/rapid_reset.cpp
+  src/attacks/continuation.cpp
   src/attacks/slow_body.cpp
   src/attacks/range.cpp
   src/config/cli.cpp

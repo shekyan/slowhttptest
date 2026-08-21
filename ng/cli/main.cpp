@@ -9,6 +9,7 @@
 #include "slowhttp/attacks/slow_read.hpp"
 #include "slowhttp/attacks/slow_read_h2.hpp"
 #include "slowhttp/attacks/rapid_reset.hpp"
+#include "slowhttp/attacks/continuation.hpp"
 #include "slowhttp/cli.hpp"
 #include "slowhttp/config.hpp"
 #include "slowhttp/engine.hpp"
@@ -45,6 +46,16 @@ int main(int argc, char** argv) {
     case slowhttp::Mode::SlowBody:
       attack.reset(new slowhttp::SlowBody(cfg));
       break;
+    case slowhttp::Mode::Continuation: {
+      auto* cf = new slowhttp::ContinuationFlood(cfg);
+      attack.reset(cf);
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  CONTINUATION flood: header block left open, a fragment"
+                     " every %llds\n",
+                     static_cast<long long>(cfg.interval.count()));
+      break;
+    }
     case slowhttp::Mode::RapidReset: {
       auto* rr = new slowhttp::RapidReset(cfg);
       attack.reset(rr);

@@ -25,6 +25,7 @@ SECTIONS = [
         ("-R", "range attack a.k.a. Apache killer"),
         ("-X", "slow read"),
         ("--rapid-reset", "HTTP/2 rapid reset (CVE-2023-44487); implies --http2"),
+        ("--continuation-flood", "HTTP/2 CONTINUATION flood; implies --http2"),
     ]),
     ("Target", [
         ("-u URL", "absolute URL of target (http://localhost/)"),

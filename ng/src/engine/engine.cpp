@@ -1513,6 +1513,8 @@ struct Engine::Impl {
       case Mode::SlowRead:    log.meta.mode_flag = "-X"; break;
       case Mode::Range:       log.meta.mode_flag = "-R"; break;
       case Mode::RapidReset:  log.meta.mode_flag = "--rapid-reset"; break;
+      case Mode::Continuation:
+        log.meta.mode_flag = "--continuation-flood"; break;
     }
     log.meta.mode_label = mode_name(cfg.mode);
     log.meta.connections = cfg.connections;

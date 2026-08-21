@@ -59,6 +59,7 @@ const char* mode_name(Mode m) {
     case Mode::SlowRead:    return "slow read";
     case Mode::Range:       return "range (Apache killer)";
     case Mode::RapidReset:  return "HTTP/2 rapid reset";
+    case Mode::Continuation: return "HTTP/2 CONTINUATION flood";
   }
   return "unknown";
 }
@@ -101,6 +102,7 @@ void print_usage() {
       "  -R                      range attack a.k.a. Apache killer\n"
       "  -X                      slow read\n"
       "  --rapid-reset           HTTP/2 rapid reset (CVE-2023-44487); implies --http2\n"
+      "  --continuation-flood    HTTP/2 CONTINUATION flood; implies --http2\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -411,9 +413,11 @@ enum {
   kOptH2Streams,
   kOptRapidReset,
   kOptH2ResetRate,
+  kOptContinuation,
 };
 
 const struct option kLongOptions[] = {
+    {"continuation-flood", no_argument, nullptr, kOptContinuation},
     {"rapid-reset", no_argument, nullptr, kOptRapidReset},
     {"h2-reset-rate", required_argument, nullptr, kOptH2ResetRate},
     {"http2", no_argument, nullptr, kOptHttp2},
@@ -509,6 +513,12 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       // two can be completely different network paths -- against one target here
       // the v4 path dropped SYNs where the v6 path did not, so consecutive
       // identical runs disagreed for reasons nothing in the output explained.
+      case kOptContinuation:
+        // Implies --http2: there is no HTTP/1.1 form of this. Its ancestor is
+        // -H, which is a different attack on a different protocol.
+        cfg.mode = Mode::Continuation;
+        cfg.http2 = true;
+        break;
       case kOptRapidReset:
         // Implies --http2: there is no HTTP/1.1 form of this attack.
         cfg.mode = Mode::RapidReset;
@@ -742,7 +752,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   }
 
   if (cfg.http2 && cfg.mode != Mode::SlowRead &&
-      cfg.mode != Mode::RapidReset) {
+      cfg.mode != Mode::RapidReset && cfg.mode != Mode::Continuation) {
     std::fprintf(stderr,
                  "Error: --http2 is implemented for slow read (-X) only.\n"
                  "       The other modes rest on HTTP/1.1 framing with no direct\n"

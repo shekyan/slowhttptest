@@ -279,6 +279,41 @@ connection once there are too many, so a server that has been fixed answers by
 hanging up.
 That arrives here as a peer close and is reported as such; a target that lets
 this run indefinitely has not been fixed.
+.It Fl \-continuation-flood
+HTTP/2 CONTINUATION flood.
+Implies
+.Fl \-http2 .
+.Pp
+The direct analogue of slow headers
+.Pq Fl H ,
+and worse than its ancestor in two ways.
+A header block may be split across a
+.Dv HEADERS
+frame and any number of
+.Dv CONTINUATION
+frames, and is only complete when one carries
+.Dv END_HEADERS .
+Until then the server cannot act on it: HPACK is a stateful compression context,
+so a partial block cannot be decoded, dispatched or discarded without
+desynchronising every later block on that connection.
+It has to be kept.
+This opens a block and never closes it.
+.Pp
+So the cost is memory that grows for as long as the client keeps sending, rather
+than one pinned connection slot.
+And in many stacks all of this happens before the point where a request is
+logged, so a server can be driven hard with nothing in its access log \-\- the
+operator sees memory climb and no requests to explain it.
+Observed against nginx 1.31.4, which closed every connection on its header
+limit and wrote nothing at all to the error log at
+.Cm warn
+level.
+.Pp
+.Fl i
+and
+.Fl x
+mean what they mean for slow headers: how often another fragment goes out, and
+how large the random field inside it is.
 .It Fl \-h2-reset-rate Ar n
 Streams opened and cancelled per second, per connection, with
 .Fl \-rapid-reset .

@@ -65,6 +65,7 @@ def main():
     ap.add_argument("port", nargs="?", type=int, default=8443)
     ap.add_argument("--expect-streams", type=int, default=0)
     ap.add_argument("--expect-resets", type=int, default=0)
+    ap.add_argument("--expect-continuations", type=int, default=0)
     ap.add_argument("--seconds", type=float, default=10.0)
     args = ap.parse_args()
 
@@ -101,6 +102,8 @@ def main():
 
     frames, streams, problems = [], set(), []
     resets = []          # stream ids cancelled, in order
+    continuations = 0
+    end_headers_seen = False
     order = []           # (kind, stream id) for HEADERS and RST_STREAM only
     while time.time() < deadline:
         while len(buf) >= 9:
@@ -134,6 +137,10 @@ def main():
                       flush=True)
                 if inc == 0:
                     problems.append("WINDOW_UPDATE increment of 0")
+            elif name == "CONTINUATION":
+                continuations += 1
+                if flags & 0x4:
+                    end_headers_seen = True
             elif name == "RST_STREAM":
                 code, = struct.unpack(">I", payload) if length == 4 else (None,)
                 if length != 4:
@@ -142,6 +149,8 @@ def main():
                 resets.append(sid)
                 order.append(("RST", sid))
             elif name == "HEADERS":
+                if flags & 0x4:
+                    end_headers_seen = True
                 order.append(("HDR", sid))
                 streams.add(sid)
                 if sid % 2 == 0:
@@ -192,6 +201,27 @@ def main():
                                 " RST_STREAM on the same stream"
                                 % (i, i + 1, kind_a, id_a, kind_b, id_b))
                 break
+
+    if args.expect_continuations:
+        print("continuations: %d" % continuations, flush=True)
+        if continuations < args.expect_continuations:
+            problems.append("expected at least %d CONTINUATION frames, saw %d"
+                            % (args.expect_continuations, continuations))
+        # The whole attack is that the block is never completed. One END_HEADERS
+        # anywhere hands the server a well-formed request and turns this into an
+        # ordinary slow client, so it is the single thing worth asserting.
+        if end_headers_seen:
+            problems.append("END_HEADERS was set: the header block was closed,"
+                            " which is not this attack")
+        # And nothing may be interleaved between HEADERS and its CONTINUATIONs
+        # (RFC 7540 6.2). A server is entitled to treat that as a connection
+        # error, so getting it wrong would end the run rather than sustain it.
+        after_headers = frames[frames.index("HEADERS") + 1:] \
+            if "HEADERS" in frames else []
+        stray = [f for f in after_headers if f != "CONTINUATION"]
+        if stray:
+            problems.append("frames interleaved into the header block: %s"
+                            % ", ".join(sorted(set(stray))))
 
     if args.expect_streams and len(streams) != args.expect_streams:
         problems.append("expected %d streams, saw %d"

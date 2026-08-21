@@ -9,7 +9,8 @@
 
 namespace slowhttp {
 
-enum class Mode { SlowHeaders, SlowBody, SlowRead, Range, RapidReset };
+enum class Mode { SlowHeaders, SlowBody, SlowRead, Range, RapidReset,
+                 Continuation };
 
 const char* mode_name(Mode m);
 
@@ -258,6 +259,7 @@ struct Config {
       case Mode::SlowBody: return "POST";
       case Mode::Range:    return "HEAD";
       case Mode::RapidReset: return "GET";
+      case Mode::Continuation: return "GET";
       default:             return "GET";
     }
   }

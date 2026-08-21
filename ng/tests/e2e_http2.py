@@ -73,6 +73,22 @@ def run_reset(tool, mock, rate, seconds):
     return checker.returncode, out
 
 
+def run_continuation(tool, mock, seconds):
+    port = free_port(9700)
+    checker = subprocess.Popen(
+        [sys.executable, mock, str(port), "--expect-continuations", "2",
+         "--seconds", str(seconds + 6)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    time.sleep(1.0)
+    subprocess.run(
+        [tool, "--continuation-flood", "-u", "http://127.0.0.1:%d/" % port,
+         "-c", "1", "-r", "1", "-l", str(seconds), "-i", "1",
+         "--no-probe", "-q"],
+        capture_output=True, text=True, timeout=90)
+    out, _ = checker.communicate(timeout=40)
+    return checker.returncode, out
+
+
 def main():
     if len(sys.argv) < 3:
         print(__doc__)
@@ -133,6 +149,18 @@ def main():
     else:
         seen = [l for l in out.splitlines() if l.startswith("streams reset:")]
         ok("rapid reset", seen[0] if seen else "")
+
+    # CONTINUATION flood: a header block that is opened and never closed.
+    # The checker asserts no END_HEADERS ever arrives and that nothing is
+    # interleaved -- either would make it a different, well-formed conversation.
+    rc, out = run_continuation(tool, mock, 6)
+    if rc != 0:
+        fail("continuation flood", "checker rejected the frames:\n%s" % out)
+    elif "continuations:" not in out:
+        fail("continuation flood", "no CONTINUATION frames seen:\n%s" % out)
+    else:
+        seen = [l for l in out.splitlines() if l.startswith("continuations:")]
+        ok("continuation flood", seen[0] if seen else "")
 
     if failures:
         print("e2e: %d case(s) failed: %s" % (len(failures), ", ".join(failures)),

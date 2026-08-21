@@ -35,6 +35,7 @@ enum class FrameType : std::uint8_t {
   RstStream = 0x3,
   Settings = 0x4,
   WindowUpdate = 0x8,
+  Continuation = 0x9,
 };
 
 // Frame flags, per type. END_STREAM and END_HEADERS share a byte position with
