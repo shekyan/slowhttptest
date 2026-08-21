@@ -42,6 +42,48 @@ def ok(name, detail=""):
     print(f"  {name}: OK{(' (' + detail + ')') if detail else ''}")
 
 
+def free_port():
+    """A port nothing is listening on, asked of the kernel rather than assumed.
+
+    This used to be a table of fixed numbers, and that made one failure into
+    many. When ctest times a run out it kills the harness outright, so the
+    finally blocks never run and the mock servers survive. The next run then
+    finds its port already open, wait_until(port_open) returns true against the
+    *stale* server, and the case proceeds to talk to the wrong process -- which
+    hangs, times out, and leaks another pair. Self-sustaining, and it looked for
+    days like an intermittent fault in the tool under test.
+    """
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+    finally:
+        s.close()
+
+
+def sweep_stale_servers():
+    """Kill mock servers left behind by an earlier run that was killed.
+
+    Belt and braces: dynamic ports already stop a leak from poisoning this run,
+    but a leaked server still burns CPU and file descriptors for as long as the
+    machine is up.
+    """
+    import signal as _sig
+    try:
+        out = subprocess.run(["pgrep", "-f", "tests/mock_"],
+                             capture_output=True, text=True).stdout.split()
+    except OSError:
+        return
+    mine = str(os.getpid())
+    for pid in out:
+        if pid == mine:
+            continue
+        try:
+            os.kill(int(pid), _sig.SIGKILL)
+        except (OSError, ValueError):
+            pass
+
+
 def terminate(proc):
     if proc and proc.poll() is None:
         proc.terminate()
@@ -530,30 +572,31 @@ def case_reports(tool, mock, port, tmpdir):
 
 
 def main():
+    sweep_stale_servers()
     if len(sys.argv) != 4:
         raise SystemExit(__doc__)
     tool, mock, proxy_script = sys.argv[1], sys.argv[2], sys.argv[3]
     tmpdir = tempfile.mkdtemp(prefix="slowhttp-e2e-")
 
     print("e2e: proxying")
-    case_http_via_proxy(tool, mock, proxy_script, 8301, 8401)
-    case_probe_proxy(tool, mock, proxy_script, 8302, 8402)
+    case_http_via_proxy(tool, mock, proxy_script, free_port(), free_port())
+    case_probe_proxy(tool, mock, proxy_script, free_port(), free_port())
 
     print("e2e: failure diagnosis")
-    case_local_limit_not_blamed_on_target(tool, mock, 8309)
+    case_local_limit_not_blamed_on_target(tool, mock, free_port())
     case_refused_blames_target(tool, 9)
 
     print("e2e: availability probe and verdict")
-    case_inconclusive(tool, mock, 8303)
-    case_capacity(tool, mock, 8304)
+    case_inconclusive(tool, mock, free_port())
+    case_capacity(tool, mock, free_port())
 
     print("e2e: connection accounting")
-    case_peer_close_detected(tool, mock, 8311)
-    case_held_not_overcounted(tool, mock, 8312)
+    case_peer_close_detected(tool, mock, free_port())
+    case_held_not_overcounted(tool, mock, free_port())
 
     print("e2e: reporting")
-    case_reports(tool, mock, 8305, tmpdir)
-    case_interrupt(tool, mock, 8310, tmpdir)
+    case_reports(tool, mock, free_port(), tmpdir)
+    case_interrupt(tool, mock, free_port(), tmpdir)
 
     print("e2e: TLS")
     if not tls_supported(tool):
@@ -563,9 +606,11 @@ def main():
         if not cert:
             print("  skipped: openssl not available to make a test certificate")
         else:
-            case_https(tool, mock, cert, key, 8306)
-            case_https_via_proxy(tool, mock, proxy_script, cert, key, 8307, 8403)
-            case_proxy_refuses(tool, mock, proxy_script, cert, key, 8308, 8404)
+            case_https(tool, mock, cert, key, free_port())
+            case_https_via_proxy(tool, mock, proxy_script, cert, key, free_port(),
+                                 free_port())
+            case_proxy_refuses(tool, mock, proxy_script, cert, key, free_port(),
+                               free_port())
 
     shutil.rmtree(tmpdir, ignore_errors=True)
     if failures:

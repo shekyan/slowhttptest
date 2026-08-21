@@ -22,6 +22,7 @@ Usage: e2e_attacks.py <path-to-slowhttptest-ng> <path-to-mock_slow_server.py>
 """
 import re
 import socket
+import os
 import subprocess
 import sys
 import tempfile
@@ -89,6 +90,43 @@ def wait_until(predicate, timeout, interval=0.25):
             return True
         time.sleep(interval)
     return False
+
+
+def free_port():
+    """A port nothing is listening on, asked of the kernel rather than assumed.
+
+    These used to be fixed numbers, and that turned one failure into a run of
+    them. ctest kills a timed-out harness outright, so its finally blocks never
+    run and the mock servers survive; the next run then finds its port already
+    open, wait_until(port_open) succeeds against the *stale* server, and the
+    case talks to the wrong process. That hangs, times out, and leaks another
+    server. Self-sustaining, and for days it looked like an intermittent fault
+    in the tool under test.
+    """
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+    finally:
+        s.close()
+
+
+def sweep_stale_servers():
+    """Kill mock servers a previously killed run left behind."""
+    import signal as _sig
+    try:
+        out = subprocess.run(["pgrep", "-f", "tests/mock_"],
+                             capture_output=True, text=True).stdout.split()
+    except OSError:
+        return
+    mine = str(os.getpid())
+    for pid in out:
+        if pid == mine:
+            continue
+        try:
+            os.kill(int(pid), _sig.SIGKILL)
+        except (OSError, ValueError):
+            pass
 
 
 def terminate(proc):
@@ -211,6 +249,7 @@ def run_range_case(tool, mock, port):
 
 
 def main():
+    sweep_stale_servers()
     if len(sys.argv) != 3:
         raise SystemExit(__doc__)
     tool, mock = sys.argv[1], sys.argv[2]
@@ -218,43 +257,43 @@ def main():
 
     print("e2e: slow headers (Slowloris)")
     # Workers pinned reading a request that never ends -> no progress at all.
-    run_case("vulnerable is wedged", tool, mock, 8123, "-H", (), (),
+    run_case("vulnerable is wedged", tool, mock, free_port(), "-H", (), (),
              expect_progress=False, saturation_field=0)
     # A header timeout reaps the slow senders, so the server keeps making progress.
-    run_case("header timeout defends", tool, mock, 8124, "-H",
+    run_case("header timeout defends", tool, mock, free_port(), "-H",
              ("--header-timeout", "2"), (), expect_progress=True)
 
     print("e2e: slow body (R-U-Dead-Yet)")
     # Workers pinned waiting for a request body that never arrives.
     slow_body_args = ("-i", "5", "-s", "100000")
-    run_case("vulnerable is wedged", tool, mock, 8128, "-B", (),
+    run_case("vulnerable is wedged", tool, mock, free_port(), "-B", (),
              slow_body_args, expect_progress=False, saturation_field=0)
     # Same asymmetry as slow read, for the same reason: the headers completed
     # instantly, so a header timeout has nothing to fire on.
-    run_case("header timeout does NOT defend", tool, mock, 8129, "-B",
+    run_case("header timeout does NOT defend", tool, mock, free_port(), "-B",
              ("--header-timeout", "2"), slow_body_args, expect_progress=False,
              saturation_field=0)
     # The matching defense is a request-body timeout.
-    run_case("body timeout defends", tool, mock, 8130, "-B",
+    run_case("body timeout defends", tool, mock, free_port(), "-B",
              ("--body-timeout", "2"), slow_body_args, expect_progress=True)
 
     print("e2e: slow read")
     slow_read_args = ("-w", "1", "-y", "8", "-z", "5", "-n", "3")
     # Workers pinned *sending* a response the client refuses to accept. Index 3 is
     # stuck_sending: it proves the mechanism is flow control, not a stalled request.
-    run_case("vulnerable is wedged", tool, mock, 8125, "-X", big,
+    run_case("vulnerable is wedged", tool, mock, free_port(), "-X", big,
              slow_read_args, expect_progress=False, saturation_field=3)
     # The key asymmetry: the Slowloris defense does nothing here, because the
     # slow-read request is complete and arrives instantly.
-    run_case("header timeout does NOT defend", tool, mock, 8126, "-X",
+    run_case("header timeout does NOT defend", tool, mock, free_port(), "-X",
              big + ("--header-timeout", "2"), slow_read_args,
              expect_progress=False, saturation_field=3)
     # The matching defense is a send timeout.
-    run_case("send timeout defends", tool, mock, 8127, "-X",
+    run_case("send timeout defends", tool, mock, free_port(), "-X",
              big + ("--send-timeout", "2"), slow_read_args, expect_progress=True)
 
     print("e2e: range (Apache killer)")
-    run_range_case(tool, mock, 8131)
+    run_range_case(tool, mock, free_port())
 
     print("e2e: all checks passed")
 
