@@ -1489,7 +1489,7 @@ struct Engine::Impl {
             " URL.";
         return false;
       }
-      tls = TlsContext::create(/*verify_peer=*/false, err);
+      tls = TlsContext::create(/*verify_peer=*/false, err, cfg.http2);
       if (!tls) return false;
       plan.tls = tls;
       plan.sni = cfg.target.host;
@@ -1512,6 +1512,7 @@ struct Engine::Impl {
       case Mode::SlowBody:    log.meta.mode_flag = "-B"; break;
       case Mode::SlowRead:    log.meta.mode_flag = "-X"; break;
       case Mode::Range:       log.meta.mode_flag = "-R"; break;
+      case Mode::RapidReset:  log.meta.mode_flag = "--rapid-reset"; break;
     }
     log.meta.mode_label = mode_name(cfg.mode);
     log.meta.connections = cfg.connections;

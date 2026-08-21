@@ -88,6 +88,8 @@ add_library(slowhttp STATIC
   src/engine/probe.cpp
   src/attacks/slow_headers.cpp
   src/attacks/slow_read.cpp
+  src/attacks/slow_read_h2.cpp
+  src/attacks/rapid_reset.cpp
   src/attacks/slow_body.cpp
   src/attacks/range.cpp
   src/config/cli.cpp
@@ -182,6 +184,14 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py)
   set_tests_properties(e2e_attacks PROPERTIES TIMEOUT 900)
+
+  # End-to-end: the HTTP/2 framing a peer actually has to accept.
+  add_test(NAME e2e_http2
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_http2.py
+            $<TARGET_FILE:slowhttptest-ng>
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
+  set_tests_properties(e2e_http2 PROPERTIES TIMEOUT 300)
 
   # End-to-end: TLS, proxying, the availability probe and the report artifacts.
   add_test(NAME e2e_transport

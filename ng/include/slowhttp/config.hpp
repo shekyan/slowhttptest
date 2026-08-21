@@ -9,7 +9,7 @@
 
 namespace slowhttp {
 
-enum class Mode { SlowHeaders, SlowBody, SlowRead, Range };
+enum class Mode { SlowHeaders, SlowBody, SlowRead, Range, RapidReset };
 
 const char* mode_name(Mode m);
 
@@ -142,6 +142,18 @@ struct Config {
   // network path between invocations.
   int address_family = 0;  // 0 == AF_UNSPEC
 
+  // HTTP/2. Only meaningful with slow read for now: the other three modes rest
+  // on HTTP/1.1 framing with no direct HTTP/2 equivalent, and the nearest
+  // analogues (a CONTINUATION flood in place of slow headers) are separate
+  // attacks rather than the same attack over different framing.
+  bool http2 = false;    // --http2
+  int h2_streams = 100;  // --h2-streams, streams pinned per connection
+  // --h2-reset-rate: streams opened and cancelled per second, per
+  // connection. Bounded by default because this is a load generator
+  // aimed at a known amplifier: with -c 50 the default is already 5000
+  // requests a second that a vulnerable server will process in full.
+  int h2_reset_rate = 100;
+
   std::chrono::seconds connect_timeout{10};
 
   // --max-connecting: ceiling on connections simultaneously mid-handshake.
@@ -245,6 +257,7 @@ struct Config {
     switch (mode) {
       case Mode::SlowBody: return "POST";
       case Mode::Range:    return "HEAD";
+      case Mode::RapidReset: return "GET";
       default:             return "GET";
     }
   }

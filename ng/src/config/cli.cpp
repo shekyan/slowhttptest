@@ -58,6 +58,7 @@ const char* mode_name(Mode m) {
     case Mode::SlowBody:    return "slow body (R-U-Dead-Yet)";
     case Mode::SlowRead:    return "slow read";
     case Mode::Range:       return "range (Apache killer)";
+    case Mode::RapidReset:  return "HTTP/2 rapid reset";
   }
   return "unknown";
 }
@@ -99,6 +100,7 @@ void print_usage() {
       "  -B                      slow body a.k.a. R-U-Dead-Yet\n"
       "  -R                      range attack a.k.a. Apache killer\n"
       "  -X                      slow read\n"
+      "  --rapid-reset           HTTP/2 rapid reset (CVE-2023-44487); implies --http2\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -140,6 +142,9 @@ void print_usage() {
       "  -w bytes                advertised window range, low end (1)\n"
       "  -y bytes                advertised window range, high end (512)\n"
       "  -k num                  repeat the request N times per connection (1)\n"
+      "  --http2                 speak HTTP/2; starves both flow-control windows\n"
+      "  --h2-streams N          streams pinned per connection with --http2 (100)\n"
+      "  --h2-reset-rate N       streams reset per second per connection (100)\n"
       "\n"
       "Availability probe (the verdict is based on this):\n"
       "  -p seconds              probe timeout; no response = unavailable (5)\n"
@@ -402,9 +407,17 @@ enum {
   kOptNoReferer,
   kOptConnectTimeout,
   kOptMaxConnecting,
+  kOptHttp2,
+  kOptH2Streams,
+  kOptRapidReset,
+  kOptH2ResetRate,
 };
 
 const struct option kLongOptions[] = {
+    {"rapid-reset", no_argument, nullptr, kOptRapidReset},
+    {"h2-reset-rate", required_argument, nullptr, kOptH2ResetRate},
+    {"http2", no_argument, nullptr, kOptHttp2},
+    {"h2-streams", required_argument, nullptr, kOptH2Streams},
     {"ipv4", no_argument, nullptr, '4'},
     {"ipv6", no_argument, nullptr, '6'},
     {"header", required_argument, nullptr, '1'},
@@ -496,6 +509,22 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       // two can be completely different network paths -- against one target here
       // the v4 path dropped SYNs where the v6 path did not, so consecutive
       // identical runs disagreed for reasons nothing in the output explained.
+      case kOptRapidReset:
+        // Implies --http2: there is no HTTP/1.1 form of this attack.
+        cfg.mode = Mode::RapidReset;
+        cfg.http2 = true;
+        break;
+      case kOptH2ResetRate:
+        if (!parse_long_int(cfg.h2_reset_rate, "h2-reset-rate", 1, 1000000))
+          return CliResult::kError;
+        break;
+      case kOptHttp2:
+        cfg.http2 = true;
+        break;
+      case kOptH2Streams:
+        if (!parse_long_int(cfg.h2_streams, "h2-streams", 1, 100000))
+          return CliResult::kError;
+        break;
       case '4': cfg.address_family = AF_INET; break;
       case '6': cfg.address_family = AF_INET6; break;
       // Same state as -v 0, spelled the way people look for it.
@@ -710,6 +739,18 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
     } else {
       cfg.user_agent = kDefaultUserAgent;
     }
+  }
+
+  if (cfg.http2 && cfg.mode != Mode::SlowRead &&
+      cfg.mode != Mode::RapidReset) {
+    std::fprintf(stderr,
+                 "Error: --http2 is implemented for slow read (-X) only.\n"
+                 "       The other modes rest on HTTP/1.1 framing with no direct\n"
+                 "       HTTP/2 equivalent; their analogues, such as a\n"
+                 "       CONTINUATION flood in place of slow headers, are\n"
+                 "       separate attacks rather than this one over different\n"
+                 "       framing.\n");
+    return CliResult::kError;
   }
 
   std::string err;

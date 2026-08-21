@@ -34,7 +34,12 @@ class TlsContext {
   // Builds a client context. Client certificates are loaded from the SSL_CERT
   // and SSL_KEY environment variables when both are set, matching the classic
   // tool's mTLS interface. Returns nullptr and sets `error` on failure.
-  static std::shared_ptr<TlsContext> create(bool verify_peer, std::string& error);
+  // `alpn_h2` offers HTTP/2 in the TLS handshake. Without it a server that
+  // speaks both settles on HTTP/1.1 and then rejects the HTTP/2 preface, which
+  // looks from the client side exactly like a server that stopped responding.
+  static std::shared_ptr<TlsContext> create(bool verify_peer, std::string& error,
+                                            bool alpn_h2 = false);
+
 
   struct Impl;
   Impl* impl() const { return impl_.get(); }

@@ -7,6 +7,8 @@
 #include "slowhttp/attacks/slow_body.hpp"
 #include "slowhttp/attacks/slow_headers.hpp"
 #include "slowhttp/attacks/slow_read.hpp"
+#include "slowhttp/attacks/slow_read_h2.hpp"
+#include "slowhttp/attacks/rapid_reset.hpp"
 #include "slowhttp/cli.hpp"
 #include "slowhttp/config.hpp"
 #include "slowhttp/engine.hpp"
@@ -28,11 +30,31 @@ int main(int argc, char** argv) {
       attack.reset(new slowhttp::SlowHeaders(cfg));
       break;
     case slowhttp::Mode::SlowRead:
-      attack.reset(new slowhttp::SlowRead(cfg));
+      if (cfg.http2) {
+        auto* h2 = new slowhttp::SlowReadH2(cfg);
+        attack.reset(h2);
+        if (cfg.log_level >= 1)
+          std::fprintf(stderr,
+                       "  HTTP/2: %d stream(s) per connection, %zu byte opening"
+                       " burst\n",
+                       h2->streams_per_connection(), h2->handshake_size());
+      } else {
+        attack.reset(new slowhttp::SlowRead(cfg));
+      }
       break;
     case slowhttp::Mode::SlowBody:
       attack.reset(new slowhttp::SlowBody(cfg));
       break;
+    case slowhttp::Mode::RapidReset: {
+      auto* rr = new slowhttp::RapidReset(cfg);
+      attack.reset(rr);
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  rapid reset: %d stream(s) per %lldms per connection\n",
+                     rr->per_tick(),
+                     static_cast<long long>(rr->tick().count()));
+      break;
+    }
     case slowhttp::Mode::Range: {
       auto* range = new slowhttp::RangeAttack(cfg);
       attack.reset(range);

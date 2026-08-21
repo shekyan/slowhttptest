@@ -244,6 +244,50 @@ requests use absolute-URI form.
 .It Fl e Ar host : Ns Ar port
 Route only the availability probe through this proxy, to measure availability
 from a different network path than the one being saturated.
+.It Fl \-http2
+Speak HTTP/2 instead of HTTP/1.1.
+Implemented for slow read
+.Pq Fl X
+only; the other modes rest on HTTP/1.1 framing with no direct equivalent.
+.Pp
+HTTP/2 makes slow read strictly stronger.
+It adds an application-layer flow-control window that the kernel does not clamp,
+so this opens that window to its maximum while starving the TCP window
+underneath: the server generates the response, cannot hand it over, and holds it
+in its own buffers rather than in socket buffers.
+That is CVE-2019-9517, internal data buffering.
+Multiplexing also pins many streams inside one connection, so per-IP connection
+limits, the usual Slowloris mitigation, do not see it.
+.It Fl \-h2-streams Ar n
+Streams to pin per connection with
+.Fl \-http2 .
+Default 100.
+.It Fl \-rapid-reset
+HTTP/2 rapid reset, CVE-2023-44487.
+Implies
+.Fl \-http2 .
+.Pp
+Opens a stream and cancels it immediately, repeatedly.
+A cancelled stream stops counting against
+.Dv SETTINGS_MAX_CONCURRENT_STREAMS
+the moment it is reset, but the server has already accepted the headers, routed
+the request and often dispatched it, so the concurrency limit never binds while
+the work does.
+.Pp
+The mitigation every implementation shipped is to count resets and close the
+connection once there are too many, so a server that has been fixed answers by
+hanging up.
+That arrives here as a peer close and is reported as such; a target that lets
+this run indefinitely has not been fixed.
+.It Fl \-h2-reset-rate Ar n
+Streams opened and cancelled per second, per connection, with
+.Fl \-rapid-reset .
+Default 100.
+.Pp
+Rate-limited deliberately.
+This is a load generator aimed at a known amplifier, and at the default
+connection count it already asks a vulnerable server to process several thousand
+requests a second.
 .It Fl 4 , Fl \-ipv4
 .It Fl 6 , Fl \-ipv6
 Resolve the target to IPv4 or IPv6 addresses only.

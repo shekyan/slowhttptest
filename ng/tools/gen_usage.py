@@ -24,6 +24,7 @@ SECTIONS = [
         ("-B", "slow body a.k.a. R-U-Dead-Yet"),
         ("-R", "range attack a.k.a. Apache killer"),
         ("-X", "slow read"),
+        ("--rapid-reset", "HTTP/2 rapid reset (CVE-2023-44487); implies --http2"),
     ]),
     ("Target", [
         ("-u URL", "absolute URL of target (http://localhost/)"),
@@ -65,6 +66,9 @@ SECTIONS = [
         ("-w bytes", "advertised window range, low end (1)"),
         ("-y bytes", "advertised window range, high end (512)"),
         ("-k num", "repeat the request N times per connection (1)"),
+        ("--http2", "speak HTTP/2; starves both flow-control windows"),
+        ("--h2-streams N", "streams pinned per connection with --http2 (100)"),
+        ("--h2-reset-rate N", "streams reset per second per connection (100)"),
     ]),
     ("Availability probe (the verdict is based on this)", [
         ("-p seconds", "probe timeout; no response = unavailable (5)"),

@@ -66,7 +66,8 @@ TlsContext::~TlsContext() = default;
 bool TlsContext::available() { return true; }
 
 std::shared_ptr<TlsContext> TlsContext::create(bool verify_peer,
-                                               std::string& error) {
+                                               std::string& error,
+                                               bool alpn_h2) {
   std::shared_ptr<TlsContext> self(new TlsContext);
   SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
   if (!ctx) {
@@ -80,6 +81,17 @@ std::shared_ptr<TlsContext> TlsContext::create(bool verify_peer,
   SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
   SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE |
                             SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
+  if (alpn_h2) {
+    // ALPN wire format is a sequence of length-prefixed names, so this is
+    // "\x02h2" and nothing else: offering http/1.1 as well would let the server
+    // pick it, and the caller asked for HTTP/2 specifically.
+    static const unsigned char kH2[] = {2, 'h', '2'};
+    if (SSL_CTX_set_alpn_protos(ctx, kH2, sizeof(kH2)) != 0) {
+      error = "cannot offer HTTP/2 over ALPN: " + openssl_error();
+      return nullptr;
+    }
+  }
 
   if (verify_peer) {
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
@@ -236,6 +248,17 @@ std::string TlsSession::description() const {
     out += " / ";
     out += SSL_CIPHER_get_name(c);
   }
+  // What ALPN actually settled on. Reported rather than assumed: offering h2
+  // does not mean getting it, and a server that quietly stayed on HTTP/1.1
+  // would then reject the HTTP/2 preface -- which looks from here like a server
+  // that simply stopped answering, the same thing a successful attack looks
+  // like. Naming it is the difference between the two.
+  const unsigned char* proto = nullptr;
+  unsigned int proto_len = 0;
+  SSL_get0_alpn_selected(impl_->ssl, &proto, &proto_len);
+  out += " / ";
+  out += proto_len ? std::string(reinterpret_cast<const char*>(proto), proto_len)
+                   : std::string("no ALPN");
   return out;
 }
 
@@ -265,7 +288,8 @@ TlsContext::~TlsContext() = default;
 bool TlsContext::available() { return false; }
 
 std::shared_ptr<TlsContext> TlsContext::create(bool /*verify_peer*/,
-                                               std::string& error) {
+                                               std::string& error,
+                                               bool /*alpn_h2*/) {
   error = "this build has no TLS backend (configured with -DSLOWHTTP_TLS=OFF)";
   return nullptr;
 }
