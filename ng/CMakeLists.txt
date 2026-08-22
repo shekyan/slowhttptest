@@ -81,6 +81,9 @@ endif()
 add_library(slowhttp STATIC
   src/net/http2.cpp
   src/net/reactor_poll.cpp
+  # Compiled everywhere; the file guards itself and the factory only reaches for
+  # it on platforms that have kqueue.
+  $<$<OR:$<PLATFORM_ID:Darwin>,$<PLATFORM_ID:FreeBSD>,$<PLATFORM_ID:OpenBSD>,$<PLATFORM_ID:NetBSD>>:src/net/reactor_kqueue.cpp>
   src/net/socket.cpp
   src/net/address.cpp
   src/net/tls.cpp

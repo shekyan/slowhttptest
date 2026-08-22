@@ -18,6 +18,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -142,7 +143,28 @@ class PollReactor : public Reactor {
 
 }  // namespace
 
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
+    defined(__NetBSD__)
+#define SLOWHTTP_HAVE_KQUEUE 1
+std::unique_ptr<Reactor> make_kqueue_reactor();
+#endif
+
+// kqueue where it exists, poll everywhere else.
+//
+// SLOWHTTP_REACTOR=poll forces the portable backend. That exists so the two can
+// be compared on the same machine and the same target -- a backend that is only
+// ever exercised on one platform is a backend nobody has checked against the
+// other, and every behavioural difference between these two has to be found by
+// running them side by side.
 std::unique_ptr<Reactor> Reactor::create() {
+#ifdef SLOWHTTP_HAVE_KQUEUE
+  const char* forced = ::getenv("SLOWHTTP_REACTOR");
+  if (!forced || std::strcmp(forced, "poll") != 0) {
+    if (auto kq = make_kqueue_reactor()) return kq;
+    // Falling back rather than failing: a machine that cannot create a kqueue
+    // can still run the test, just with the old ceiling.
+  }
+#endif
   return std::unique_ptr<Reactor>(new PollReactor());
 }
 

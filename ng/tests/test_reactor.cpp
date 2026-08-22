@@ -13,6 +13,8 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <memory>
 #include <vector>
 
 #include "slowhttp/reactor.hpp"
@@ -30,6 +32,11 @@ static void check(bool cond, const char* what) {
 }
 
 int main() {
+  // This test asserts what each backend does, so it must not inherit a choice
+  // from whoever ran it. The suite is run once with SLOWHTTP_REACTOR=poll set
+  // in the environment to exercise the portable path end to end, and without
+  // this the default-backend checks below would be describing poll instead.
+  ::unsetenv("SLOWHTTP_REACTOR");
   auto r = Reactor::create();
   std::vector<IoEvent> events;
 
@@ -83,9 +90,42 @@ int main() {
     check(cap == 0 || cap >= 1024,
           "a reported ceiling is a plausible one, not a tiny number");
 #if defined(__APPLE__)
-    // Darwin's is a compile-time OPEN_MAX that no ulimit raises, so it must be
-    // reported -- this is exactly the platform where the silent spin happened.
-    check(cap > 0, "macOS reports its fixed poll() ceiling");
+    // On Darwin the default backend is kqueue, which has no ceiling of its own,
+    // so it must report none -- getting past OPEN_MAX is the entire reason it
+    // exists, and a ceiling here would make the engine refuse a -c that is now
+    // perfectly achievable.
+    check(cap == 0, "kqueue reports no descriptor ceiling");
+#endif
+  }
+
+  // The portable backend, forced. Both are compiled on this platform and only
+  // one of them is exercised by default, so the other has to be reached
+  // deliberately or it is a backend nobody has run.
+  {
+#if defined(__APPLE__)
+    ::setenv("SLOWHTTP_REACTOR", "poll", 1);
+    std::unique_ptr<slowhttp::Reactor> p = slowhttp::Reactor::create();
+    check(p != nullptr, "SLOWHTTP_REACTOR=poll yields a reactor");
+    // Darwin's poll() ceiling is a compile-time OPEN_MAX that no ulimit raises,
+    // and the engine relies on it being reported: this is the platform where
+    // exceeding it turned into a silent 91-million-iteration spin.
+    check(p->max_descriptors() > 0, "poll reports its fixed OPEN_MAX ceiling");
+
+    // And it still works, not just reports. A backend that is only ever
+    // selected and never driven is not covered by anything.
+    int fds[2];
+    check(::pipe(fds) == 0, "pipe for the forced-poll check");
+    p->add(fds[0], slowhttp::kRead);
+    const char c = 'x';
+    check(::write(fds[1], &c, 1) == 1, "write to the forced-poll pipe");
+    std::vector<slowhttp::IoEvent> evs;
+    const int n = p->wait(evs, std::chrono::milliseconds(50));
+    check(n == 1 && evs.size() == 1 && evs[0].fd == fds[0] && evs[0].readable,
+          "forced poll backend reports a ready descriptor");
+    p->remove(fds[0]);
+    ::close(fds[0]);
+    ::close(fds[1]);
+    ::unsetenv("SLOWHTTP_REACTOR");
 #endif
   }
 
