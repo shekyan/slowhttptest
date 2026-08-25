@@ -162,6 +162,71 @@ def main():
         seen = [l for l in out.splitlines() if l.startswith("continuations:")]
         ok("continuation flood", seen[0] if seen else "")
 
+    # HTTP/2 through a plain-http proxy has to be refused, not attempted.
+    # Attempted, it produces a run that looks like a result: the proxy cannot
+    # parse an HTTP/2 preface, closes every connection, and the tool reports a
+    # pile of peer closes and "No open connections left" -- indistinguishable
+    # from a target shedding load. Measured before the check existed: 24
+    # connections opened, 24 closed by the proxy, nothing tested.
+    r = subprocess.run([tool, "-X", "--http2", "-u", "http://127.0.0.1:1/",
+                        "-d", "127.0.0.1:2", "-c", "1", "-l", "1"],
+                       capture_output=True, text=True, timeout=30)
+    combined = (r.stdout + r.stderr).lower()
+    if r.returncode == 0:
+        fail("refuses http2 through an http proxy", "it was accepted")
+    elif "--http2" not in combined or "-d" not in combined:
+        fail("refuses http2 through an http proxy",
+             "rejected without naming the conflict: %s" % r.stderr[-200:])
+    else:
+        ok("refuses http2 through an http proxy")
+
+    # ...but https through a CONNECT tunnel is fine and must stay allowed, so
+    # the check above cannot simply ban --http2 alongside -d. This one is
+    # expected to fail at connect time, not at argument parsing.
+    r = subprocess.run([tool, "-X", "--http2", "-u", "https://127.0.0.1:1/",
+                        "-d", "127.0.0.1:2", "-c", "1", "-l", "1",
+                        "--no-probe", "-q"],
+                       capture_output=True, text=True, timeout=30)
+    if r.returncode == 2:
+        fail("allows http2 through a CONNECT proxy",
+             "rejected as a usage error: %s" % (r.stdout + r.stderr)[-200:])
+    else:
+        ok("allows http2 through a CONNECT proxy")
+
+    # -4 and -6 shipped with no coverage at all. They decide which network a
+    # run measures, and a run that silently lands on the other one disagrees
+    # with its predecessor for reasons nothing in the output explains.
+    port = free_port(9900)
+    srv = subprocess.Popen([sys.executable, mock, str(port), "--seconds", "12"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
+    try:
+        r = subprocess.run([tool, "-X", "-4", "-u", "http://localhost:%d/" % port,
+                            "-c", "2", "-r", "2", "-l", "3", "--no-probe"],
+                           capture_output=True, text=True, timeout=60)
+        if "127.0.0.1" not in r.stderr:
+            fail("-4 pins IPv4", "did not resolve to an IPv4 address:\n%s"
+                 % r.stderr[-300:])
+        else:
+            ok("-4 pins IPv4")
+
+        # The mock listens on IPv4 only, so -6 must fail cleanly and say that
+        # nothing was tested -- never report a result it did not measure.
+        r = subprocess.run([tool, "-X", "-6", "-u", "http://localhost:%d/" % port,
+                            "-c", "2", "-r", "2", "-l", "3", "--no-probe"],
+                           capture_output=True, text=True, timeout=60)
+        both = r.stdout + r.stderr
+        if r.returncode == 0:
+            fail("-6 pins IPv6", "exited 0 despite reaching nothing")
+        elif "::1" not in both and "no IPv6" not in both:
+            fail("-6 pins IPv6", "did not resolve to IPv6:\n%s" % both[-300:])
+        elif "nothing was actually tested" not in both:
+            fail("-6 pins IPv6", "failed without saying nothing was tested")
+        else:
+            ok("-6 pins IPv6", "and says nothing was tested")
+    finally:
+        srv.kill()
+
     if failures:
         print("e2e: %d case(s) failed: %s" % (len(failures), ", ".join(failures)),
               flush=True)

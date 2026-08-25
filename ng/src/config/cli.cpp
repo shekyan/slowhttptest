@@ -3,6 +3,8 @@
 #include "slowhttp/cli.hpp"
 
 #include <getopt.h>
+
+#include <memory>
 #include <sys/socket.h>
 
 #include <cstdio>
@@ -73,12 +75,14 @@ void print_version() {
   // The connection ceiling belongs here too: on some platforms it is a fixed
   // property of the reactor backend rather than something -c or ulimit controls,
   // and finding that out by hitting it is a bad way to learn.
-  const std::size_t cap = Reactor::create()->max_descriptors();
+  const std::unique_ptr<Reactor> reactor = Reactor::create();
+  const std::size_t cap = reactor->max_descriptors();
   if (cap > 0)
-    std::printf("reactor: poll, max %zu connections (fixed OPEN_MAX ceiling)\n",
-                cap);
+    std::printf("reactor: %s, max %zu connections (fixed OPEN_MAX ceiling)\n",
+                reactor->name(), cap);
   else
-    std::printf("reactor: poll, bounded by the file descriptor limit\n");
+    std::printf("reactor: %s, bounded by the file descriptor limit\n",
+                reactor->name());
 }
 
 void print_usage() {
@@ -768,6 +772,35 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
     std::fprintf(stderr, "Error: %s\n", err.c_str());
     return CliResult::kError;
   }
+
+  // HTTP/2 cannot be spoken to a plain HTTP proxy.
+  //
+  // For http, -d proxies by rewriting the request line into absolute-URI form,
+  // which is an HTTP/1.1 mechanism: the proxy parses the request. An HTTP/2
+  // connection preface is not something it can parse, so it closes -- and the
+  // run then reports a pile of peer closes and "No open connections left",
+  // which reads exactly like a target dropping connections under load.
+  // Measured before this check existed: 24 connections opened, 24 closed by the
+  // proxy, nothing tested, and nothing in the output saying so.
+  //
+  // https is unaffected and deliberately still allowed: there the proxy is a
+  // CONNECT tunnel relaying bytes it never inspects, so ALPN negotiates h2 with
+  // the origin end to end. Verified against a real proxy and nginx.
+  if (cfg.http2 && cfg.proxy.enabled() && !cfg.target.tls()) {
+    std::fprintf(stderr,
+                 "Error: --http2 cannot go through -d with an http:// target.\n"
+                 "       Proxying plain http rewrites the request line, which"
+                 " an HTTP/2\n"
+                 "       proxy would have to parse -- it cannot, and closes"
+                 " every connection,\n"
+                 "       which looks like a target under load rather than a"
+                 " misconfiguration.\n"
+                 "       Use an https:// target, where -d becomes a CONNECT"
+                 " tunnel and HTTP/2\n"
+                 "       works end to end, or drop -d.\n");
+    return CliResult::kError;
+  }
+
   return CliResult::kRun;
 }
 
