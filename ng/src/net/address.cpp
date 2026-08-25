@@ -40,6 +40,15 @@ bool ResolvedAddr::resolve(const std::string& host, const std::string& port,
   return true;
 }
 
+std::string ResolvedAddr::numeric_host(const addrinfo* ai) {
+  if (ai == nullptr) return {};
+  char host[NI_MAXHOST] = {0};
+  if (::getnameinfo(ai->ai_addr, ai->ai_addrlen, host, sizeof(host), nullptr, 0,
+                    NI_NUMERICHOST) != 0)
+    return {};
+  return host;
+}
+
 std::string ResolvedAddr::describe(const addrinfo* ai) {
   if (ai == nullptr) return "<none>";
   char host[NI_MAXHOST] = {0};

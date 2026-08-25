@@ -1622,7 +1622,14 @@ struct Engine::Impl {
     if (cfg.probe_enabled) {
       prober.reset(new Prober(cfg, tls));
       std::string perr;
-      if (!prober->start(perr)) {
+      // The address the attack is using, so the oracle cannot drift onto a
+      // different one. Empty when a proxy is in play, where the probe is meant
+      // to go elsewhere.
+      const std::string pinned =
+          (cfg.proxy.enabled() || cfg.probe_proxy.enabled())
+              ? std::string()
+              : ResolvedAddr::numeric_host(current_addr());
+      if (!prober->start(perr, cfg.address_family, pinned)) {
         // A broken probe path costs the verdict, not the test. Say so loudly and
         // carry on rather than refusing to run at all.
         if (chatty())
@@ -1692,6 +1699,13 @@ struct Engine::Impl {
             static_cast<long long>(cfg.interval.count()));
       }
       row("connections per seconds:", "%d", cfg.rate);
+      // Printed next to the attack's address on purpose: when they differ
+      // without a proxy to explain it, the run is measuring one endpoint and
+      // reporting on another.
+      if (prober && !prober->endpoint().empty())
+        row("probe endpoint:", "%s%s", prober->endpoint().c_str(),
+            (cfg.proxy.enabled() || cfg.probe_proxy.enabled()) ? " (via proxy)"
+                                                               : "");
       row("probe:", "%s", probe_desc);
       row("test duration:", "%lld seconds",
           static_cast<long long>(cfg.duration.count()));

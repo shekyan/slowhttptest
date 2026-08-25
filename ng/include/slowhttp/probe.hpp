@@ -37,7 +37,26 @@ class Prober {
   // Resolves the probe endpoint. Returns false and sets `error` on failure; the
   // engine treats that as "no probing", not as a fatal error, so a test still
   // runs when only the probe path is broken.
-  bool start(std::string& error);
+  // `family` is AF_UNSPEC/AF_INET/AF_INET6, matching -4/-6.
+  //
+  // `pinned_host` is the address the attack settled on, in numeric form, and
+  // exists because the probe is the oracle the verdict rests on. Resolving the
+  // target a second time is not harmless: a dual-stack name can hand the probe
+  // a different address from the one under attack, and then the run measures
+  // one endpoint and reports on another. Observed: the attack pinned ::1 where
+  // nothing listened and every connection was refused, while the probe reached
+  // the IPv4 address and reported the service available.
+  //
+  // Ignored when the probe goes through a proxy, where it is connecting
+  // somewhere else on purpose.
+  // Where the probe will actually connect, in numeric form, once started.
+  // Printed at startup and asserted by the tests: the probe is the oracle the
+  // verdict rests on, so "it goes where the attack goes" has to be checkable
+  // rather than merely intended.
+  std::string endpoint() const;
+
+  bool start(std::string& error, int family = 0,
+             const std::string& pinned_host = std::string());
 
   // Reports each completed measurement. Set before the first tick().
   std::function<void(const ProbeSample&)> on_sample;

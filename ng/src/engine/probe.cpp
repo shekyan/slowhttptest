@@ -103,7 +103,8 @@ Prober::Prober(const Config& cfg, std::shared_ptr<TlsContext> tls)
 
 Prober::~Prober() = default;
 
-bool Prober::start(std::string& error) {
+bool Prober::start(std::string& error, int family,
+                   const std::string& pinned_host) {
   const Config& cfg = impl_->cfg;
   // -e wins over -d for probe traffic: naming a probe proxy explicitly is a
   // statement about where availability should be measured from.
@@ -111,13 +112,22 @@ bool Prober::start(std::string& error) {
       cfg.probe_proxy.enabled() ? cfg.probe_proxy : cfg.proxy;
   impl_->through_proxy = via.enabled();
 
-  const std::string host = via.enabled() ? via.host : cfg.target.host;
+  // Straight to the address the attack chose when there is no proxy in the
+  // way, so both halves of the run are measuring the same machine.
+  const std::string host = via.enabled()
+                               ? via.host
+                               : (pinned_host.empty() ? cfg.target.host
+                                                      : pinned_host);
   const std::string port = via.enabled() ? via.port : cfg.target.port;
-  if (!impl_->addr.resolve(host, port, error)) return false;
+  if (!impl_->addr.resolve(host, port, error, family)) return false;
 
   impl_->request = build_probe_request(cfg, impl_->through_proxy);
   degraded_above_ = cfg.degraded_above;
   return true;
+}
+
+std::string Prober::endpoint() const {
+  return ResolvedAddr::describe(impl_->current());
 }
 
 int Prober::fd() const {

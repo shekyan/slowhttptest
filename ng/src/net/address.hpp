@@ -36,6 +36,11 @@ class ResolvedAddr {
   // Human-readable "host:port" for a candidate, for diagnostics.
   static std::string describe(const addrinfo* ai);
 
+  // Just the address, no port and no brackets -- the form getaddrinfo takes
+  // back. Used to pin a second resolution to an address already chosen, so two
+  // parts of the same run cannot end up talking to different machines.
+  static std::string numeric_host(const addrinfo* ai);
+
  private:
   addrinfo* list_ = nullptr;
   std::vector<const addrinfo*> candidates_;

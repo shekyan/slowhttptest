@@ -11,6 +11,7 @@ closes or goes quiet, which is what a working slow-read attack also looks like.
     usage: e2e_http2.py <slowhttptest-ng> <mock_h2_server.py>
 """
 import os
+import re
 import subprocess
 import sys
 import time
@@ -224,6 +225,54 @@ def main():
             fail("-6 pins IPv6", "failed without saying nothing was tested")
         else:
             ok("-6 pins IPv6", "and says nothing was tested")
+    finally:
+        srv.kill()
+
+    # The probe must reach the same address the attack does.
+    #
+    # It used to resolve the target independently, so against a dual-stack name
+    # the attack could pin ::1 -- where nothing listened, every connection
+    # refused -- while the probe reached 127.0.0.1 and reported the service
+    # healthy. The probe is the oracle every verdict rests on, so that is a run
+    # measuring one machine and reporting on another; on a real target it would
+    # be silently wrong rather than visibly broken.
+    #
+    # Asserted against the reported endpoints rather than against the symptom.
+    # Waiting for the symptom means waiting for the two resolutions to disagree,
+    # which depends on resolver ordering -- the unstable thing this is about --
+    # and a first attempt at that passed against the reintroduced bug by luck.
+    port = free_port(9950)
+    srv = subprocess.Popen([sys.executable, mock, str(port), "--seconds", "20"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
+    try:
+        pairs = []
+        for fam in ("-4", "-6"):
+            r = subprocess.run([tool, "-X", fam,
+                                "-u", "http://localhost:%d/" % port,
+                                "-c", "2", "-r", "2", "-l", "3",
+                                "-p", "2", "--probe-interval", "1"],
+                               capture_output=True, text=True, timeout=90)
+            both = r.stdout + r.stderr
+            attack = re.search(r"resolved address:\s+(\S+)", both)
+            probe = re.search(r"probe endpoint:\s+(\S+)", both)
+            pairs.append((fam, attack.group(1) if attack else None,
+                          probe.group(1) if probe else None))
+
+        bad = [p for p in pairs if p[1] is None or p[2] is None or p[1] != p[2]]
+        if bad:
+            fail("probe follows the attack",
+                 "attack and probe endpoints differ: %s" % bad)
+        else:
+            # And -4/-6 must actually move it, or both could agree by accident
+            # on whatever the resolver happened to prefer.
+            fams = {p[0]: p[1] for p in pairs}
+            if fams["-4"] == fams["-6"]:
+                fail("probe follows the attack",
+                     "-4 and -6 chose the same address: %s" % fams)
+            else:
+                ok("probe follows the attack",
+                   "%s and %s, probe matched both" % (fams["-4"], fams["-6"]))
     finally:
         srv.kill()
 
