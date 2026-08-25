@@ -195,7 +195,23 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_http2.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
-  set_tests_properties(e2e_http2 PROPERTIES TIMEOUT 300)
+  set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT 300)
+
+  # The same end-to-end run again, forced onto the poll() backend.
+  #
+  # kqueue is now the default wherever it exists, which means that on macOS and
+  # the BSDs nothing exercised poll() any more -- the backend every other
+  # platform uses. Two implementations of the reactor with only one of them
+  # tested per platform is how a backend quietly rots. Cheap: this is the
+  # shortest of the end-to-end suites.
+  add_test(NAME e2e_http2_poll
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_http2.py
+            $<TARGET_FILE:slowhttptest-ng>
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
+  set_tests_properties(e2e_http2_poll PROPERTIES
+    LABELS "e2e" TIMEOUT 300
+    ENVIRONMENT "SLOWHTTP_REACTOR=poll")
 
   # End-to-end: TLS, proxying, the availability probe and the report artifacts.
   add_test(NAME e2e_transport

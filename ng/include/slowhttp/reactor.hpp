@@ -45,6 +45,13 @@ class Reactor {
   // Largest number of descriptors this backend can watch at once, or 0 when the
   // only limit is the process file-descriptor limit. Lets the engine refuse an
   // impossible connection count up front instead of failing 10,000 sockets in.
+  // Which backend this actually is. Reported by -V, which used to print "poll"
+  // unconditionally -- so on a machine running kqueue the version output named
+  // the wrong backend while correctly reporting that backend's descriptor
+  // ceiling. A diagnostic that contradicts itself is worse than none, and -V
+  // output is what arrives in bug reports.
+  virtual const char* name() const = 0;
+
   virtual std::size_t max_descriptors() const = 0;
 
   // Why the last wait() returned -1. Empty if nothing has failed.

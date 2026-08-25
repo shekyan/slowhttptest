@@ -112,6 +112,8 @@ class KqueueReactor : public Reactor {
     return static_cast<int>(merged_.size());
   }
 
+  const char* name() const override { return "kqueue"; }
+
   // No ceiling worth reporting. Unlike poll() on Darwin, kqueue is bounded only
   // by the process descriptor limit, and 0 is this interface's way of saying
   // "ask the operating system, not me".

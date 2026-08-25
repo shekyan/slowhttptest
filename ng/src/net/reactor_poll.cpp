@@ -113,6 +113,8 @@ class PollReactor : public Reactor {
     return produced;
   }
 
+  const char* name() const override { return "poll"; }
+
   std::size_t max_descriptors() const override { return poll_capacity(); }
 
   const std::string& last_error() const override { return last_error_; }
