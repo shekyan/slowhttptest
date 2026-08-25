@@ -14,13 +14,18 @@ rationale, and the roadmap.
 
 - **Library + CLI split** — `libslowhttp` (engine) is independent of `cli/` and
   unit-testable.
-- **Reactor abstraction** (`slowhttp/reactor.hpp`) with a portable `poll()` backend
-  that builds on Linux/macOS/BSD. epoll/kqueue backends drop in behind the same
-  interface without changing the engine.
+- **Reactor abstraction** (`slowhttp/reactor.hpp`) with two backends behind one
+  interface: `poll()` everywhere, and **kqueue** on macOS/BSD, which is not an
+  optimisation but the only way past Darwin's fixed `OPEN_MAX` ceiling of 10240
+  descriptors. `-V` reports which one a build will use. An epoll backend for
+  Linux drops in the same way and is not yet written.
 - **Attack state-machine interface** (`slowhttp/attack.hpp`) — attacks decide *what
   bytes to dribble and when*; the engine owns all I/O and timers.
-- **All four attack modes**, each wired end-to-end against a real target:
-  slow headers (`-H`), slow body (`-B`), slow read (`-X`), range (`-R`).
+- **Six attack modes**, each wired end-to-end against a real target. Four over
+  HTTP/1.1 — slow headers (`-H`), slow body (`-B`), slow read (`-X`), range
+  (`-R`) — and, over HTTP/2, slow read (`--http2`, CVE-2019-9517), rapid reset
+  (`--rapid-reset`, CVE-2023-44487) and the CONTINUATION flood
+  (`--continuation-flood`).
 - **TLS / https** over system OpenSSL, with SNI and client certificates from
   `SSL_CERT` / `SSL_KEY` (same environment variables as the classic tool).
 - **Proxy support** — `-d` routes all traffic, `-e` routes only the probe.
@@ -43,11 +48,15 @@ rationale, and the roadmap.
 
 ## Not yet ported
 
-- epoll/kqueue reactor backends (the abstraction is in place; `poll()` works
-  everywhere and is the current ceiling on connection counts).
-- HTTP/2 attack modes — deliberately deferred, and probably where the remaining
-  value is; see
-  [DESIGN.md §5](DESIGN.md#5-http2-deferred-but-where-the-value-likely-is).
+- **epoll**, for Linux. kqueue is done, and it was the urgent one: Darwin's
+  `poll()` refuses more than `OPEN_MAX` (10240) descriptors and no
+  file-descriptor limit moves it. Linux `poll()` has no such wall, so the
+  ceiling there is the O(n) scan and `RLIMIT_NOFILE`, which has not been
+  measured.
+- **HTTP/2 over an HTTP proxy.** `--http2` with `-d` is refused for `http://`
+  targets: proxying plain http rewrites the request line, which an HTTP/2 proxy
+  would have to parse. `https://` works, because `-d` is then a `CONNECT`
+  tunnel.
 
 ## Migrating from `slowhttptest`
 
@@ -188,14 +197,15 @@ compiled in, and the reactor's connection ceiling:
 slowhttptest-ng 2.0.0
 https://github.com/shekyan/slowhttptest
 TLS: enabled (OpenSSL)
-reactor: poll, max 10240 connections (fixed OPEN_MAX ceiling)
+reactor: kqueue, bounded by the file descriptor limit
 ```
 
 Both of the last two matter in a bug report. A build without TLS behaves
-differently in a way that is otherwise invisible, and on some platforms — macOS
-among them — `poll()` cannot watch more than a fixed `OPEN_MAX` descriptors no
-matter what `ulimit -n` says. A `-c` above that ceiling is refused at startup
-rather than discovered ten thousand sockets in.
+differently in a way that is otherwise invisible, and the reactor decides the
+connection ceiling: `poll()` on macOS cannot watch more than a fixed `OPEN_MAX`
+of 10240 descriptors whatever `ulimit -n` says, while kqueue is bounded only by
+the descriptor limit. A `-c` above the ceiling is refused at startup rather than
+discovered ten thousand sockets in.
 
 ## Try it locally — watch a real denial of service
 

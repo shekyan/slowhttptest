@@ -128,7 +128,7 @@ assuming the request took effect.
 **Range** is a regression check, not a live exploit: CVE-2011-3192 was patched in
 2011. It answers "is this still vulnerable?".
 
-## 5. HTTP/2 (deferred, but where the value likely is)
+## 5. HTTP/2 (implemented; where the value was)
 
 Slow read works on HTTP/2 and is *stronger* there, for two reasons: HTTP/2 adds
 an explicit application-layer flow-control window (`SETTINGS_INITIAL_WINDOW_SIZE`,
@@ -149,7 +149,25 @@ consequential HTTP DoS of the last decade and untouched by the current tool —
 and the **CONTINUATION flood**, which is the true Slowloris analogue and which
 many stacks buffer unboundedly *without logging*.
 
-Deferred by decision, not by difficulty.
+All three are implemented: `--http2` for slow read, `--rapid-reset`, and
+`--continuation-flood`. The framing is send-only -- no frame parser, no HPACK
+decoder, no dynamic table -- because none of these attacks needs to understand
+what the server says, only to make it hold something.
+
+Verified against nginx 1.31.4 rather than against a validator written alongside
+the encoder, which could not catch a misreading shared by both. nginx logged no
+protocol errors; slow read left it holding 326 KB per connection with our TCP
+window at zero; rapid reset and the CONTINUATION flood were both met by nginx
+closing the connection, which is the mitigation working and which the tool
+reports as `peer_closed`.
+
+Worth recording, because it is the finding rather than the feature: nginx alone
+is a poor target for HTTP/2 slow read. It is event driven and its own buffering
+is bounded, so it holds. What gives way is whatever is behind it -- with
+`proxy_buffering off`, four client connections became 128 pinned upstream
+requests against an eight-worker backend and denied the service outright. The
+32x multiplier is `--h2-streams`, and per-IP connection limits, the standard
+Slowloris mitigation, saw four connections.
 
 ## 6. Measuring the outcome, not the attack
 
@@ -239,13 +257,18 @@ real-world exposure under its own name.
 
 ## 8. Roadmap
 
-Done: all four attack modes, reactor, engine, CLI parity, TLS/https, proxying
+Done: all four HTTP/1.1 attack modes, reactor, engine, CLI parity, TLS/https, proxying
 (`-d`/`-e`, including `CONNECT`), the availability probe (`-p`), the capacity
 staircase, HTML + JSON reporting, install rules, man page, tests, CI.
 
+Also done since: kqueue, HTTP/2 (all three attacks), `-4`/`-6`, a `./configure`
+front end for packagers, and the report naming the protocol it actually used.
+
 Remaining:
 
-1. **epoll/kqueue reactor backends.** Measured, rather than assumed:
+1. **An epoll backend for Linux.** kqueue is done and was the urgent half; the
+   measurements that motivated it are kept below because they say something the
+   headline does not -- CPU was never the problem:
 
    | connections | held | system CPU (40 s run) | share of a core |
    |---|---|---|---|
@@ -270,4 +293,6 @@ Remaining:
 
    Do kqueue first: it is the platform where the wall is hard, near, and hit by
    the maintainer's own machine.
-2. **HTTP/2** — see §5. Deliberately deferred, and where the value likely is.
+2. ~~**HTTP/2**~~ — done; see §5. Slow read (CVE-2019-9517), rapid reset
+   (CVE-2023-44487) and the CONTINUATION flood, all verified against nginx
+   1.31.4.
