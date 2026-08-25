@@ -1516,7 +1516,18 @@ struct Engine::Impl {
       case Mode::Continuation:
         log.meta.mode_flag = "--continuation-flood"; break;
     }
-    log.meta.mode_label = mode_name(cfg.mode);
+    // A flag that does not reproduce the run is worse than none: -X alone
+    // describes a different attack from the one that was carried out.
+    if (cfg.http2 && cfg.mode == Mode::SlowRead)
+      log.meta.mode_flag += " --http2";
+    // Taken from the attack rather than from the mode enum. mode_name() knows
+    // only the mode, so with --http2 it called an HTTP/2 slow read "slow read"
+    // -- and the report is the artifact people attach to tickets. A reader
+    // would have concluded that HTTP/1.1 slow read denied the service, when it
+    // was CVE-2019-9517, a different attack with different mitigations, and
+    // nothing in the HTML said HTTP/2 at all. The attack names itself, so this
+    // stays right as attacks are added.
+    log.meta.mode_label = attack.name();
     log.meta.connections = cfg.connections;
     log.meta.rate = cfg.rate;
     log.meta.duration_s = static_cast<long>(cfg.duration.count());

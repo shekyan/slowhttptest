@@ -258,9 +258,24 @@ Verdict EventLog::evaluate(double threshold) const {
   }
 
   {
+    // A capacity run never holds -c connections: it climbs a staircase and
+    // stops. Reporting -c here said "at 50 connections" for a run whose levels
+    // were 2, 4 and 6 -- while the denial-threshold line in the same report
+    // correctly said "up to 6". A report that contradicts itself invites the
+    // reader to believe whichever half suits them, and the wrong half here
+    // overstates the test by an order of magnitude.
     char buf[256];
-    std::snprintf(buf, sizeof(buf), "under %s at %d connections",
-                  meta.mode_label.c_str(), meta.connections);
+    if (!capacity.empty()) {
+      int highest = 0;
+      for (const auto& lvl : capacity)
+        if (lvl.connections > highest) highest = lvl.connections;
+      std::snprintf(buf, sizeof(buf),
+                    "under %s, capacity search up to %d connections",
+                    meta.mode_label.c_str(), highest);
+    } else {
+      std::snprintf(buf, sizeof(buf), "under %s at %d connections",
+                    meta.mode_label.c_str(), meta.connections);
+    }
     v.scope = buf;
   }
 
