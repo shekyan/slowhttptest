@@ -144,40 +144,62 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/man/slowhttptest-ng.1
 
 enable_testing()
 
+# Tests are labelled so a distribution build can run the ones that belong in a
+# build sandbox and skip the ones that do not:
+#
+#   ctest -L unit     hermetic, no sockets, about two seconds
+#   ctest             everything, including three end-to-end suites that bind
+#                     loopback ports and take roughly five minutes
+#
+# This matters because the alternative is worse. A packager who runs plain
+# ctest in an environment with restricted networking sees the end-to-end suites
+# hang or fail, and the usual response is to disable testing altogether -- which
+# loses the unit tests too, and those are the ones that would actually catch a
+# miscompile on an architecture nobody here has.
+
 add_executable(test_slow_headers tests/test_slow_headers.cpp)
 target_link_libraries(test_slow_headers PRIVATE slowhttp)
 add_test(NAME slow_headers_unit COMMAND test_slow_headers)
+set_tests_properties(slow_headers_unit PROPERTIES LABELS "unit")
 
 add_executable(test_slow_read tests/test_slow_read.cpp)
 target_link_libraries(test_slow_read PRIVATE slowhttp)
 add_test(NAME slow_read_unit COMMAND test_slow_read)
+set_tests_properties(slow_read_unit PROPERTIES LABELS "unit")
 
 add_executable(test_slow_body tests/test_slow_body.cpp)
 target_link_libraries(test_slow_body PRIVATE slowhttp)
 add_test(NAME slow_body_unit COMMAND test_slow_body)
+set_tests_properties(slow_body_unit PROPERTIES LABELS "unit")
 
 add_executable(test_range tests/test_range.cpp)
 target_link_libraries(test_range PRIVATE slowhttp)
 add_test(NAME range_unit COMMAND test_range)
+set_tests_properties(range_unit PROPERTIES LABELS "unit")
 
 add_executable(test_cli tests/test_cli.cpp)
 target_link_libraries(test_cli PRIVATE slowhttp)
 add_test(NAME cli_unit COMMAND test_cli)
+set_tests_properties(cli_unit PROPERTIES LABELS "unit")
 
 add_executable(test_report tests/test_report.cpp)
 target_link_libraries(test_report PRIVATE slowhttp)
 add_test(NAME report_unit COMMAND test_report)
+set_tests_properties(report_unit PROPERTIES LABELS "unit")
 
 add_executable(test_http2 tests/test_http2.cpp)
 target_link_libraries(test_http2 PRIVATE slowhttp)
 add_test(NAME http2_unit COMMAND test_http2)
+set_tests_properties(http2_unit PROPERTIES LABELS "unit")
 
 add_executable(test_reactor tests/test_reactor.cpp)
 target_link_libraries(test_reactor PRIVATE slowhttp)
 add_test(NAME reactor_unit COMMAND test_reactor)
+set_tests_properties(reactor_unit PROPERTIES LABELS "unit")
 
 # Smoke test: the binary builds and prints help without error.
 add_test(NAME cli_help COMMAND slowhttptest-ng -h)
+set_tests_properties(cli_help PROPERTIES LABELS "unit")
 
 # End-to-end: attack a local vulnerable server and assert it actually saturates.
 find_package(Python3 COMPONENTS Interpreter)
@@ -187,7 +209,7 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_attacks.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py)
-  set_tests_properties(e2e_attacks PROPERTIES TIMEOUT 900)
+  set_tests_properties(e2e_attacks PROPERTIES LABELS "e2e" TIMEOUT 900)
 
   # End-to-end: the HTTP/2 framing a peer actually has to accept.
   add_test(NAME e2e_http2
@@ -220,5 +242,5 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_proxy.py)
-  set_tests_properties(e2e_transport PROPERTIES TIMEOUT 900)
+  set_tests_properties(e2e_transport PROPERTIES LABELS "e2e" TIMEOUT 900)
 endif()

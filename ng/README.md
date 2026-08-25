@@ -125,6 +125,58 @@ Installs the binary and its man page, honouring `DESTDIR` and the standard
 /usr/local/share/man/man1/slowhttptest-ng.1
 ```
 
+### `./configure` also works
+
+If your habits or your packaging scripts expect the GNU dance, it is there:
+
+```bash
+./configure --prefix=/usr --disable-tls
+make
+make check          # unit tests only, ~2 seconds
+make install DESTDIR=/tmp/stage
+```
+
+`configure` is a wrapper, not a second build system. There is one build
+definition in this tree — `CMakeLists.txt` — and the script translates the usual
+options into CMake arguments and writes a `Makefile` that delegates to it.
+Carrying real autotools alongside CMake would mean two descriptions of the build
+drifting apart, and every new source file added twice; the failure mode is
+"builds with cmake, fails with make", found by a packager rather than by us.
+
+Unrecognised options are warned about and ignored, as autoconf does. That is not
+politeness: `dh_auto_configure` alone passes `--build`, `--infodir`,
+`--disable-silent-rules` and more, and a wrapper that rejected them would fail
+on the first real packaging attempt. `--host` is refused explicitly, because
+cross-compiling needs a CMake toolchain file that this script cannot invent.
+
+`make distclean` removes the build directory and the generated `Makefile`.
+
+### Packaging
+
+CMake underneath, which every distribution build system drives directly
+(`dh_auto_configure`, Fedora's `%cmake` macros, Arch, Alpine, Gentoo). What
+packagers actually need is that the build behave itself, so:
+
+* `DESTDIR` staging works, with `GNUInstallDirs` for every path.
+* `CMAKE_BUILD_TYPE` is only defaulted when the caller has not set one, so
+  `RelWithDebInfo` survives.
+* No hard-coded `-O2`, `-march` or link flags, so distribution `CXXFLAGS` and
+  `LDFLAGS` are honoured rather than overridden.
+* No `__DATE__` or `__TIME__` anywhere, so builds are reproducible.
+* OpenSSL is the only mandatory dependency, and `-DSLOWHTTP_TLS=OFF` drops it.
+
+Tests are labelled, which matters more than it sounds:
+
+```bash
+ctest -L unit     # hermetic, no sockets, ~2 seconds -- run this in a build
+ctest             # adds three end-to-end suites that bind loopback ports, ~5 min
+```
+
+A build sandbox with restricted networking will fail or hang on the end-to-end
+suites, and the usual reaction is to disable testing altogether -- which throws
+away the unit tests too, and those are the ones that would catch a miscompile on
+an architecture the maintainer does not own.
+
 `libslowhttp` is deliberately **not** installed. It is a static library whose
 headers are still moving, and shipping it would be a promise of API stability
 the project isn't ready to make; it remains available for in-tree embedding.
