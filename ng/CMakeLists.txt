@@ -192,6 +192,11 @@ target_link_libraries(test_http2 PRIVATE slowhttp)
 add_test(NAME http2_unit COMMAND test_http2)
 set_tests_properties(http2_unit PROPERTIES LABELS "unit")
 
+add_executable(test_h2_attacks tests/test_h2_attacks.cpp)
+target_link_libraries(test_h2_attacks PRIVATE slowhttp)
+add_test(NAME h2_attacks_unit COMMAND test_h2_attacks)
+set_tests_properties(h2_attacks_unit PROPERTIES LABELS "unit")
+
 add_executable(test_reactor tests/test_reactor.cpp)
 target_link_libraries(test_reactor PRIVATE slowhttp)
 add_test(NAME reactor_unit COMMAND test_reactor)

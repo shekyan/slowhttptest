@@ -411,11 +411,11 @@ def case_refused_blames_target(tool, port):
 def case_interrupt(tool, mock, port, tmpdir):
     """Ctrl-C terminates immediately, and writes nothing.
 
-    The tool installs no SIGINT handler at all: cancelling a test means
-    cancelling it, and the kernel default cannot hang. Three earlier attempts to
-    be helpful first -- stop the loop cleanly, close every connection, write the
-    report -- each hung in the field, so the shutdown work was removed rather
-    than repaired again.
+    The SIGINT handler itself does nothing but set a flag and write one
+    non-blocking line: no report, no cleanup, nothing that can block inside the
+    handler. The exit path then closes connections through the worker pool
+    rather than the kernel's serial teardown, which is what keeps "die soon"
+    and "leave nothing behind" compatible.
 
     Both halves matter. That it dies, and that it leaves no report behind from a
     run nobody waited for, since a half-finished report is worse than none.
