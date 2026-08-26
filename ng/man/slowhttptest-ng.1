@@ -215,13 +215,34 @@ Drop it if the target rejects an
 unparseable Referer, or replace it with
 .Fl 1 Dq Li "Referer: https://..." .
 .It Fl v Ar level
-Verbosity, 0 to 4, on the classic scale.
+Verbosity, 0 to 4, on the classic scale: fatal, info, error, warn, debug.
 Default 1.
-In practice three levels differ: 0 is silent (as
-.Fl q ) ,
-1 is normal, and 4 adds a breakdown of connect failures by cause, which is
-useful when several are mixed together and the dominant one alone would
-mislead.
+.Bl -tag -width 4n -compact
+.It 0
+Silent, the same as
+.Fl q .
+.It 1
+The banner, the running status and the verdict.
+.It 2
+Adds every connection error as it happens, rather than the first one and a
+tally at the end.
+.It 3
+Adds connection-level warnings: a handshake stalled past
+.Fl \-connect-timeout
+and its slot reclaimed, a peer that hung up on a connection that is therefore
+holding nothing.
+.It 4
+Adds per-socket tracing: descriptor numbers, where each connected, bytes
+written, and each close.
+Also a breakdown of connect failures by cause, which matters when several are
+mixed and the dominant one alone would mislead.
+.El
+.Pp
+At 2 and above the running status stops being redrawn in place and becomes one
+appended line per update.
+The two cannot share a terminal: the status block repaints over its own lines,
+so a per-connection trace printed into it would be overwritten a moment later.
+Verbose output is a log, not a dashboard.
 .It Fl q , Fl -quiet
 No console output at all.
 Reports are still written and the exit status is

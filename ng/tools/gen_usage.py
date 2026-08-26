@@ -90,7 +90,7 @@ SECTIONS = [
         ("--fail-on-status LIST", "codes that also fail the CI gate, e.g. 5xx"),
     ]),
     ("Output", [
-        ("-v level", "verbosity 0-4 (1); 4 details connect failures"),
+        ("-v level", "verbosity 0-4 (1): fatal, info, error, warn, debug"),
         ("-q, --quiet", "no console output at all"),
         ("-h, --help", "this help"),
         ("-V, --version", "version, TLS support and connection ceiling"),

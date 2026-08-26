@@ -172,7 +172,7 @@ void print_usage() {
       "  --fail-on-status LIST   codes that also fail the CI gate, e.g. 5xx\n"
       "\n"
       "Output:\n"
-      "  -v level                verbosity 0-4 (1); 4 details connect failures\n"
+      "  -v level                verbosity 0-4 (1): fatal, info, error, warn, debug\n"
       "  -q, --quiet             no console output at all\n"
       "  -h, --help              this help\n"
       "  -V, --version           version, TLS support and connection ceiling\n"

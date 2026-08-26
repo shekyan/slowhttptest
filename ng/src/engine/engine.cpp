@@ -622,6 +622,36 @@ struct Engine::Impl {
   // operator nothing about what went wrong.
   bool chatty() const { return cfg.log_level >= 1; }
 
+  // -v levels mean what they mean in the classic tool: 0 fatal, 1 info,
+  // 2 error, 3 warn, 4 debug. Before this, only 1 and 4 did anything at all --
+  // 2 and 3 produced output identical to 1, so the flag looked like it had five
+  // settings and had three.
+  //
+  // Anything above info also switches the status display from the redrawn block
+  // to one appended line per update. The two cannot share a terminal: the block
+  // repaints over its own lines, so a per-connection trace printed into it is
+  // overwritten a moment later. Verbose output is a log, not a dashboard.
+  bool verbose_log() const { return cfg.log_level >= 2; }
+
+  // Stamped like the classic tool's, which prefixes every line, so two runs can
+  // be read side by side.
+  void trace(int level, const char* fmt, ...) const {
+    if (cfg.log_level < level) return;
+    char msg[512];
+    va_list ap;
+    va_start(ap, fmt);
+    std::vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    char clock[16] = {0};
+    const time_t wall = ::time(nullptr);
+    struct tm tmv;
+    if (::localtime_r(&wall, &tmv) != nullptr)
+      std::strftime(clock, sizeof(clock), "%H:%M:%S", &tmv);
+    static const char* const kTag[] = {"", "info", "error", "warn", "debug"};
+    std::fprintf(stderr, "%s %-5s %s\n", clock,
+                 kTag[level < 5 ? level : 4], msg);
+  }
+
   const addrinfo* current_addr() const { return addr.candidates()[cand_idx]; }
 
   void note_connect_success() {
@@ -631,6 +661,7 @@ struct Engine::Impl {
 
   // `err` is errno from the failed call, or 0 when the reason is unknown.
   void note_connect_failure(int err) {
+    trace(2, "connect failed: %s", err ? std::strerror(err) : "unknown");
     ++connect_failed_total;
     if (err != 0) {
       auto& count = connect_errnos_[err];
@@ -728,6 +759,8 @@ struct Engine::Impl {
       c.in_flight = true;
       ++in_flight_conns;
     }
+    trace(4, "conn %d: socket %d -> %s", c.id, c.sock.fd(),
+          ResolvedAddr::describe(current_addr()).c_str());
     fd_to_id[c.sock.fd()] = c.id;
     reactor->add(c.sock.fd(), interest_for(c));
     c.active = true;
@@ -759,6 +792,7 @@ struct Engine::Impl {
     const TimePoint t1 = Clock::now();
     // Handed off rather than closed here: see Closer. This call must not block,
     // because every caller of close_slot is on the event loop.
+    trace(4, "conn %d: closing socket %d", c.id, c.sock.fd());
     closer->submit(c.sock.release_fd());
     const TimePoint t2 = Clock::now();
     close_bookkeep_s += std::chrono::duration<double>(t1 - t0).count();
@@ -896,6 +930,7 @@ struct Engine::Impl {
       long n = c.sock.send_some(c.outbuf.data() + c.outpos,
                                 c.outbuf.size() - c.outpos);
       if (n > 0) {
+        trace(4, "conn %d: socket %d wrote %ld byte(s)", c.id, c.sock.fd(), n);
         c.outpos += static_cast<std::size_t>(n);
         c.sent_bytes += n;
       } else if (n == 0) {
@@ -1142,6 +1177,8 @@ struct Engine::Impl {
       if (!c.sock.ready()) {
         if (check_timeout && now - c.opened_at >= cfg.connect_timeout) {
           ++connect_timeout_total;
+          trace(3, "conn %d: handshake stalled past %llds, reclaiming the slot",
+                c.id, (long long)cfg.connect_timeout.count());
           // Recorded as a timeout so it lands in the by-cause breakdown
           // alongside real connect failures rather than vanishing.
           note_connect_failure(ETIMEDOUT);
@@ -1155,6 +1192,7 @@ struct Engine::Impl {
       // 5740 of a reported 10000 -- and leaving it open wastes the slot that
       // could carry a live connection instead.
       if (check_peer_closed && c.sock.peer_has_closed()) {
+        trace(3, "conn %d: peer closed, connection is holding nothing", c.id);
         ++peer_closed_total;
         close_slot(c);
       }
@@ -1431,7 +1469,7 @@ struct Engine::Impl {
                       up ? "YES" : "NO", C(kReset));
     }
 
-    if (!use_colour()) {
+    if (!use_colour() || verbose_log()) {
       // Appended, not redrawn: a log wants one line per second, in order.
       char clock[16] = {0};
       const time_t wall = ::time(nullptr);
