@@ -9,7 +9,11 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/resource.h>
+// sysctlbyname is Darwin-only, and glibc removed <sys/sysctl.h> outright in
+// 2.32, so the include itself would break the Linux build.
+#if defined(__APPLE__)
 #include <sys/sysctl.h>
+#endif
 #include <time.h>
 
 #include <algorithm>
@@ -1521,10 +1525,12 @@ struct Engine::Impl {
   bool build_setup_plan(std::string& err) {
     if (cfg.target.tls()) {
       if (!TlsContext::available()) {
+        // The wording is load-bearing: tests and CI grep for "no TLS backend"
+        // to recognise this refusal, so it must stay the canonical phrase.
         err =
-            "https targets need a TLS backend, and this binary was built without"
-            " one (-DSLOWHTTP_TLS=OFF). Rebuild with OpenSSL, or use an http://"
-            " URL.";
+            "this build has no TLS backend, so https targets cannot be tested"
+            " (built with -DSLOWHTTP_TLS=OFF). Rebuild with OpenSSL, or use an"
+            " http:// URL.";
         return false;
       }
       tls = TlsContext::create(/*verify_peer=*/false, err, cfg.http2);

@@ -58,6 +58,19 @@ def run_case(tool, mock, streams):
     return checker.returncode, out, ng
 
 
+def tls_supported(tool):
+    """Whether this build can speak https at all.
+
+    The no-TLS build refuses https targets at startup, which is its documented
+    behaviour and not a CLI-parsing conflict, so the one case below that needs
+    an https URL has to know the difference.
+    """
+    r = subprocess.run([tool, "-u", "https://127.0.0.1:1/", "-c", "1",
+                        "-l", "1", "--no-probe"],
+                       capture_output=True, text=True, timeout=30)
+    return "no TLS backend" not in (r.stdout + r.stderr)
+
+
 def run_reset(tool, mock, rate, seconds):
     port = free_port(9500)
     checker = subprocess.Popen(
@@ -184,15 +197,23 @@ def main():
     # ...but https through a CONNECT tunnel is fine and must stay allowed, so
     # the check above cannot simply ban --http2 alongside -d. This one is
     # expected to fail at connect time, not at argument parsing.
-    r = subprocess.run([tool, "-X", "--http2", "-u", "https://127.0.0.1:1/",
-                        "-d", "127.0.0.1:2", "-c", "1", "-l", "1",
-                        "--no-probe", "-q"],
-                       capture_output=True, text=True, timeout=30)
-    if r.returncode == 2:
-        fail("allows http2 through a CONNECT proxy",
-             "rejected as a usage error: %s" % (r.stdout + r.stderr)[-200:])
+    #
+    # Skipped on a build with no TLS backend: refusing https there is the
+    # documented behaviour of that configuration rather than a parsing
+    # conflict, so exit code 2 would be correct and tell us nothing.
+    if tls_supported(tool):
+        r = subprocess.run([tool, "-X", "--http2", "-u", "https://127.0.0.1:1/",
+                            "-d", "127.0.0.1:2", "-c", "1", "-l", "1",
+                            "--no-probe", "-q"],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode == 2:
+            fail("allows http2 through a CONNECT proxy",
+                 "rejected as a usage error: %s" % (r.stdout + r.stderr)[-200:])
+        else:
+            ok("allows http2 through a CONNECT proxy")
     else:
-        ok("allows http2 through a CONNECT proxy")
+        print("  allows http2 through a CONNECT proxy: "
+              "skipped (no TLS backend in this build)", flush=True)
 
     # -4 and -6 shipped with no coverage at all. They decide which network a
     # run measures, and a run that silently lands on the other one disagrees

@@ -5,11 +5,26 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+// Which TCP header supplies struct tcp_info, and what it is allowed to contain.
+//
+// glibc's <netinet/tcp.h> is the only header that defines both struct tcp_info
+// and the TCP_* state constants this file needs, but its copy of the struct is
+// frozen at the 3.x-era layout: it ends at tcpi_total_retrans and has never
+// carried tcpi_bytes_sent (glibc only synced the kernel's extended struct in
+// December 2025, so every glibc in support today -- 2.36 through 2.41 --
+// lacks the field). The kernel's own <linux/tcp.h> has had it since 4.18, but
+// the two headers cannot be included together (both define struct tcphdr, and
+// the redefinition is an error), and the kernel's has no TCP_* state constants.
+// So this file takes glibc's, asks the compiler whether the struct it got
+// carries the bytes-sent counter (detail::HasTcpiBytesSent below), and reports
+// the counter as unavailable where it does not -- the same "absent rather than
+// wrong" answer the other TCP_INFO queries give on platforms without them.
+#include <netinet/tcp.h>
 
 #if defined(__APPLE__)
 #include <netinet/tcp_fsm.h>
@@ -18,7 +33,38 @@
 #include <cerrno>
 #include <cstdio>
 #include <string>
+#include <type_traits>
 #include <utility>
+
+namespace slowhttp {
+namespace detail {
+
+// Whether the struct tcp_info this build sees carries tcpi_bytes_sent. The
+// kernel added the field in 4.18, but userspace copies of the struct vary in
+// age (see the include note at the top of this file), so presence is a property
+// of the headers, not of the platform.
+template <class T, class = void>
+struct HasTcpiBytesSent : std::false_type {};
+template <class T>
+struct HasTcpiBytesSent<
+    T, std::void_t<decltype(std::declval<T&>().tcpi_bytes_sent)>>
+    : std::true_type {};
+
+// Reads tcp_info's bytes-sent counter, or -1 where the struct this build sees
+// does not carry it. A pair of constrained overloads rather than `if constexpr`
+// at the call site: the call site is not a template, and a discarded
+// `if constexpr` branch is still semantically checked outside one.
+template <class T, std::enable_if_t<HasTcpiBytesSent<T>::value, int> = 0>
+long tx_bytes(const T& info) {
+  return static_cast<long>(info.tcpi_bytes_sent);
+}
+template <class T, std::enable_if_t<!HasTcpiBytesSent<T>::value, int> = 0>
+long tx_bytes(const T&) {
+  return -1;
+}
+
+}  // namespace detail
+}  // namespace slowhttp
 
 namespace slowhttp {
 namespace {
@@ -321,7 +367,11 @@ long Socket::kernel_tx_bytes() const {
   struct tcp_info i;
   socklen_t len = sizeof(i);
   if (::getsockopt(fd_, IPPROTO_TCP, TCP_INFO, &i, &len) != 0) return -1;
-  return static_cast<long>(i.tcpi_bytes_sent);
+  // Whichever header supplied struct tcp_info may predate the bytes-sent
+  // counters (see the include note at the top of this file). Report the
+  // counter as unavailable where it does, which the caller reads as "cannot
+  // be asked" -- the same answer a platform with no TCP_INFO at all gives.
+  return detail::tx_bytes(i);
 #else
   return -1;
 #endif
