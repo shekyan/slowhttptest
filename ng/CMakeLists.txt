@@ -201,6 +201,23 @@ set_tests_properties(reactor_unit PROPERTIES LABELS "unit")
 add_test(NAME cli_help COMMAND slowhttptest-ng -h)
 set_tests_properties(cli_help PROPERTIES LABELS "unit")
 
+# Wall-clock budget for the end-to-end suites.
+#
+# These tests spend nearly all of their time waiting on real timers and real
+# sockets, so what they measure is how fast the machine is, not how fast the
+# code is. e2e_transport already uses ~320s of its 900s on a quiet laptop, and
+# an instrumented build stretches every one of those waits -- under sanitizers
+# there is no margin left. Padding every timeout for the slowest configuration
+# would throw away the signal on the fastest, so the slow configurations say so
+# themselves: -DSLOWHTTP_TEST_TIMEOUT_SCALE=4.
+#
+# This buys room; it does not explain why e2e_transport nearly doubled from
+# ~175s. That is still open.
+set(SLOWHTTP_TEST_TIMEOUT_SCALE 1 CACHE STRING
+    "Multiplier for end-to-end test timeouts, for slow or instrumented builds")
+math(EXPR E2E_TIMEOUT_LONG "900 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")
+math(EXPR E2E_TIMEOUT_SHORT "300 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")
+
 # End-to-end: attack a local vulnerable server and assert it actually saturates.
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
@@ -209,7 +226,7 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_attacks.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py)
-  set_tests_properties(e2e_attacks PROPERTIES LABELS "e2e" TIMEOUT 900)
+  set_tests_properties(e2e_attacks PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG})
 
   # End-to-end: the HTTP/2 framing a peer actually has to accept.
   add_test(NAME e2e_http2
@@ -217,7 +234,7 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_http2.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
-  set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT 300)
+  set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT})
 
   # The same end-to-end run again, forced onto the poll() backend.
   #
@@ -232,7 +249,7 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
   set_tests_properties(e2e_http2_poll PROPERTIES
-    LABELS "e2e" TIMEOUT 300
+    LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT}
     ENVIRONMENT "SLOWHTTP_REACTOR=poll")
 
   # End-to-end: TLS, proxying, the availability probe and the report artifacts.
@@ -242,5 +259,5 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_proxy.py)
-  set_tests_properties(e2e_transport PROPERTIES LABELS "e2e" TIMEOUT 900)
+  set_tests_properties(e2e_transport PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG})
 endif()

@@ -19,19 +19,26 @@ jobs:
         # Both standard libraries matter: libstdc++ (GCC) and libc++ (Clang/macOS)
         # differ in which headers they pull in transitively, which is exactly how
         # a missing #include slips through on one platform and breaks the other.
+        #
+        # timeout_scale widens the end-to-end budgets on runners that are slower
+        # than a developer machine. The macOS runners are the shared ones here,
+        # and these suites wait on real timers, so they stretch with the host.
         include:
           - os: ubuntu-latest
             compiler: gcc
             cc: gcc
             cxx: g++
+            timeout_scale: 1
           - os: ubuntu-latest
             compiler: clang
             cc: clang
             cxx: clang++
+            timeout_scale: 1
           - os: macos-latest
             compiler: clang
             cc: clang
             cxx: clang++
+            timeout_scale: 2
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +61,9 @@ jobs:
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: cmake -S ng -B ng/build -DCMAKE_BUILD_TYPE=Release
+        run: >
+          cmake -S ng -B ng/build -DCMAKE_BUILD_TYPE=Release
+          -DSLOWHTTP_TEST_TIMEOUT_SCALE=${{ matrix.timeout_scale }}
 
       - name: Build
         run: cmake --build ng/build -j
@@ -116,10 +125,15 @@ jobs:
       - name: Install OpenSSL
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
 
+      # The timeout scale is not padding for its own sake: the end-to-end suites
+      # wait on real timers and real sockets, and instrumenting every one of
+      # those waits is what makes this job slow -- the tests are not doing more
+      # work, they are doing the same work through ASan.
       - name: Configure with sanitizers
         run: >
           cmake -S ng -B ng/build-asan
           -DCMAKE_BUILD_TYPE=Debug
+          -DSLOWHTTP_TEST_TIMEOUT_SCALE=4
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
 
       - name: Build
