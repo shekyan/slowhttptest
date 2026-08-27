@@ -2092,19 +2092,22 @@ struct Engine::Impl {
     if (ready_total == 0) {
       // Name the actual cause. Blaming the target for a local descriptor or
       // port limit sends the operator to debug the wrong machine entirely.
-      const int err = dominant_connect_errno();
-      const std::string advice = advice_for(err);
+      // Not `err`: that name already holds the setup/resolve error string for
+      // the whole of run(), and an int of the same name shadowing it here is
+      // one careless edit away from printing the wrong thing.
+      const int connect_err = dominant_connect_errno();
+      const std::string advice = advice_for(connect_err);
       std::fprintf(stderr,
                    "\nERROR: no usable connection was ever established to %s"
                    " (tried %zu resolved address(es)) -- nothing was actually"
                    " tested.\n",
                    cfg.connect_endpoint().c_str(), addr.candidates().size());
-      if (err != 0) {
+      if (connect_err != 0) {
         std::fprintf(stderr, "       Every attempt failed with: %s\n",
-                     std::strerror(err));
+                     std::strerror(connect_err));
         if (!advice.empty())
           std::fprintf(stderr, "       %s\n", advice.c_str());
-        if (blame_for(err) == Blame::Local)
+        if (blame_for(connect_err) == Blame::Local)
           std::fprintf(stderr,
                        "       This is a limit on THIS machine. The target was"
                        " never actually reached, so it is not implicated.\n");

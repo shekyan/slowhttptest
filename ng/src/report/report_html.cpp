@@ -5,6 +5,9 @@
 // code -- is inlined, so the file opens offline, inside a container, and on an
 // air-gapped network. The original tool's report loads Google Chart Tools over
 // the network and renders nothing in exactly those situations.
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -868,8 +871,16 @@ bool write_reports(const Config& cfg, const EventLog& log, const Verdict& v) {
                       {json_path, render_json(log, v)}};
 
   for (const auto& f : outs) {
-    std::FILE* fp = std::fopen(f.path.c_str(), "wb");
+    // open(2) with an explicit mode rather than fopen(3), which always asks for
+    // 0666 and leaves the result entirely to the caller's umask -- so a umask of
+    // 0 yields a world-writable report. A report names the target host and the
+    // shape of the run, which is not something to hand to every local account.
+    // 0644 is still masked by umask, so a stricter one keeps producing 0600.
+    const int fd =
+        ::open(f.path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    std::FILE* fp = fd < 0 ? nullptr : ::fdopen(fd, "wb");
     if (!fp) {
+      if (fd >= 0) ::close(fd);
       std::fprintf(stderr, "Error: cannot write %s\n", f.path.c_str());
       ok = false;
       continue;
