@@ -2,7 +2,10 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ "master" ]
+    # The rewrite lives on feat/cpp-rewrite until it replaces the classic tool.
+    # Analysing it only after the merge would mean the first scan of 15k lines
+    # of new C++ arrives on master, which is the worst moment to find something.
+    branches: [ "master", "feat/cpp-rewrite" ]
   pull_request:
     branches: [ "master" ]
   schedule:
@@ -24,18 +27,45 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      # ng/ links against OpenSSL. Autobuild never needed this because the
+      # autotools build degrades to a no-TLS binary when it cannot find the
+      # headers, which is exactly the kind of quiet narrowing of scope this
+      # workflow should not have.
+      - name: Install OpenSSL
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          build-mode: manual
           queries: +security-and-quality
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
+      # Both trees, deliberately.
+      #
+      # Autobuild drove the root autotools build and databased src/ alone, so
+      # the rewrite under ng/ was never analysed. Replacing it with a build of
+      # ng/ alone would swap one blind spot for the other: src/ is frozen, but
+      # it is still the code in every binary anyone is running today. CodeQL
+      # traces whatever compiles between init and analyze, so building both puts
+      # both in one database.
+      #
+      # ng/ is absent on master until the rewrite lands. Analysing what is
+      # present beats failing the run, and this step then keeps working across
+      # the merge without another edit.
+      - name: Build both trees
+        run: |
+          ./configure && make
+          if [ -d ng ]; then
+            cmake -S ng -B ng/build -DCMAKE_BUILD_TYPE=Release
+            cmake --build ng/build -j
+          else
+            echo "no ng/ in this tree -- analysed src/ only"
+          fi
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
