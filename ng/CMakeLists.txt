@@ -210,14 +210,22 @@ set_tests_properties(cli_help PROPERTIES LABELS "unit")
 #
 # These tests spend nearly all of their time waiting on real timers and real
 # sockets, so what they measure is how fast the machine is, not how fast the
-# code is. e2e_transport already uses ~320s of its 900s on a quiet laptop, and
-# an instrumented build stretches every one of those waits -- under sanitizers
-# there is no margin left. Padding every timeout for the slowest configuration
-# would throw away the signal on the fastest, so the slow configurations say so
-# themselves: -DSLOWHTTP_TEST_TIMEOUT_SCALE=4.
+# code is. That cuts against the obvious guess, which was wrong when this knob
+# was added: an asan+ubsan build is *not* slower here. Measured in CI at 463s
+# against plain gcc's 458s, because instrumentation does not make a sleep take
+# longer, and there is almost no CPU work to instrument. Only macOS needs the
+# room -- 626s for the same suite, 1.37x Linux -- so it is the one configuration
+# that sets a scale.
 #
-# This buys room; it does not explain why e2e_transport nearly doubled from
-# ~175s. That is still open.
+# On a laptop the thing that actually blows these budgets is the machine going
+# to sleep mid-run. ctest measures wall clock, so an idle sleep is indistinguish-
+# able from a wedged test: a run here recorded 3151s against this 900s ceiling
+# with all thirteen cases passing, in a window `pmset -g log` showed a 47-minute
+# sleep inside. Run long suites as `caffeinate -i ctest` rather than raising
+# these numbers to cover it.
+#
+# The suite's growth from ~175s to ~320s was likewise not a regression: it is
+# e2e_transport going from 8 cases to 13.
 set(SLOWHTTP_TEST_TIMEOUT_SCALE 1 CACHE STRING
     "Multiplier for end-to-end test timeouts, for slow or instrumented builds")
 math(EXPR E2E_TIMEOUT_LONG "900 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")

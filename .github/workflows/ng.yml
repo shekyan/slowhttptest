@@ -20,9 +20,10 @@ jobs:
         # differ in which headers they pull in transitively, which is exactly how
         # a missing #include slips through on one platform and breaks the other.
         #
-        # timeout_scale widens the end-to-end budgets on runners that are slower
-        # than a developer machine. The macOS runners are the shared ones here,
-        # and these suites wait on real timers, so they stretch with the host.
+        # timeout_scale widens the end-to-end budgets on runners measured to be
+        # slower. Only macOS is: 626s for the suite against 458s on Linux, 1.37x.
+        # The Linux jobs, sanitizers included, run it in the same 458-463s and
+        # get no scale at all.
         include:
           - os: ubuntu-latest
             compiler: gcc
@@ -40,9 +41,9 @@ jobs:
             cxx: clang++
             timeout_scale: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
@@ -87,9 +88,9 @@ jobs:
     name: ubuntu / without TLS
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
@@ -116,24 +117,23 @@ jobs:
     name: ubuntu / asan+ubsan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
       - name: Install OpenSSL
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
 
-      # The timeout scale is not padding for its own sake: the end-to-end suites
-      # wait on real timers and real sockets, and instrumenting every one of
-      # those waits is what makes this job slow -- the tests are not doing more
-      # work, they are doing the same work through ASan.
+      # No timeout scale here, deliberately. This job used to widen the budgets
+      # on the theory that instrumentation stretches the end-to-end waits; the
+      # first green run disproved it, at 463s against plain gcc's 458s. ASan
+      # slows CPU work, and these suites are almost entirely sleeps.
       - name: Configure with sanitizers
         run: >
           cmake -S ng -B ng/build-asan
           -DCMAKE_BUILD_TYPE=Debug
-          -DSLOWHTTP_TEST_TIMEOUT_SCALE=4
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
 
       - name: Build
