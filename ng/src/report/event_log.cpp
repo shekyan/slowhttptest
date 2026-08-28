@@ -330,6 +330,19 @@ Verdict EventLog::evaluate(double threshold) const {
         "Probes went through " + meta.probe_proxy +
         "; the proxy's own health is part of every measurement here.");
   }
+  // The availability oracle and the attack can be on different protocols, and
+  // on an HTTP/2 run they always are. A server can hold up perfectly well on
+  // HTTP/1.1 while its h2 path is exhausted -- separate connection pools,
+  // separate stream limits, often a different backend entirely -- so "held"
+  // here is weaker than it looks, and "denied" implicates something both paths
+  // share. Either way the reader has to know which door was knocked on.
+  if (meta.attack_http2) {
+    v.caveats.push_back(
+        "Availability was measured with " + meta.probe_protocol +
+        " requests, not over the HTTP/2 path the attack used. A target can "
+        "serve HTTP/1.1 normally while its HTTP/2 side is exhausted, and the "
+        "reverse is also possible.");
+  }
   if (v.outcome == Outcome::Held) {
     v.caveats.push_back(
         "Holding at " + std::to_string(meta.connections) +

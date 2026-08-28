@@ -174,6 +174,42 @@ static CapacityLevel level(int conns, int served, int total, long median,
   return c;
 }
 
+// An HTTP/2 attack is judged by an HTTP/1.1 probe. That is a real limit on what
+// the run can conclude, so it has to appear in the artifact rather than being
+// left for the reader to deduce from the mode label.
+static void test_http2_run_discloses_probe_protocol() {
+  EventLog log = make_log(2, 100);
+  log.meta.attack_http2 = true;
+  log.meta.mode_label = "HTTP/2 rapid reset";
+  for (double t = 0; t <= 100; t += 2) add(log, t, Availability::Ok, 20);
+
+  const Verdict v = log.evaluate(0.95);
+  bool disclosed = false;
+  for (const auto& c : v.caveats)
+    if (c.find("HTTP/2 path the attack used") != std::string::npos)
+      disclosed = true;
+  check(disclosed,
+        "an HTTP/2 run says the availability oracle was not on HTTP/2");
+
+  const std::string json = render_json(log, v);
+  check(contains(json, "\"attack_protocol\": \"HTTP/2\""),
+        "JSON names the attack protocol");
+  check(contains(json, "\"probe_protocol\": \"HTTP/1.1\""),
+        "JSON names the probe protocol separately");
+
+  const std::string html = render_html(log, v);
+  check(contains(html, "attack used HTTP/2"),
+        "the HTML parameters show the probe/attack protocol mismatch");
+
+  // An HTTP/1.1 run has no mismatch to disclose and should not carry the note.
+  EventLog plain = make_log(2, 100);
+  for (double t = 0; t <= 100; t += 2) add(plain, t, Availability::Ok, 20);
+  const Verdict pv = plain.evaluate(0.95);
+  for (const auto& c : pv.caveats)
+    check(c.find("HTTP/2 path the attack used") == std::string::npos,
+          "an HTTP/1.1 run does not claim a protocol mismatch");
+}
+
 static void test_capacity_bracket() {
   EventLog log = make_log(2, 100);
   for (double t = 0; t <= 100; t += 2) add(log, t, Availability::Ok, 20);
@@ -335,6 +371,7 @@ int main() {
   test_inconclusive_too_few_probes();
   test_capacity_bracket();
   test_capacity_level_that_never_ramped();
+  test_http2_run_discloses_probe_protocol();
   test_threshold_refused_without_capacity();
   test_renderers_agree();
 

@@ -85,6 +85,12 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "    \"window_requested_bytes\": [" + std::to_string(m.window_lower) + ", " +
        std::to_string(m.window_upper) + "],\n";
   o += "    \"window_kernel_bytes\": " + opt_long(m.kernel_rcvbuf) + ",\n";
+  // Emitted for every run, not only h2 ones, so a consumer can compare the two
+  // without special-casing: on an HTTP/2 attack these differ, and any
+  // conclusion drawn from probe results is qualified by that.
+  o += "    \"attack_protocol\": " +
+       q(m.attack_http2 ? "HTTP/2" : "HTTP/1.1") + ",\n";
+  o += "    \"probe_protocol\": " + q(m.probe_protocol) + ",\n";
   o += "    \"probe_interval_ms\": " + std::to_string(m.probe_interval_ms) + ",\n";
   o += "    \"probe_timeout_ms\": " + std::to_string(m.probe_timeout_ms) + ",\n";
   o += "    \"degraded_above_ms\": " + std::to_string(m.degraded_above_ms) + ",\n";

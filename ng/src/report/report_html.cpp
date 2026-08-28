@@ -792,6 +792,10 @@ std::string render_html(const EventLog& log, const Verdict& v) {
   } else {
     param("Followup interval", std::to_string(m.interval_s) + " s (-i)");
   }
+  // Spelled out whenever the attack is not on the probe's protocol, so the
+  // mismatch is visible in the parameters rather than only in the caveats.
+  if (m.attack_http2)
+    param("Probe protocol", esc(m.probe_protocol) + " (attack used HTTP/2)");
   param("Probe interval", num(m.probe_interval_ms / 1000.0, 1) + " s");
   param("Probe timeout", num(m.probe_timeout_ms / 1000.0, 1) + " s (-p)");
   param("Degraded above", group(m.degraded_above_ms) + " ms");

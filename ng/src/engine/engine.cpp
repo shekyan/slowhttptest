@@ -1670,6 +1670,7 @@ struct Engine::Impl {
     // nothing in the HTML said HTTP/2 at all. The attack names itself, so this
     // stays right as attacks are added.
     log.meta.mode_label = attack.name();
+    log.meta.attack_http2 = cfg.http2;
     log.meta.connections = cfg.connections;
     log.meta.rate = cfg.rate;
     log.meta.duration_s = static_cast<long>(cfg.duration.count());

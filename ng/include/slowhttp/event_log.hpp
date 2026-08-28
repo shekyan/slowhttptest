@@ -97,6 +97,13 @@ struct RunMeta {
   long probe_timeout_ms = 0;
   long degraded_above_ms = 0;
   std::string tls_description;   // "TLSv1.3 / TLS_AES_256_GCM_SHA384"
+  // Which protocol carried the attack, and which carried the availability
+  // probe. They are not always the same: the HTTP/2 attacks speak h2 while the
+  // probe is an ordinary HTTP/1.1 GET, so on an h2 run the oracle is measuring
+  // a path the attack never touched. That is a real limitation of the result
+  // and the report has to say so rather than let the reader assume otherwise.
+  bool attack_http2 = false;
+  std::string probe_protocol = "HTTP/1.1";
   std::string proxy;             // "host:port" or empty
   std::string probe_proxy;       // "host:port" or empty
   std::string fail_on_status_spec;  // --fail-on-status as typed, or empty
