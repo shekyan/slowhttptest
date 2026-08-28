@@ -1,0 +1,38 @@
+# Docker does not read .gitignore, so without this `COPY . /build` ships the
+# host's build tree into the image.
+#
+# That is not merely wasteful. ng/build holds a CMakeCache.txt recording the
+# absolute path it was generated in, and cmake refuses to reuse a cache from a
+# different directory -- so `docker build .` failed outright on any machine
+# where ng had been built locally first, which is the normal order of work. CI
+# never saw it because CI starts from a fresh checkout.
+#
+# The autotools .am/.in sources and the generated `configure` are tracked and
+# must reach the image; only their build-time output is excluded here.
+
+.git
+.gitignore
+.github
+.claude
+
+# autotools output
+Makefile
+config.h
+config.log
+config.status
+stamp-h1
+autom4te.cache/
+src/Makefile
+src/.deps/
+src/*.o
+src/slowhttptest
+man/Makefile
+
+# cmake output
+ng/Makefile
+ng/build/
+ng/build-*/
+
+# editor and OS leavings
+*~
+.DS_Store
