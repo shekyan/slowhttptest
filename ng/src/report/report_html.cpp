@@ -743,16 +743,28 @@ std::string render_html(const EventLog& log, const Verdict& v) {
   o += "    </div>\n";
   if (!log.capacity.empty()) {
     o += "    <div class=\"table-scroll\">\n      <table>\n";
-    o += "        <thead><tr><th scope=\"col\">Level</th><th scope=\"col\">Held for</th>"
+    o += "        <thead><tr><th scope=\"col\">Level</th><th scope=\"col\">Reached</th>"
+         "<th scope=\"col\">Held for</th>"
          "<th scope=\"col\">Probes served</th><th scope=\"col\">Median latency</th>"
          "<th scope=\"col\">Result</th></tr></thead>\n        <tbody>\n";
     for (const auto& c : log.capacity) {
+      // Reached is its own column because it is the number that qualifies every
+      // other cell in the row. A level showing 5/5 probes served at 1000 means
+      // something quite different when only 731 connections were ever up.
+      const std::string reached =
+          c.reached_max == c.connections
+              ? group(c.reached_max)
+              : group(c.reached_min) + "–" + group(c.reached_max);
+      const std::string pill = c.inconclusive ? "unk" : (c.denied ? "den" : "ok");
+      const std::string label =
+          c.inconclusive ? "inconclusive" : (c.denied ? "denied" : "held");
       o += "          <tr><td class=\"t\">" + std::to_string(c.connections) +
+           "</td><td class=\"t\">" + reached +
            "</td><td class=\"t\">" + num(c.hold_s, 0) + " s</td><td>" +
            std::to_string(c.probes_served) + " / " + std::to_string(c.probes_total) +
            "</td><td>" + (c.median_ms < 0 ? "—" : group(c.median_ms) + " ms") +
-           "</td><td><span class=\"pill " + (c.denied ? "den" : "ok") + "\">" +
-           (c.denied ? "denied" : "held") + "</span></td></tr>\n";
+           "</td><td><span class=\"pill " + pill + "\">" + label +
+           "</span></td></tr>\n";
     }
     o += "        </tbody>\n      </table>\n    </div>\n";
   }

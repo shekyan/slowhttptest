@@ -169,11 +169,18 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "  \"capacity_levels\": [\n";
   for (std::size_t i = 0; i < log.capacity.size(); ++i) {
     const auto& c = log.capacity[i];
+    // `connections` is what the level asked for; `reached_*` is what it got.
+    // A consumer gating on `denied` alone would read an inconclusive level as
+    // "held", so `inconclusive` is emitted alongside it rather than folded in.
     o += "    {\"connections\": " + std::to_string(c.connections) +
+         ", \"reached_max\": " + std::to_string(c.reached_max) +
+         ", \"reached_min\": " + std::to_string(c.reached_min) +
+         ", \"ramped\": " + (c.ramped ? "true" : "false") +
          ", \"held_seconds\": " + num(c.hold_s, 1) +
          ", \"probes_served\": " + std::to_string(c.probes_served) +
          ", \"probes_total\": " + std::to_string(c.probes_total) +
          ", \"median_ms\": " + opt_long(c.median_ms) +
+         ", \"inconclusive\": " + (c.inconclusive ? "true" : "false") +
          ", \"denied\": " + (c.denied ? "true" : "false") + "}";
     o += (i + 1 < log.capacity.size() ? ",\n" : "\n");
   }

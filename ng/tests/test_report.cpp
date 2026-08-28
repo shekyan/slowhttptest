@@ -155,12 +155,31 @@ static void test_inconclusive_too_few_probes() {
         "too few probes must not pass the criterion by accident");
 }
 
+// A level that reached the load it asked for. Named rather than positional:
+// aggregate initialisation silently changes meaning when a field is added in
+// the middle of the struct, which is exactly what happened when reached_max
+// and ramped landed.
+static CapacityLevel level(int conns, int served, int total, long median,
+                           bool denied) {
+  CapacityLevel c;
+  c.connections = conns;
+  c.reached_max = conns;
+  c.reached_min = conns;
+  c.ramped = true;
+  c.hold_s = 15;
+  c.probes_served = served;
+  c.probes_total = total;
+  c.median_ms = median;
+  c.denied = denied;
+  return c;
+}
+
 static void test_capacity_bracket() {
   EventLog log = make_log(2, 100);
   for (double t = 0; t <= 100; t += 2) add(log, t, Availability::Ok, 20);
-  log.capacity.push_back(CapacityLevel{32, 15, 5, 5, 13, false});
-  log.capacity.push_back(CapacityLevel{64, 15, 5, 5, 41, false});
-  log.capacity.push_back(CapacityLevel{96, 15, 1, 5, 2980, true});
+  log.capacity.push_back(level(32, 5, 5, 13, false));
+  log.capacity.push_back(level(64, 5, 5, 41, false));
+  log.capacity.push_back(level(96, 1, 5, 2980, true));
 
   const Verdict v = log.evaluate(0.95);
   check(v.threshold_measured, "a staircase run measures the denial threshold");
@@ -177,6 +196,45 @@ static void test_capacity_bracket() {
 
   const std::string html = render_html(log, v);
   check(contains(html, "64 &lt; n &le; 96"), "HTML shows the bracket, not a point");
+}
+
+// A level whose connections never came up measures the load that was actually
+// present, not the load it asked for. Reporting it as "held" would be the worst
+// available answer: it reads as a server that coped with a level it never saw.
+static void test_capacity_level_that_never_ramped() {
+  EventLog log = make_log(2, 100);
+  for (double t = 0; t <= 100; t += 2) add(log, t, Availability::Ok, 20);
+  log.capacity.push_back(level(32, 5, 5, 13, false));
+
+  CapacityLevel short_level;
+  short_level.connections = 64;   // asked for 64
+  short_level.reached_max = 41;   // never got past 41
+  short_level.reached_min = 38;
+  short_level.ramped = false;
+  short_level.hold_s = 15;
+  short_level.probes_served = 5;  // and every probe was served
+  short_level.probes_total = 5;
+  short_level.median_ms = 12;
+  short_level.inconclusive = true;
+  log.capacity.push_back(short_level);
+
+  const Verdict v = log.evaluate(0.95);
+  check(!v.threshold_measured,
+        "a level that never ramped does not bracket a threshold");
+  check(v.threshold_note.find("41") != std::string::npos,
+        "the note says how many connections were actually established");
+  check(v.threshold_note.find("not measured") != std::string::npos,
+        "and says plainly that the ceiling was not measured");
+
+  const std::string json = render_json(log, v);
+  check(contains(json, "\"inconclusive\": true"),
+        "JSON marks the level inconclusive");
+  check(contains(json, "\"reached_max\": 41"),
+        "JSON carries what was actually reached, not just what was asked for");
+
+  const std::string html = render_html(log, v);
+  check(contains(html, "inconclusive"),
+        "the HTML level table says inconclusive rather than held");
 }
 
 static void test_threshold_refused_without_capacity() {
@@ -276,6 +334,7 @@ int main() {
   test_inconclusive_bad_baseline();
   test_inconclusive_too_few_probes();
   test_capacity_bracket();
+  test_capacity_level_that_never_ramped();
   test_threshold_refused_without_capacity();
   test_renderers_agree();
 

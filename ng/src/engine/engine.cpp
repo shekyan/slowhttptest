@@ -602,6 +602,21 @@ struct Engine::Impl {
   bool level_measuring = false;
   std::size_t level_probe_begin = 0;
   TimePoint level_started{};
+  // What the current level actually achieved, as against what it asked for.
+  bool level_ramped = false;
+  int level_max_active = 0;
+  int level_min_active = 0;
+
+  // Connections that are up and carrying the attack, which is not the same as
+  // active_conns: that counts a slot from the moment the socket is opened and
+  // handed to the reactor, so it includes sockets still in connect(), the proxy
+  // CONNECT exchange, or the TLS handshake. Occupancy has to mean established,
+  // or a level "reaches" a target using sockets sitting in the peer's accept
+  // backlog -- measured doing exactly that against a server with listen(8).
+  int established_conns() const {
+    const int n = active_conns - in_flight_conns;
+    return n > 0 ? n : 0;
+  }
 
   // Index of the resolved address we are currently dialing. While nothing has
   // ever connected we rotate through the candidates so an IPv6-first "localhost"
@@ -1306,6 +1321,9 @@ struct Engine::Impl {
     target_conns = levels[level_idx];
     level_started = now;
     level_measuring = false;
+    level_ramped = false;
+    level_max_active = 0;
+    level_min_active = 0;
     if (prober) {
       prober->set_active(false);  // no samples while connections are coming up
       prober->set_tag("level " + std::to_string(target_conns));
@@ -1318,6 +1336,9 @@ struct Engine::Impl {
   void finish_level(TimePoint now) {
     CapacityLevel lvl;
     lvl.connections = levels[level_idx];
+    lvl.ramped = level_ramped;
+    lvl.reached_max = level_max_active;
+    lvl.reached_min = level_min_active;
     lvl.hold_s = std::chrono::duration<double>(now - level_started).count();
     std::vector<long> served;
     for (std::size_t i = level_probe_begin; i < log.probes.size(); ++i) {
@@ -1338,31 +1359,74 @@ struct Engine::Impl {
     // denial of normal service; saying otherwise would overstate the ceiling.
     if (!lvl.denied && lvl.probes_total > 0 && lvl.probes_served == 0)
       lvl.denied = true;
+
+    // A level that never reached its target says nothing about that target, in
+    // either direction. "held" would be the more dangerous of the two mistakes
+    // -- it reads as a server that coped with a load it was never given.
+    if (!lvl.ramped) {
+      lvl.inconclusive = true;
+      lvl.denied = false;
+    }
     log.capacity.push_back(lvl);
 
-    if (chatty())
-      interrupt_status(),
-      std::fprintf(stderr, "\n  level %d: %d/%d probes served, median %ld ms -> %s\n",
-                 lvl.connections, lvl.probes_served, lvl.probes_total,
-                 lvl.median_ms, lvl.denied ? "DENIED" : "held");
-    log.note(elapsed(now), lvl.denied ? Availability::Denied : Availability::Ok,
-             lvl.denied ? "Level denied" : "Level held",
-             std::to_string(lvl.probes_served) + "/" +
-                 std::to_string(lvl.probes_total) + " probes served at " +
-                 std::to_string(lvl.connections) + " connections");
+    if (chatty()) {
+      interrupt_status();
+      if (lvl.inconclusive)
+        std::fprintf(stderr,
+                     "\n  level %d: INCONCLUSIVE -- only %d connection(s) were"
+                     " ever up, so the %d/%d probes served describe that load,"
+                     " not %d\n",
+                     lvl.connections, lvl.reached_max, lvl.probes_served,
+                     lvl.probes_total, lvl.connections);
+      else
+        std::fprintf(stderr,
+                     "\n  level %d: %d/%d probes served, median %ld ms,"
+                     " occupancy %d-%d -> %s\n",
+                     lvl.connections, lvl.probes_served, lvl.probes_total,
+                     lvl.median_ms, lvl.reached_min, lvl.reached_max,
+                     lvl.denied ? "DENIED" : "held");
+    }
+    if (lvl.inconclusive) {
+      // Degraded rather than Ok: the timeline should not show a reassuring
+      // green band for a stretch that measured nothing.
+      log.note(elapsed(now), Availability::Degraded, "Level inconclusive",
+               "asked for " + std::to_string(lvl.connections) +
+                   " connections, never had more than " +
+                   std::to_string(lvl.reached_max));
+    } else {
+      log.note(elapsed(now), lvl.denied ? Availability::Denied : Availability::Ok,
+               lvl.denied ? "Level denied" : "Level held",
+               std::to_string(lvl.probes_served) + "/" +
+                   std::to_string(lvl.probes_total) + " probes served at " +
+                   std::to_string(lvl.connections) + " connections (occupancy " +
+                   std::to_string(lvl.reached_min) + "-" +
+                   std::to_string(lvl.reached_max) + ")");
+    }
   }
 
   // Returns false when the staircase is over.
   bool capacity_tick(TimePoint now) {
     if (!level_measuring) {
-      const bool ramped = active_conns >= target_conns;
+      const bool ramped = established_conns() >= target_conns;
       if (!ramped && now < phase_deadline) return true;
+      // Remember whether the ramp actually finished. Measuring anyway is the
+      // right call -- the probes are real and the operator wants to see them --
+      // but the level cannot then be labelled with a number it never reached.
+      level_ramped = ramped;
       level_measuring = true;
+      level_max_active = established_conns();
+      level_min_active = established_conns();
       level_probe_begin = log.probes.size();
       if (prober) prober->set_active(true);
       phase_deadline = now + cfg.capacity.hold;
       return true;
     }
+    // Occupancy is sampled across the whole hold, not just at its edges: a
+    // level that reaches its target and then drains has probes describing a
+    // load that was no longer there.
+    const int occupancy = established_conns();
+    if (occupancy > level_max_active) level_max_active = occupancy;
+    if (occupancy < level_min_active) level_min_active = occupancy;
     if (now < phase_deadline) return true;
     // Let an in-flight probe land before closing the books: it was launched
     // under this level's load, so counting it against the next one would both
@@ -1371,6 +1435,11 @@ struct Engine::Impl {
     if (prober && prober->busy()) return true;
 
     finish_level(now);
+    // A level that could not be populated ends the search. Climbing to a higher
+    // target when this one was already out of reach cannot produce a level that
+    // ramps, so every level above would be inconclusive too -- and printing a
+    // staircase of them would look like a measurement.
+    if (log.capacity.back().inconclusive) return false;
     if (log.capacity.back().denied) return false;  // bracket found
     if (++level_idx >= levels.size()) return false;
     enter_level(now);

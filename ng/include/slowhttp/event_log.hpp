@@ -55,12 +55,26 @@ struct Note {
 
 // One step of a capacity staircase.
 struct CapacityLevel {
-  int connections = 0;
+  // What the level asked for, and what it actually got. These are not the same
+  // thing, and conflating them is how a staircase reports a ceiling it never
+  // reached: connect failures, --max-connecting, slow handshakes, peer closes
+  // and local descriptor limits all leave the level short, and the probes then
+  // describe whatever load was really present rather than `connections`.
+  int connections = 0;    // requested
+  int reached_max = 0;    // highest simultaneous connections seen while holding
+  int reached_min = 0;    // lowest, so a level that drained is visible
+  bool ramped = false;    // did the level actually reach `connections`?
+
   double hold_s = 0;
   int probes_served = 0;
   int probes_total = 0;
   long median_ms = -1;  // across served probes; -1 when none were served
   bool denied = false;
+
+  // Set when the level never reached its target. The probes are still recorded
+  // -- they are real observations -- but they say nothing about `connections`,
+  // so the level must not count as either held or denied at that number.
+  bool inconclusive = false;
 };
 
 // Everything about the run that the reports need, gathered once.

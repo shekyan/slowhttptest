@@ -100,7 +100,15 @@ Verdict EventLog::evaluate(double threshold) const {
                            : capacity[0].connections;
     int last_held = 0;
     bool found = false;
+    const CapacityLevel* stopped_short = nullptr;
     for (const auto& lvl : capacity) {
+      // A level that never reached its target brackets nothing. Treating it as
+      // held would put its number in threshold_lo -- a floor under a load the
+      // server was never actually given.
+      if (lvl.inconclusive) {
+        stopped_short = &lvl;
+        break;
+      }
       if (lvl.denied) {
         v.threshold_measured = true;
         v.threshold_lo = last_held;
@@ -110,7 +118,31 @@ Verdict EventLog::evaluate(double threshold) const {
       }
       last_held = lvl.connections;
     }
-    if (!found) {
+    if (found) {
+      // nothing more to say; the bracket is the measurement
+    } else if (stopped_short) {
+      // Deliberately silent on whose fault it was. A level can fail to fill
+      // because of a local descriptor or port limit, or because the target
+      // refused or throttled the connections -- and from here those look the
+      // same. Naming a culprit would send the operator to the wrong machine,
+      // which is the one thing this report must never do.
+      v.threshold_note =
+          "not measured: the search stopped at " +
+          std::to_string(stopped_short->connections) +
+          " connections, where no more than " +
+          std::to_string(stopped_short->reached_max) +
+          " could be established at once. ";
+      v.threshold_note +=
+          last_held > 0
+              ? "Service held up to " + std::to_string(last_held) +
+                    " connections; the ceiling is somewhere above that and this "
+                    "run did not reach it."
+              : "No level was ever populated, so this run measured nothing "
+                "about the target's ceiling.";
+      v.threshold_note +=
+          " Check for a local descriptor or ephemeral-port limit before"
+          " concluding anything about the target.";
+    } else {
       v.threshold_note = "service held at every level up to " +
                          std::to_string(last_held) +
                          " connections; the threshold is above the range tested";
