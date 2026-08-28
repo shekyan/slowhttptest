@@ -15,3 +15,31 @@ Check out [Wiki](https://github.com/shekyan/slowhttptest/wiki) for installation 
 
 Latest official image is available at [Docker Hub](https://hub.docker.com/repository/docker/shekyan/slowhttptest):
 `docker pull shekyan/slowhttptest:latest`
+
+## Trying `slowhttptest-ng` (beta) ##
+
+There is a rewrite of this tool in modern C++, and it would benefit from being
+run against things its author does not own.
+
+It installs **alongside** the existing binary. Nothing is renamed: `slowhttptest`
+still means the tool described above, and stays installed and unchanged.
+
+`docker run --rm --entrypoint slowhttptest-ng shekyan/slowhttptest:ng -u https://target/ -c 1000 -H`
+
+What it adds:
+
+* **HTTP/2 attacks** — slow read (CVE-2019-9517), rapid reset (CVE-2023-44487)
+  and the CONTINUATION flood.
+* **A verdict instead of a socket census.** The report says whether service was
+  actually denied, and lists what could explain the result other than the attack.
+* **An exit code that distinguishes "nothing was tested" from "the target held"**,
+  so an unreachable host stops passing as a clean run in CI.
+
+Three things deliberately differ from the classic tool: CSV output is replaced by
+JSON, exit codes are `2`/`3` rather than `-1`, and the report is organised around
+availability rather than socket states. All flags otherwise mean what they always
+have.
+
+See the [v2.0.0-beta1 release notes](https://github.com/shekyan/slowhttptest/releases/tag/v2.0.0-beta1),
+and please open an issue if it gets something wrong — a report that misdescribes a
+run is the worst bug this tool can have, and that is exactly what a beta is for.
