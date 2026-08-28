@@ -4,7 +4,8 @@ Any actions and or activities related to the code provided is solely your respon
 
 # SlowHTTPTest #
 
-[![Build Status](https://travis-ci.org/shekyan/slowhttptest.svg?branch=master)](https://travis-ci.org/shekyan/slowhttptest)
+[![ng](https://github.com/shekyan/slowhttptest/actions/workflows/ng.yml/badge.svg)](https://github.com/shekyan/slowhttptest/actions/workflows/ng.yml)
+[![CodeQL](https://github.com/shekyan/slowhttptest/actions/workflows/codeql.yml/badge.svg)](https://github.com/shekyan/slowhttptest/actions/workflows/codeql.yml)
 
 SlowHTTPTest is a highly configurable tool that simulates some Application Layer Denial of Service attacks by prolonging HTTP connections in different ways.
 
