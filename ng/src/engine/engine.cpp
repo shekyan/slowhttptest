@@ -1919,13 +1919,32 @@ struct Engine::Impl {
         Conn* c = conn_by_fd(ev.fd);
         if (!c || !c->active) continue;
         if (ev.error) {
-          if (c->sock.state() == SockState::Connecting)
+          if (c->sock.state() == SockState::Connecting) {
             // Ask the socket why before closing it; poll() only said "error".
             note_connect_failure(c->sock.finish_connect()
                                      ? 0
                                      : c->sock.connect_errno());
-          else
-            ++peer_closed_total;
+            close_slot(*c);
+            continue;
+          }
+          // A hangup routinely arrives with the bytes that explain it still
+          // unread: kqueue sets EV_EOF alongside pending data, and a proxy that
+          // answers CONNECT with 403 and closes produces exactly that. Writing
+          // the connection off here discarded the reply along with the only
+          // reason the run had -- and because the loss landed in peer_closed
+          // rather than setup_failed, the scheme-mismatch heuristic downstream
+          // then read "TCP up, no handshake, nothing failed" and told the
+          // operator to try http://, which is confidently wrong advice about a
+          // proxy that simply refused the tunnel.
+          //
+          // So drain setup first. If it concludes, it closes the slot itself
+          // with the real reason; if it still wants bytes that are never coming,
+          // fall through and count the hangup as before.
+          if (!c->sock.ready()) {
+            drive_setup(*c);
+            if (!c->active) continue;
+          }
+          ++peer_closed_total;
           close_slot(*c);
           continue;
         }
