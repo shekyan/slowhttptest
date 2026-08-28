@@ -676,6 +676,8 @@ CPPFLAGS
 LDFLAGS
 CXXFLAGS
 CXX
+PKG_CONFIG
+BREW
 AM_BACKSLASH
 AM_DEFAULT_VERBOSITY
 AM_DEFAULT_V
@@ -750,6 +752,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_silent_rules
+with_openssl
 enable_dependency_tracking
 '
       ac_precious_vars='build_alias
@@ -1392,6 +1395,12 @@ Optional Features:
                           do not reject slow dependency extractors
   --disable-dependency-tracking
                           speeds up one-time build
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-openssl=DIR      OpenSSL installation prefix (default: ask brew on
+                          macOS, else pkg-config)
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -3381,8 +3390,174 @@ END
 fi
 
 
-LDFLAGS="$LDFLAGS -L/usr/local/opt/openssl/lib"
-CPPFLAGS="$CPPFLAGS -I/usr/local/opt/openssl/include"
+# Where is OpenSSL?
+#
+# macOS ships LibreSSL headers that must not be shadowed, so Homebrew keeps
+# OpenSSL keg-only, outside every default search path. This used to be handled
+# by hardcoding /usr/local/opt/openssl -- which is the Intel Homebrew prefix.
+# Apple Silicon moved it to /opt/homebrew, so on every arm64 Mac ./configure
+# failed outright with "OpenSSL-devel is missing", and the fix was undiscoverable
+# from that message.
+#
+# Order matters, and pkg-config is deliberately not first. An arm64 Mac that
+# once had Intel Homebrew still has an x86_64 pkg-config under /usr/local
+# reporting an x86_64 OpenSSL, which cannot link into an arm64 binary. The brew
+# on PATH always belongs to the architecture the shell is running as -- the same
+# architecture the compiler targets by default -- so on Darwin it is the
+# reliable answer. pkg-config is right everywhere else, including MacPorts and
+# every Linux distribution.
+
+# Check whether --with-openssl was given.
+if test ${with_openssl+y}
+then :
+  withval=$with_openssl; openssl_prefix="$withval"
+else $as_nop
+  openssl_prefix=""
+fi
+
+
+openssl_cflags=""
+openssl_ldflags=""
+openssl_from="system default paths"
+
+if test -n "$openssl_prefix" && test "x$openssl_prefix" != xyes; then
+  openssl_cflags="-I$openssl_prefix/include"
+  openssl_ldflags="-L$openssl_prefix/lib"
+  openssl_from="--with-openssl=$openssl_prefix"
+else
+  if test "`uname -s 2>/dev/null`" = Darwin; then
+    # A Mac that migrated from Intel keeps both Homebrew prefixes, each holding
+    # a different architecture's OpenSSL, and an x86_64 libssl cannot link into
+    # an arm64 binary. Order the candidates by what this build actually needs
+    # rather than by whichever brew happens to come first on PATH.
+    case `uname -m 2>/dev/null` in
+      arm64) ssl_roots="/opt/homebrew /usr/local" ;;
+      *)     ssl_roots="/usr/local /opt/homebrew" ;;
+    esac
+    ssl_candidates=""
+    for ssl_root in $ssl_roots; do
+      for keg in openssl@3 openssl; do
+        ssl_candidates="$ssl_candidates $ssl_root/opt/$keg"
+      done
+    done
+    # Then whatever brew reports, which covers a non-standard prefix.
+    # Extract the first word of "brew", so it can be a program name with args.
+set dummy brew; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_BREW+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if test -n "$BREW"; then
+  ac_cv_prog_BREW="$BREW" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_BREW="brew"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+BREW=$ac_cv_prog_BREW
+if test -n "$BREW"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $BREW" >&5
+printf "%s\n" "$BREW" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+    if test -n "$BREW"; then
+      for keg in openssl@3 openssl; do
+        brew_ssl=`$BREW --prefix $keg 2>/dev/null`
+        if test -n "$brew_ssl"; then
+          ssl_candidates="$ssl_candidates $brew_ssl"
+        fi
+      done
+    fi
+    for ssl_try in $ssl_candidates; do
+      if test -d "$ssl_try/include/openssl"; then
+        openssl_cflags="-I$ssl_try/include"
+        openssl_ldflags="-L$ssl_try/lib"
+        openssl_from="$ssl_try"
+        break
+      fi
+    done
+  fi
+  if test -z "$openssl_cflags"; then
+    # Extract the first word of "pkg-config", so it can be a program name with args.
+set dummy pkg-config; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_PKG_CONFIG+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if test -n "$PKG_CONFIG"; then
+  ac_cv_prog_PKG_CONFIG="$PKG_CONFIG" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_PKG_CONFIG="pkg-config"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+PKG_CONFIG=$ac_cv_prog_PKG_CONFIG
+if test -n "$PKG_CONFIG"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $PKG_CONFIG" >&5
+printf "%s\n" "$PKG_CONFIG" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+    if test -n "$PKG_CONFIG" && $PKG_CONFIG --exists openssl 2>/dev/null; then
+      openssl_cflags=`$PKG_CONFIG --cflags openssl`
+      openssl_ldflags=`$PKG_CONFIG --libs-only-L openssl`
+      openssl_from="pkg-config"
+    fi
+  fi
+fi
+
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking where OpenSSL comes from" >&5
+printf %s "checking where OpenSSL comes from... " >&6; }
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $openssl_from" >&5
+printf "%s\n" "$openssl_from" >&6; }
+
+CPPFLAGS="$CPPFLAGS $openssl_cflags"
+LDFLAGS="$LDFLAGS $openssl_ldflags"
 
 # Checks for programs.
 
@@ -5894,7 +6069,15 @@ then :
   LIBS="-lssl $LIBS"
 
 else $as_nop
-  as_fn_error $? "OpenSSL-devel is missing" "$LINENO" 5
+  as_fn_error $? "
+  OpenSSL development files were not found (looked via: $openssl_from).
+
+  Debian/Ubuntu:  apt install libssl-dev
+  Fedora/RHEL:    dnf install openssl-devel
+  macOS:          brew install openssl@3
+
+  If it is installed somewhere this did not look, say where:
+      ./configure --with-openssl=/path/to/openssl" "$LINENO" 5
 fi
 
 
