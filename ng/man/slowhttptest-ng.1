@@ -1,0 +1,626 @@
+.\"
+.\"  Copyright 2011-2026 Sergey Shekyan and contributors
+.\"
+.\"  Licensed under the Apache License, Version 2.0 (the "License");
+.\"  you may not use this file except in compliance with the License.
+.\"  You may obtain a copy of the License at
+.\"
+.\"  http://www.apache.org/licenses/LICENSE-2.0
+.\"
+.\"  Unless required by applicable law or agreed to in writing, software
+.\"  distributed under the License is distributed on an "AS IS" BASIS,
+.\"  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+.\"  See the License for the specific language governing permissions and
+.\"  limitations under the License.
+.\"
+.Dd August 10, 2026
+.Dt SLOWHTTPTEST-NG 1
+.Os
+.Sh NAME
+.Nm slowhttptest-ng
+.Nd measure whether a server keeps serving under slow HTTP load
+.Sh SYNOPSIS
+.Nm
+.Bk -words
+.Op Fl H | B | R | X
+.Op Fl u Ar url
+.Op Fl c Ar connections
+.Op Fl r Ar rate
+.Op Fl l Ar seconds
+.Op Fl i Ar seconds
+.Op Fl g
+.Op Fl o Ar base
+.Op Fl p Ar seconds
+.Op Fl d Ar host : Ns Ar port
+.Op Fl e Ar host : Ns Ar port
+.Op Fl 1 Ar header
+.Op Fl P Ar data
+.Op Fl A Ar user-agent
+.Op Fl q
+.Op options ...
+.Ek
+.Sh DESCRIPTION
+.Nm
+tests whether a web server remains available to ordinary clients while it is
+subjected to slow HTTP load.
+It opens many connections that make progress
+extremely slowly, and, independently, keeps one ordinary client of its own
+alive to measure whether the service is still being served.
+.Pp
+That second part is the point.
+Held sockets prove nothing on their own: an
+event-driven server will hold every connection you can open and serve every
+real client throughout.
+The verdict is derived from the availability probe, not
+from socket counts.
+.Pp
+Only run
+.Nm
+against systems you are authorized to test.
+.Ss Test modes
+Each mode attacks a different point of the request lifecycle, and each is
+stopped by a different server timeout.
+A server hardened against one can be
+wide open to the next.
+.Bl -tag -width Ds
+.It Fl H
+Slow headers, a.k.a. Slowloris.
+Sends a request whose headers never end.
+The
+server blocks reading headers; the defense is a request-header timeout.
+This is
+the default.
+.It Fl B
+Slow body, a.k.a. R-U-Dead-Yet.
+Sends complete headers with a large
+.Sy Content-Length ,
+then delivers the body a few bytes at a time.
+The server blocks reading the
+body.
+Because the headers completed instantly, a header timeout never fires;
+the defense is a request-body timeout.
+.It Fl R
+Range attack, a.k.a. Apache killer.
+A small request naming thousands of
+overlapping byte ranges, which a vulnerable server expands in memory.
+CVE-2011-3192 was patched in 2011, so against a current server this is a
+regression check rather than a live exploit.
+.It Fl X
+Slow read.
+Sends a complete, valid request and then refuses to read the
+response, advertising a tiny TCP receive window.
+The server blocks
+.Em sending .
+Neither a header nor a body timeout helps; the defense is a send timeout.
+.El
+.Ss General options
+.Bl -tag -width Ds
+.It Fl u Ar url
+Absolute URL of the target,
+.Sy http
+or
+.Sy https .
+Default
+.Pa http://localhost/ .
+.It Fl c Ar connections
+Target number of concurrent connections.
+Default 50.
+.It Fl r Ar rate
+New connections per second.
+Default 50.
+.It Fl -connect-timeout Ar seconds
+Drop a connection that has not been established within this long and reuse the
+slot.
+Default 10; 0 leaves it to the operating system.
+.Pp
+The OS default is far too patient for this purpose \(em macOS retries a SYN for
+75 seconds.
+Against a target that drops SYNs, a rate limiter or a full accept queue, every
+slot fills with connections that will never establish, the attack quietly stops
+applying pressure, and the status line shows a large
+.Dq connecting
+count that never resolves.
+Recycling the slot sends a fresh SYN instead.
+.It Fl -max-connecting Ar n
+Ceiling on connections simultaneously mid-handshake.
+Default 5000; 0 removes the limit.
+.Pp
+This is not here to stop you flooding a slow-accepting target \(em exhausting an
+accept queue is a real attack and worth testing.
+It is here because the cost of holding half-open sockets has a knee in it.
+Time for the operating system to reap the process on Ctrl-C, measured on macOS
+against a target answering no SYNs at all:
+.Bd -literal -offset indent
+ 2500 in flight   0.0 s     7000 in flight    7.4 s
+ 5000 in flight   0.6 s     9000 in flight   14.2 s
+ 6000 in flight   3.1 s    10000 in flight   23.5 s
+.Ed
+.Pp
+The default sits at that knee, so the ordinary case pays nothing and a larger
+flood is asked for explicitly with
+.Fl -max-connecting Cm 0 .
+Against a target that accepts normally the cap never binds: handshakes complete
+in milliseconds, so even a fast ramp keeps only a few hundred in flight.
+.It Fl l Ar seconds
+Test length.
+Default 240.
+.It Fl i Ar seconds
+Interval between followup data.
+Default 10.
+.It Fl x Ar bytes
+Maximum length of each randomized name/value pair of followup data.
+Default 32.
+.It Fl s Ar bytes
+Value of the
+.Sy Content-Length
+header for body modes.
+Default 4096.
+.It Fl t Ar verb
+Request verb.
+Defaults to GET for slow headers and slow read, POST for slow
+body, HEAD for range.
+.It Fl f Ar content-type
+Value of the
+.Sy Content-Type
+header.
+.It Fl m Ar accept
+Value of the
+.Sy Accept
+header.
+.It Fl j Ar cookie
+Value of the
+.Sy Cookie
+header.
+.It Fl 1 Ar header , Fl -header Ar header
+Extra header, e.g.
+.Dq Li "Authorization: Bearer abc" .
+May be given more than once.
+Sent on every attack request
+.Em and
+on the availability probe, so both reach the same endpoint.
+Values containing
+CR or LF are rejected.
+.It Fl P Ar data , Fl -data Ar data
+Request body for
+.Fl B .
+A leading
+.Sq @
+reads the body from a file, as in
+.Xr curl 1 .
+.Fl s
+is raised above the payload if needed, so the body still never completes.
+.It Fl A Ar user-agent , Fl -user-agent Ar user-agent
+Value of the
+.Sy User-Agent
+header.
+By default
+.Nm
+identifies itself and carries the project URL, so the traffic is recognisable
+in the target's own logs.
+.It Fl -random-user-agent
+Present as Chrome, Firefox or Safari instead, one chosen per run.
+Use when a
+CDN or WAF sheds the tool's own agent before it reaches the service.
+The agent
+used is recorded in the report.
+.It Fl -no-referer
+Do not send the
+.Sy Referer
+header.
+.Nm
+sends
+.Dq Li TESTING_PURPOSES_ONLY
+by default as a second marker for defenders.
+Drop it if the target rejects an
+unparseable Referer, or replace it with
+.Fl 1 Dq Li "Referer: https://..." .
+.It Fl v Ar level
+Verbosity, 0 to 4, on the classic scale: fatal, info, error, warn, debug.
+Default 1.
+.Bl -tag -width 4n -compact
+.It 0
+Silent, the same as
+.Fl q .
+.It 1
+The banner, the running status and the verdict.
+.It 2
+Adds every connection error as it happens, rather than the first one and a
+tally at the end.
+.It 3
+Adds connection-level warnings: a handshake stalled past
+.Fl \-connect-timeout
+and its slot reclaimed, a peer that hung up on a connection that is therefore
+holding nothing.
+.It 4
+Adds per-socket tracing: descriptor numbers, where each connected, bytes
+written, and each close.
+Also a breakdown of connect failures by cause, which matters when several are
+mixed and the dominant one alone would mislead.
+.El
+.Pp
+At 2 and above the running status stops being redrawn in place and becomes one
+appended line per update.
+The two cannot share a terminal: the status block repaints over its own lines,
+so a per-connection trace printed into it would be overwritten a moment later.
+Verbose output is a log, not a dashboard.
+.It Fl q , Fl -quiet
+No console output at all.
+Reports are still written and the exit status is
+unchanged.
+Equivalent to
+.Fl v Cm 0 .
+.It Fl h , Fl -help
+Print usage and exit.
+.It Fl V , Fl -version
+Print the version, project URL and whether TLS is compiled in, then exit.
+.El
+.Ss Proxy options
+.Bl -tag -width Ds
+.It Fl d Ar host : Ns Ar port
+Route all traffic through this HTTP proxy.
+.Sy https
+targets are tunnelled with CONNECT;
+.Sy http
+requests use absolute-URI form.
+.It Fl e Ar host : Ns Ar port
+Route only the availability probe through this proxy, to measure availability
+from a different network path than the one being saturated.
+.It Fl \-http2
+Speak HTTP/2 instead of HTTP/1.1.
+Implemented for slow read
+.Pq Fl X
+only; the other modes rest on HTTP/1.1 framing with no direct equivalent.
+.Pp
+HTTP/2 makes slow read strictly stronger.
+It adds an application-layer flow-control window that the kernel does not clamp,
+so this opens that window to its maximum while starving the TCP window
+underneath: the server generates the response, cannot hand it over, and holds it
+in its own buffers rather than in socket buffers.
+That is CVE-2019-9517, internal data buffering.
+Multiplexing also pins many streams inside one connection, so per-IP connection
+limits, the usual Slowloris mitigation, do not see it.
+.It Fl \-h2-streams Ar n
+Streams to pin per connection with
+.Fl \-http2 .
+Default 100.
+.It Fl \-rapid-reset
+HTTP/2 rapid reset, CVE-2023-44487.
+Implies
+.Fl \-http2 .
+.Pp
+Opens a stream and cancels it immediately, repeatedly.
+A cancelled stream stops counting against
+.Dv SETTINGS_MAX_CONCURRENT_STREAMS
+the moment it is reset, but the server has already accepted the headers, routed
+the request and often dispatched it, so the concurrency limit never binds while
+the work does.
+.Pp
+The mitigation every implementation shipped is to count resets and close the
+connection once there are too many, so a server that has been fixed answers by
+hanging up.
+That arrives here as a peer close and is reported as such; a target that lets
+this run indefinitely has not been fixed.
+.It Fl \-continuation-flood
+HTTP/2 CONTINUATION flood.
+Implies
+.Fl \-http2 .
+.Pp
+The direct analogue of slow headers
+.Pq Fl H ,
+and worse than its ancestor in two ways.
+A header block may be split across a
+.Dv HEADERS
+frame and any number of
+.Dv CONTINUATION
+frames, and is only complete when one carries
+.Dv END_HEADERS .
+Until then the server cannot act on it: HPACK is a stateful compression context,
+so a partial block cannot be decoded, dispatched or discarded without
+desynchronising every later block on that connection.
+It has to be kept.
+This opens a block and never closes it.
+.Pp
+So the cost is memory that grows for as long as the client keeps sending, rather
+than one pinned connection slot.
+And in many stacks all of this happens before the point where a request is
+logged, so a server can be driven hard with nothing in its access log \-\- the
+operator sees memory climb and no requests to explain it.
+Observed against nginx 1.31.4, which closed every connection on its header
+limit and wrote nothing at all to the error log at
+.Cm warn
+level.
+.Pp
+.Fl i
+and
+.Fl x
+mean what they mean for slow headers: how often another fragment goes out, and
+how large the random field inside it is.
+.It Fl \-h2-reset-rate Ar n
+Streams opened and cancelled per second, per connection, with
+.Fl \-rapid-reset .
+Default 100.
+.Pp
+Rate-limited deliberately.
+This is a load generator aimed at a known amplifier, and at the default
+connection count it already asks a vulnerable server to process several thousand
+requests a second.
+.It Fl 4 , Fl \-ipv4
+.It Fl 6 , Fl \-ipv6
+Resolve the target to IPv4 or IPv6 addresses only.
+.Pp
+This is about reproducibility rather than connectivity.
+On a dual-stack host the resolver may answer with either family first, and it is
+free to answer differently on the next invocation; the two families can be
+entirely different network paths, with different routing, MTU and filtering.
+A run that is not pinned can therefore land somewhere else than the previous one
+and disagree with it for reasons nothing in the output explains.
+Pin the family when comparing runs, and note that
+.Nm
+prints the address it actually used.
+.El
+.Ss Availability probe
+The probe is what the verdict is based on.
+One short-lived, entirely ordinary
+request at a time, timing the first response byte.
+.Bl -tag -width Ds
+.It Fl p Ar seconds
+Probe timeout.
+No response within this counts as unavailable.
+Default 5.
+.It Fl -probe-interval Ar seconds
+Seconds between probes.
+Accepts fractional values.
+Default 2.
+.It Fl -no-probe
+Do not measure availability at all.
+No verdict and no report are produced.
+.El
+.Pp
+The status code deliberately does not decide availability: a
+.Sy 503
+is a served response, and treating it as a denial would conflate
+.Dq it refused me
+with
+.Dq it never answered me .
+See
+.Fl -fail-on-status .
+.Ss Capacity search
+.Bl -tag -width Ds
+.It Fl -capacity
+Hold connections at each level, probe, then step up, until the service stops
+answering.
+The denial threshold is reported as a bracket whose resolution is
+the step size.
+.It Fl -capacity-start Ar n
+First level.
+Default 32.
+.It Fl -capacity-step Ar n
+Increment between levels.
+Default 32.
+.It Fl -capacity-max Ar n
+Ceiling.
+Defaults to
+.Fl c .
+.It Fl -capacity-hold Ar seconds
+Time held at each level.
+Default 15.
+.El
+.Pp
+Without
+.Fl -capacity
+no denial threshold is reported at all, and the report says why: at the default
+rate the connection ramp covers far more connections than the probe samples, so
+any number would be an artifact of ramp timing rather than a property of the
+server.
+.Ss Reporting
+.Bl -tag -width Ds
+.It Fl g
+Write a report.
+.It Fl o Ar base
+Report base name; writes
+.Pa base.html
+and
+.Pa base.json .
+Default
+.Pa slowhttptest-ng .
+.It Fl -availability-threshold Ar fraction
+Fraction of the attack window that must have been served for the JSON
+criterion to pass.
+Default 0.95.
+.It Fl -fail-on-status Ar list
+Status codes that additionally fail the CI criterion, e.g.
+.Cm 5xx
+or
+.Dq Li 503,429 .
+This affects the pass/fail gate only.
+The measured outcome and the availability
+figure are unchanged, because the server did answer.
+.El
+.Ss Range options
+.Bl -tag -width Ds
+.It Fl a Ar start
+Left boundary of the ranges in the Range header.
+Default 5.
+.It Fl b Ar bytes
+Ceiling for the Range header right boundary.
+Default 2000.
+.El
+.Ss Slow read options
+.Bl -tag -width Ds
+.It Fl n Ar seconds
+Interval between read operations on the receive buffer.
+Default 1.
+.It Fl z Ar bytes
+Bytes to read from the receive buffer per read call.
+Default 5.
+.It Fl w Ar bytes
+Start of the range the advertised window size is picked from.
+Default 1.
+.It Fl y Ar bytes
+End of that range.
+Default 512.
+.It Fl k Ar n
+Repeat the request this many times per connection, to multiply the response
+size on servers supporting persistent connections.
+Default 1.
+.El
+.Pp
+Over
+.Sy https ,
+.Fl z
+throttles how fast the application consumes plaintext while the kernel receive
+buffer drains a TLS record at a time, because TLS is record-oriented.
+The
+attack still works; the effective granularity is a record rather than
+.Fl z
+bytes.
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev SSL_CERT
+Path to a PEM client certificate chain, for mutually authenticated
+.Sy https
+targets.
+.It Ev SSL_KEY
+Path to the matching PEM private key.
+Both must be set together.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa base.html
+Self-contained report.
+All CSS, SVG and data are inlined, so it opens offline,
+inside a container and on an air-gapped network.
+.It Pa base.json
+The same run in machine-readable form, from the same internal event log, so the
+two cannot disagree.
+.El
+.Sh EXIT STATUS
+.Bl -tag -width Ds
+.It 0
+The test ran to completion.
+This is returned regardless of the outcome:
+finding a denial of service is a successful test run, not a failed one.
+Gate
+automation on
+.Li .criterion.pass
+in the JSON report instead.
+.It 2
+Usage or configuration error, or an
+.Sy https
+target on a build without TLS.
+.It 3
+No usable connection was ever established, so nothing was actually tested.
+.It 130
+Interrupted twice.
+The second
+.Dv SIGINT
+exits immediately without writing anything.
+.It 4
+The event loop failed partway through.
+No verdict and no report are produced, because measurements taken after the
+loop stopped working are not trustworthy.
+.El
+.Ss Interrupting a run
+.Dv SIGINT
+(Ctrl-C) or
+.Dv SIGTERM
+quits at once.
+Nothing is closed and nothing is written: no verdict, no report.
+.Pp
+A run that appears not to have exited has almost certainly exited already.
+A finished process the shell has not yet reaped remains visible as a zombie,
+which is easily mistaken for a hang: it is listed by
+.Xr ps 1
+with its command name in parentheses because its argument vector is gone, it
+consumes no processor time,
+.Dv SIGKILL
+has no effect on it, and it vanishes the moment its parent shell does.
+.Pp
+To tell the two apart:
+.Bd -literal -offset indent
+lsof -p <pid> | wc -l
+.Ed
+.Pp
+No open descriptors means a zombie.
+Sockets still listed by
+.Xr netstat 1
+at that point belong to the kernel's own teardown and to no process.
+.Xr pgrep 1
+with
+.Fl f
+will not match it either, there being no command line left to match.
+.Ss Connection ceiling
+The
+.Sy poll
+reactor cannot watch more descriptors than the platform allows, and on some
+platforms that is a fixed
+.Dv OPEN_MAX
+rather than something the file descriptor limit controls.
+.Nm Fl V
+reports the ceiling.
+A
+.Fl c
+above it is refused at startup rather than discovered thousands of sockets in.
+.Sh EXAMPLES
+Slowloris against a local server, with a report:
+.Bd -literal -offset indent
+slowhttptest-ng -u http://127.0.0.1:8080/ -c 200 -l 120 -g -o report
+.Ed
+.Pp
+Find the connection count at which service stops:
+.Bd -literal -offset indent
+slowhttptest-ng -u http://127.0.0.1:8080/ -c 512 --capacity \e
+    --capacity-start 32 --capacity-step 32
+.Ed
+.Pp
+An authenticated JSON endpoint, silently, gated for CI:
+.Bd -literal -offset indent
+slowhttptest-ng -B -u https://api.example/v1/orders \e
+    -1 "Authorization: Bearer $TOKEN" -f application/json -P @order.json \e
+    -q -g -o report --fail-on-status 5xx
+jq -e '.criterion.pass' report.json
+.Ed
+.Pp
+Attack directly, but measure availability from another network path:
+.Bd -literal -offset indent
+slowhttptest-ng -u http://target.example/ -e probe-proxy.local:3128 -c 200
+.Ed
+.Sh COMPATIBILITY
+.Nm
+accepts every flag
+.Xr slowhttptest 1
+does, with the same meanings.
+It differs in three ways that matter to existing
+scripts:
+.Bl -bullet
+.It
+.Fl o
+writes
+.Pa base.html
+and
+.Pa base.json .
+The classic tool wrote
+.Pa base.html
+and
+.Pa base.csv ;
+CSV output has been dropped.
+.It
+Errors exit 2 or 3 rather than the classic's -1.
+.It
+The report is built around service availability rather than socket state
+changes, and states what it could not rule out.
+.El
+.Sh SEE ALSO
+.Xr curl 1 ,
+.Xr slowhttptest 1
+.Pp
+.Lk https://github.com/shekyan/slowhttptest
+.Sh AUTHORS
+.An Sergey Shekyan
+and contributors.
+.Sh CAVEATS
+A result from a single run, from a single vantage point, cannot distinguish
+server-side exhaustion from packet loss, from rate limiting or a WAF shedding
+this client specifically, or from an intermediary failing rather than the
+origin.
+Every report states this alongside its verdict.

@@ -1,0 +1,164 @@
+#!/bin/sh
+# A GNU-style front end for the CMake build.
+#
+# There is exactly one build definition in this tree, CMakeLists.txt. This
+# script does not duplicate it; it translates the ./configure conventions into
+# CMake arguments and writes a Makefile that delegates. So
+#
+#     ./configure --prefix=/usr && make && make install DESTDIR=/tmp/stage
+#
+# works for anyone whose habits or packaging scripts expect it, without the
+# project carrying a second, drifting description of how to build itself.
+#
+# Unknown options are warned about and ignored, deliberately. That is what an
+# autoconf-generated configure does, and it is not politeness: Debian's
+# dh_auto_configure alone passes --build, --host, --infodir, --disable-silent-
+# rules and several more. A wrapper that treats those as errors fails on the
+# first real packaging attempt.
+
+set -e
+
+srcdir=$(cd "$(dirname "$0")" && pwd)
+builddir=build
+prefix=/usr/local
+tls=ON
+build_type=
+cmake_extra=
+unknown=
+
+bindir=
+libdir=
+mandir=
+sharedir=
+
+usage() {
+    cat <<EOF
+Usage: ./configure [OPTION]...
+
+Installation directories:
+  --prefix=DIR            install under DIR [/usr/local]
+  --bindir=DIR            user executables [PREFIX/bin]
+  --libdir=DIR            object code libraries [PREFIX/lib]
+  --mandir=DIR            man documentation [PREFIX/share/man]
+  --datarootdir=DIR       read-only data [PREFIX/share]
+
+Optional features:
+  --enable-tls            build with TLS via OpenSSL [default]
+  --disable-tls           build without TLS; https is refused at runtime
+                          with an explanation rather than failing to link
+
+Build:
+  --build-type=TYPE       CMake build type [Release]
+  --builddir=DIR          where to build [build]
+  -h, --help              this message
+
+Environment: CC, CXX, CXXFLAGS, LDFLAGS are passed through to CMake.
+
+This is a wrapper. The build itself is CMake, and
+    cmake -S . -B build && cmake --build build
+is equivalent and always available.
+EOF
+}
+
+for arg in "$@"; do  # consumed here; "$@" is rebuilt below as cmake args
+    case "$arg" in
+        --prefix=*)       prefix=${arg#*=} ;;
+        --bindir=*)       bindir=${arg#*=} ;;
+        --libdir=*)       libdir=${arg#*=} ;;
+        --mandir=*)       mandir=${arg#*=} ;;
+        --datarootdir=*)  sharedir=${arg#*=} ;;
+        --enable-tls)     tls=ON ;;
+        --disable-tls)    tls=OFF ;;
+        --enable-tls=*)   [ "${arg#*=}" = no ] && tls=OFF || tls=ON ;;
+        --build-type=*)   build_type=${arg#*=} ;;
+        --builddir=*)     builddir=${arg#*=} ;;
+        -h|--help)        usage; exit 0 ;;
+        # Cross-compiling needs a CMake toolchain file, which this wrapper has
+        # no way to synthesise correctly. Say so rather than appear to succeed.
+        --host=*)
+            echo "configure: warning: --host is not supported by this wrapper." >&2
+            echo "configure: cross-compiling needs a CMake toolchain file:" >&2
+            echo "    cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=..." >&2
+            unknown="$unknown $arg" ;;
+        -D*)              cmake_extra="$cmake_extra $arg" ;;
+        *)                unknown="$unknown $arg" ;;
+    esac
+done
+
+if [ -n "$unknown" ]; then
+    echo "configure: warning: ignoring unrecognised option(s):$unknown" >&2
+fi
+
+# GNUInstallDirs takes these relative to the prefix, so an absolute path from
+# the caller has to be made relative to it or CMake will nest it under the
+# prefix a second time.
+relativise() {
+    case "$1" in
+        "$prefix"/*) printf '%s' "${1#"$prefix"/}" ;;
+        /*)          printf '%s' "$1" ;;   # outside the prefix: CMake allows it
+        *)           printf '%s' "$1" ;;
+    esac
+}
+
+# Built as positional parameters, not as a string. CXXFLAGS is "-O2 -g -Wall"
+# on essentially every distribution, and a string expanded unquoted splits on
+# those spaces -- CMake then sees "-g" as an argument of its own and refuses to
+# run. This is the first thing a real packaging attempt would hit.
+set --
+set -- "$@" "-DCMAKE_INSTALL_PREFIX=$prefix" "-DSLOWHTTP_TLS=$tls"
+[ -n "$bindir" ]   && set -- "$@" "-DCMAKE_INSTALL_BINDIR=$(relativise "$bindir")"
+[ -n "$libdir" ]   && set -- "$@" "-DCMAKE_INSTALL_LIBDIR=$(relativise "$libdir")"
+[ -n "$mandir" ]   && set -- "$@" "-DCMAKE_INSTALL_MANDIR=$(relativise "$mandir")"
+[ -n "$sharedir" ] && set -- "$@" "-DCMAKE_INSTALL_DATAROOTDIR=$(relativise "$sharedir")"
+[ -n "$build_type" ] && set -- "$@" "-DCMAKE_BUILD_TYPE=$build_type"
+[ -n "$CC" ]  && set -- "$@" "-DCMAKE_C_COMPILER=$CC"
+[ -n "$CXX" ] && set -- "$@" "-DCMAKE_CXX_COMPILER=$CXX"
+[ -n "$CXXFLAGS" ] && set -- "$@" "-DCMAKE_CXX_FLAGS=$CXXFLAGS"
+[ -n "$LDFLAGS" ]  && set -- "$@" "-DCMAKE_EXE_LINKER_FLAGS=$LDFLAGS"
+# shellcheck disable=SC2086
+[ -n "$cmake_extra" ] && set -- "$@" $cmake_extra
+
+command -v cmake >/dev/null || {
+    echo "configure: error: cmake not found. This project builds with CMake;" >&2
+    echo "           install it (apt install cmake / dnf install cmake /" >&2
+    echo "           brew install cmake) and run this again." >&2
+    exit 1
+}
+
+echo "configure: cmake -S $srcdir -B $builddir $*"
+cmake -S "$srcdir" -B "$builddir" "$@"
+
+cat > Makefile <<EOF
+# Generated by ./configure. Edits here are lost; change CMakeLists.txt.
+#
+# Every target delegates to CMake, which owns the actual build.
+BUILDDIR = $builddir
+
+all:
+	cmake --build \$(BUILDDIR) --parallel
+
+# DESTDIR is passed through the environment, which is how cmake --install
+# expects it and how every packaging tool passes it.
+install:
+	DESTDIR="\$(DESTDIR)" cmake --install \$(BUILDDIR)
+
+# The unit tests only: hermetic, no sockets, a second or two. The end-to-end
+# suites bind loopback ports and take minutes, which is wrong for a build
+# sandbox -- "make fullcheck" asks for those explicitly.
+check:
+	ctest --test-dir \$(BUILDDIR) -L unit --output-on-failure
+
+fullcheck:
+	ctest --test-dir \$(BUILDDIR) --output-on-failure
+
+clean:
+	cmake --build \$(BUILDDIR) --target clean
+
+distclean:
+	rm -rf \$(BUILDDIR) Makefile
+
+.PHONY: all install check fullcheck clean distclean
+EOF
+
+echo "configure: wrote Makefile (prefix=$prefix, TLS=$tls)"
+echo "configure: now run: make && make check && make install"
