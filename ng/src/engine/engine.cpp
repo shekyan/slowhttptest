@@ -576,6 +576,10 @@ struct Engine::Impl {
   std::shared_ptr<TlsContext> tls;
   SetupPlan plan;
 
+  // Declared after `closer` on purpose: the prober hands finished descriptors
+  // to it, so it must be destroyed first. Members are destroyed in reverse
+  // declaration order, and moving this above `closer` would leave that hand-off
+  // pointing at a destroyed pool.
   std::unique_ptr<Prober> prober;
   int probe_reg_fd = -1;
   unsigned probe_reg_int = kNone;
@@ -1789,6 +1793,22 @@ struct Engine::Impl {
           // renderers stay free of any policy about what counts as a failure.
           marked.status_fails = cfg.fail_on_status.matches(s.status);
           log.add_probe(marked);
+        };
+        // Finished probe descriptors go to the same pool as attack connections,
+        // so a close that blocks cannot land between one probe and the next.
+        //
+        // Deregistering here rather than leaving it to the next
+        // sync_probe_registration() is deliberate. Once the descriptor is in the
+        // pool a worker may close it immediately, and the number can be handed
+        // straight back out to a new attack connection; unregistering it after
+        // that would silently remove the wrong socket from the reactor. Doing it
+        // before the hand-off closes that window entirely. This runs on the
+        // event loop, from Prober::finish, so touching reactor state is safe.
+        prober->hand_off_fd = [this](int fd) {
+          if (fd < 0) return;
+          if (fd_to_id.find(fd) == fd_to_id.end()) reactor->remove(fd);
+          if (probe_reg_fd == fd) probe_reg_fd = -1;
+          closer->submit(fd);
         };
       }
     }

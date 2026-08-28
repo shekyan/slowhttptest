@@ -61,6 +61,21 @@ class Prober {
   // Reports each completed measurement. Set before the first tick().
   std::function<void(const ProbeSample&)> on_sample;
 
+  // Where finished probe descriptors go. Set by the engine to hand them to the
+  // same close pool the attack connections use; left unset, the probe closes
+  // them itself.
+  //
+  // The probe is the measurement clock, and close(2) is not reliably cheap: on
+  // macOS a socket a content filter has attached to holds close for up to
+  // net.cfil.close_wait_timeout, a second by default. Closing on the event loop
+  // would put that delay between a probe finishing and the next one starting,
+  // which is measurement error introduced by the instrument. Measured at 0.038
+  // ms mean on loopback with a filter active, so this is insurance against a
+  // case that has not been reproduced here rather than a repair.
+  //
+  // The callee takes ownership of the descriptor.
+  std::function<void(int fd)> hand_off_fd;
+
   // Wall-clock origin for ProbeSample::t.
   void set_epoch(TimePoint t) { epoch_ = t; }
 

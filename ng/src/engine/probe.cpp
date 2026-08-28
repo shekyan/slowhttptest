@@ -301,7 +301,13 @@ void Prober::on_event(TimePoint now, bool readable, bool writable, bool error) {
 void Prober::finish(TimePoint now, Availability state, long ms,
                     const std::string& detail, int status) {
   Impl& p = *impl_;
-  p.sock.close();
+  // Hand the descriptor off where the engine has provided somewhere to put it,
+  // so a slow close cannot sit between this probe and the next. release_fd()
+  // detaches it without closing; the pool owns it from here.
+  if (hand_off_fd && p.sock.fd() >= 0)
+    hand_off_fd(p.sock.release_fd());
+  else
+    p.sock.close();
   p.phase = Impl::Phase::Idle;
   p.want = kNone;
   // Schedule from the launch time, not from now, so a slow probe doesn't push
