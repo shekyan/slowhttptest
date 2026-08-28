@@ -1071,10 +1071,39 @@ struct Engine::Impl {
       drive_setup(c);
       return;
     }
+    // Drain what is buffered, but not without limit.
+    //
+    // Only rapid reset reaches this loop more than once. Every other attack
+    // either does not ask for read events at all, or closes the connection on
+    // the first response -- so `if (!c.active) return` ends it after a single
+    // recv. Rapid reset reads and discards on purpose, which lets a peer that
+    // keeps refilling the socket keep this loop running.
+    //
+    // Measured against a peer blasting continuously over loopback: 917
+    // iterations, 3.7 MB and 4.9 ms in one dispatch. That is 5% of rapid
+    // reset's 100 ms tick and never disturbed the 1 s status cadence, so this
+    // is a bound on a tail rather than a repair for observed starvation. The
+    // tail is worth bounding anyway: how long it runs is decided by the peer's
+    // throughput and the kernel's receive buffer, neither of which this tool
+    // picks, and everything sharing this thread -- probe deadlines, the ramp,
+    // attack timers -- waits behind it.
+    //
+    // Returning early loses nothing. Both reactors are level-triggered (the
+    // kqueue backend registers without EV_CLEAR), so a socket with bytes still
+    // pending is reported again on the very next wakeup, with the timers
+    // serviced in between.
+    constexpr int kMaxReadOpsPerDispatch = 64;
+    constexpr std::uint64_t kMaxReadBytesPerDispatch = 256 * 1024;
+
     char buf[4096];
+    int ops = 0;
+    std::uint64_t drained = 0;
     for (;;) {
+      if (++ops > kMaxReadOpsPerDispatch || drained >= kMaxReadBytesPerDispatch)
+        return;
       long n = c.sock.recv_some(buf, sizeof(buf));
       if (n > 0) {
+        drained += static_cast<std::uint64_t>(n);
         bytes_read_total += static_cast<std::uint64_t>(n);
         apply(c, attack.on_readable(c.id, buf, static_cast<std::size_t>(n)));
         if (!c.active) return;
