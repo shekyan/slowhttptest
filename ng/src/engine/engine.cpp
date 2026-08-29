@@ -99,23 +99,17 @@ std::chrono::milliseconds ramp_budget(int conns, int rate) {
   return std::chrono::milliseconds(std::max(500L, ms + 500L));
 }
 
-// Cancelling means cancelling. The handler prints one fixed line and leaves;
-// it closes nothing, writes no report, and runs no cleanup.
+// Cancelling means cancelling. The handler writes one fixed line, sets a flag
+// and returns. It closes nothing, writes no report, and runs no cleanup: the
+// event loop sees the flag, stops, and closes the connections through the
+// Closer pool, which does it N at a time.
 //
-// Two things are worth recording here, because this path was misdiagnosed
-// repeatedly and the evidence was misleading each time.
-//
-// First, the handler must never be able to block. write(2) to a terminal that
-// is not draining does block, and blocking here traps the process inside the
-// very handler whose job is to leave -- reproduced with stderr on a pipe nobody
-// reads, where the process survived SIGINT entirely. Hence the non-blocking
-// stderr below: the message is best-effort, the exit is not.
-//
-// Second, _exit() is reached immediately after the message, so any pause the
-// operator sees after that is the kernel, not this code: the process is already
-// in its exit path with sockets still open. Whether that pause is avoidable is
-// an open question and not one this handler can answer -- what it can do is not
-// add to it, which is why it closes nothing.
+// The handler must never be able to block. write(2) to a terminal that is not
+// draining does block, and blocking here traps the process inside the very
+// handler whose job is to get out of the way -- reproduced with stderr on a
+// pipe nobody reads, where the process survived SIGINT entirely. Hence the
+// non-blocking stderr below: the message is best-effort, the cancellation is
+// not.
 //
 // Two things that look like this bug but are not. A leftover zombie is a
 // convincing impostor: ps lists it, its argv is gone so the name shows in
@@ -150,6 +144,13 @@ constexpr char kCancelMessage[] =
 // Set by the handler, read by the event loop. sig_atomic_t and volatile are what
 // make that legal: the loop must see the store, and the handler may write
 // nothing more complicated.
+//
+// A counter rather than a flag, because the teardown progress line distinguishes
+// the first Ctrl-C from a later one and tells the operator that pressing it
+// again is not making anything faster. With SA_NODEFER the handler can interrupt
+// itself, so the increment is a read-modify-write that can lose a count -- which
+// costs at worst one softer message on a repeat press, and is not worth trading
+// for the loss of that distinction.
 volatile sig_atomic_t g_cancelled = 0;
 
 void handle_cancel(int) {
@@ -178,15 +179,15 @@ void handle_cancel(int) {
   ++g_cancelled;
 }
 
-// SA_RESETHAND and SA_NODEFER together mean that even if the write above blocks
-// -- a terminal that is not draining will do it -- a second Ctrl-C still gets
-// through to the default disposition and kills the process. Without SA_NODEFER
-// the signal would merely go pending while the handler sat there, which is
-// exactly how an earlier version of this made itself unkillable.
+// SA_NODEFER is set so the handler does not block its own signal. Without it a
+// second Ctrl-C would merely go pending while the handler sat in a write that
+// was not draining, which is exactly how an earlier version of this made itself
+// unkillable. With it, a repeat press re-enters the handler, bumps the counter
+// and returns, and the teardown line says that killing would be slower.
 //
-// That second Ctrl-C is an escape hatch, not a speed-up: it kills the process
-// mid-teardown and hands the remaining descriptors back to the kernel, which
-// closes them one at a time. The message says so.
+// SA_RESETHAND is deliberately NOT set; see the note in the function body for
+// why letting a second Ctrl-C reach the default disposition is the worst of the
+// available outcomes rather than an escape hatch.
 void install_cancel_handler() {
   struct sigaction sa;
   std::memset(&sa, 0, sizeof(sa));
