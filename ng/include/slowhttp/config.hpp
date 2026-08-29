@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace slowhttp {
@@ -297,6 +298,47 @@ struct Config {
     // before the slow-body hold could bite.
     if (!referer.empty() && !has_extra_header("Referer"))
       out += "Referer: " + referer + "\r\n";
+    return out;
+  }
+
+  // The same headers as caller_headers(), as name/value pairs with names
+  // lowercased for HTTP/2, which requires it (RFC 7540 8.1.2).
+  //
+  // This exists because the three HTTP/2 attacks each built their own header
+  // block and none of them carried -1 headers: an operator testing an
+  // authenticated or tenant-routed endpoint got their Authorization header on
+  // HTTP/1.1 and silently not on h2, so the attack hit a different endpoint
+  // from the one they named and the report said nothing.
+  //
+  // Connection-specific headers are dropped rather than encoded. They are
+  // malformed in HTTP/2 (RFC 7540 8.1.2.2) and a server is entitled to reset
+  // the stream, which would look like the attack working.
+  std::vector<std::pair<std::string, std::string>> caller_headers_h2() const {
+    std::vector<std::pair<std::string, std::string>> out;
+    auto lower = [](std::string s) {
+      for (char& c : s)
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+      return s;
+    };
+    auto connection_specific = [](const std::string& n) {
+      return n == "connection" || n == "keep-alive" || n == "proxy-connection" ||
+             n == "transfer-encoding" || n == "upgrade" || n == "te";
+    };
+    if (!cookie.empty()) out.emplace_back("cookie", cookie);
+    for (const auto& h : extra_headers) {
+      const auto colon = h.find(':');
+      if (colon == std::string::npos) continue;
+      std::string name = lower(h.substr(0, colon));
+      std::string value = h.substr(colon + 1);
+      // Trim the single space conventionally written after the colon.
+      std::size_t v = 0;
+      while (v < value.size() && (value[v] == ' ' || value[v] == '\t')) ++v;
+      value.erase(0, v);
+      if (name.empty() || connection_specific(name)) continue;
+      out.emplace_back(std::move(name), std::move(value));
+    }
+    if (!referer.empty() && !has_extra_header("Referer"))
+      out.emplace_back("referer", referer);
     return out;
   }
 

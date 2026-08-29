@@ -296,10 +296,75 @@ static void test_continuation_flood() {
         "a server response is left uninterpreted; the close is the signal");
 }
 
+// -1 and -j exist so a run can address an authenticated or tenant-routed
+// endpoint. They reached the HTTP/1.1 attacks and none of the HTTP/2 ones, so
+// an h2 run silently attacked a different endpoint from the one the operator
+// named. Every h2 attack must carry them, including the CONTINUATION flood,
+// whose block is never completed but is still read as it arrives.
+static bool headers_contain(const std::string& wire, const std::string& needle) {
+  const std::vector<Frame> frames =
+      parse_frames(wire, std::string(slowhttp::http2::kPreface).size());
+  for (const auto& f : frames)
+    if (f.type == static_cast<std::uint8_t>(FrameType::Headers) &&
+        f.payload.find(needle) != std::string::npos)
+      return true;
+  return false;
+}
+
+static void test_h2_carries_caller_headers() {
+  Config cfg = h2_config();
+  cfg.h2_streams = 1;
+  cfg.cookie = "session=abc123";
+  cfg.extra_headers.push_back("Authorization: Bearer tok-42");
+  cfg.extra_headers.push_back("X-Tenant: acme");
+  // Malformed in HTTP/2; a server may reset the stream for it, which would look
+  // like the attack landing.
+  cfg.extra_headers.push_back("Connection: keep-alive");
+
+  struct Case {
+    const char* name;
+    std::string wire;
+  };
+  std::vector<Case> cases;
+  {
+    slowhttp::SlowReadH2 a(cfg);
+    a.on_open(0);
+    cases.push_back({"slow read h2", a.on_connect(0).bytes});
+  }
+  {
+    slowhttp::RapidReset a(cfg);
+    a.on_open(0);
+    cases.push_back({"rapid reset", a.on_connect(0).bytes});
+  }
+  {
+    slowhttp::ContinuationFlood a(cfg);
+    a.on_open(0);
+    cases.push_back({"continuation flood", a.on_connect(0).bytes});
+  }
+
+  for (const auto& c : cases) {
+    check(headers_contain(c.wire, "authorization"),
+          (std::string(c.name) + ": -1 header name reaches the request").c_str());
+    check(headers_contain(c.wire, "Bearer tok-42"),
+          (std::string(c.name) + ": -1 header value reaches the request").c_str());
+    check(headers_contain(c.wire, "x-tenant"),
+          (std::string(c.name) + ": a second -1 header is not dropped").c_str());
+    check(headers_contain(c.wire, "session=abc123"),
+          (std::string(c.name) + ": -j cookie reaches the request").c_str());
+    check(!headers_contain(c.wire, "keep-alive"),
+          (std::string(c.name) +
+           ": connection-specific headers are dropped, not encoded").c_str());
+    check(!headers_contain(c.wire, "Authorization"),
+          (std::string(c.name) +
+           ": header names are lowercased as HTTP/2 requires").c_str());
+  }
+}
+
 int main() {
   test_slow_read_h2();
   test_rapid_reset();
   test_continuation_flood();
+  test_h2_carries_caller_headers();
   if (failures == 0) std::fprintf(stderr, "h2 attacks: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

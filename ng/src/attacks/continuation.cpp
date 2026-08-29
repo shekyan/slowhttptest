@@ -41,6 +41,12 @@ std::string ContinuationFlood::opening() const {
   http2::hpack_literal(block, ":authority", cfg_.target.host_header());
   http2::hpack_literal(block, ":path", cfg_.target.path);
   http2::hpack_literal(block, "user-agent", cfg_.user_agent);
+  // Carried here too, even though this block is never completed. A server that
+  // routes or authenticates on headers reads them as the block arrives, and
+  // which backend absorbs the flood is exactly what the operator chose with
+  // -1/-j. Without them the flood lands somewhere they did not name.
+  for (const auto& h : cfg_.caller_headers_h2())
+    http2::hpack_literal(block, h.first, h.second);
 
   // Deliberately no END_HEADERS, and deliberately no END_STREAM. The block is
   // left open; everything after this is a CONTINUATION that also declines to

@@ -79,9 +79,11 @@ void SlowReadH2::append_request(std::string& out,
   // reason (RFC 7540 section 8.1.2.2).
   http2::hpack_literal(block, "user-agent", cfg_.user_agent);
   http2::hpack_literal(block, "accept", cfg_.accept);
-  if (!cfg_.cookie.empty()) http2::hpack_literal(block, "cookie", cfg_.cookie);
-  if (!cfg_.referer.empty() && !cfg_.has_extra_header("Referer"))
-    http2::hpack_literal(block, "referer", cfg_.referer);
+  // Cookie, Referer and every -1 header, from the same place the HTTP/1.1
+  // attacks get them, so an authenticated or host-routed target is addressed
+  // identically whichever protocol carries the attack.
+  for (const auto& h : cfg_.caller_headers_h2())
+    http2::hpack_literal(block, h.first, h.second);
 
   // END_STREAM: the request is complete, so the server may answer immediately
   // and start filling its buffers. Withholding it would be a different attack

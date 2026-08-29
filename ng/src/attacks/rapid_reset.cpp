@@ -51,8 +51,12 @@ RapidReset::RapidReset(const Config& cfg)
   http2::hpack_literal(header_block_, ":path", cfg_.target.path);
   http2::hpack_literal(header_block_, "user-agent", cfg_.user_agent);
   http2::hpack_literal(header_block_, "accept", cfg_.accept);
-  if (!cfg_.cookie.empty())
-    http2::hpack_literal(header_block_, "cookie", cfg_.cookie);
+  // Cookie, Referer and every -1 header, as the HTTP/1.1 attacks send them.
+  // A reset stream still reaches routing and authentication, so a run against a
+  // tenant-routed or authenticated endpoint has to carry them or it is
+  // exercising a different service from the one that was named.
+  for (const auto& h : cfg_.caller_headers_h2())
+    http2::hpack_literal(header_block_, h.first, h.second);
 }
 
 void RapidReset::on_open(ConnId id) {
