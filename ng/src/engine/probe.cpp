@@ -14,6 +14,11 @@
 namespace slowhttp {
 namespace {
 
+// How much of a response to read while looking for the end of the status line.
+// Generous for a status line, small enough that a peer which never sends CRLF
+// cannot make the probe hold memory. Real status lines are tens of bytes.
+constexpr std::size_t kMaxStatusLine = 8192;
+
 // The probe deliberately looks like an ordinary client: a complete request,
 // Connection: close, no keep-alive games. If it looked unusual a WAF could treat
 // it differently from the traffic we are claiming to measure.
@@ -84,6 +89,12 @@ struct Prober::Impl {
   TimePoint started{};        // when the current probe opened its socket
   std::string request;
   std::size_t sent = 0;
+  // Response bytes seen so far for the probe in flight, until the status line
+  // is complete. TCP has no message boundaries, so the first read is not
+  // guaranteed to hold one: a response can arrive as "HTT" then the rest, and
+  // reading the status out of whatever the first read happened to contain makes
+  // the measurement depend on packetisation.
+  std::string reply;
   bool through_proxy = false;
   unsigned want = kNone;
 
@@ -180,11 +191,13 @@ void Prober::launch(TimePoint now) {
     // recorded rather than retried silently.
     p.started = now;
     p.phase = Impl::Phase::Connecting;
+    p.reply.clear();
     finish(now, Availability::Denied, -1, "connect failed immediately");
     return;
   }
   p.started = now;
   p.phase = Impl::Phase::Connecting;
+  p.reply.clear();  // nothing carried over from the previous probe
   p.want = kWrite;
   // A synchronous connect (common on loopback) produces no writable event.
   if (p.sock.state() != SockState::Connecting) advance(now);
@@ -267,17 +280,35 @@ void Prober::on_event(TimePoint now, bool readable, bool writable, bool error) {
     char buf[2048];
     long n = p.sock.recv_some(buf, sizeof(buf));
     if (n > 0) {
+      p.reply.append(buf, static_cast<std::size_t>(n));
+
+      // Wait for a complete status line before concluding anything. Reading it
+      // out of the first read alone made both the recorded status text and
+      // parse_status_code() depend on how the response was segmented -- a split
+      // read yielded a truncated line and a status code of -1, which silently
+      // stopped --fail-on-status from matching anything.
+      const auto eol = p.reply.find("\r\n");
+      if (eol == std::string::npos) {
+        // A peer that never sends a line terminator must not buy unbounded
+        // memory with it. The probe timeout would eventually fire regardless;
+        // this bounds the damage in the meantime.
+        if (p.reply.size() > kMaxStatusLine) {
+          finish(now, Availability::Denied, -1,
+                 "no HTTP status line in the first " +
+                     std::to_string(kMaxStatusLine) + " bytes");
+          return;
+        }
+        return;  // keep reading; the timeout still bounds the wait
+      }
+
       const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                           now - p.started)
                           .count();
-      std::string status(buf, static_cast<std::size_t>(
-                                  std::min<long>(n, 15)));
+      std::string status = p.reply.substr(0, eol);
       // The status code is deliberately *not* used to decide availability: a 503
       // is a served response, and calling it a denial would conflate "the server
       // answered, refusing" with "the server never answered". It is recorded so
       // the reader can see it, and so --fail-on-status can gate on it.
-      auto cut = status.find('\r');
-      if (cut != std::string::npos) status.resize(cut);
       const bool slow = ms >= degraded_above_.count();
       finish(now, slow ? Availability::Degraded : Availability::Ok,
              static_cast<long>(ms),
@@ -286,12 +317,20 @@ void Prober::on_event(TimePoint now, bool readable, bool writable, bool error) {
       return;
     }
     if (n == 0) {
+      // Distinguished because they are different findings: silence, versus a
+      // reply that began and was cut off before its first line ended.
       finish(now, Availability::Denied, -1,
-             "server closed the connection without responding");
+             p.reply.empty()
+                 ? "server closed the connection without responding"
+                 : "server closed after " + std::to_string(p.reply.size()) +
+                       " byte(s), before the status line ended");
       return;
     }
     if (n == -2) {
-      finish(now, Availability::Denied, -1, "connection reset while waiting");
+      finish(now, Availability::Denied, -1,
+             p.reply.empty()
+                 ? "connection reset while waiting"
+                 : "connection reset after a partial response");
       return;
     }
     // -1: nothing buffered yet, keep waiting for the timeout to decide.
