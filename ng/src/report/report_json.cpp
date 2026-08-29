@@ -61,7 +61,7 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "{\n";
   o += "  \"tool\": \"slowhttptest-ng\",\n";
   o += "  \"version\": " + q(m.tool_version) + ",\n";
-  o += "  \"schema\": 1,\n";
+  o += "  \"schema\": 2,\n";
   o += "  \"started_utc\": " + q(m.started_utc) + ",\n";
 
   o += "  \"target\": {\n";
@@ -82,13 +82,25 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "    \"followup_interval_seconds\": " + std::to_string(m.interval_s) + ",\n";
   o += "    \"read_interval_seconds\": " + std::to_string(m.read_interval_s) + ",\n";
   o += "    \"read_length_bytes\": " + std::to_string(m.read_len) + ",\n";
-  o += "    \"window_requested_bytes\": [" + std::to_string(m.window_lower) + ", " +
-       std::to_string(m.window_upper) + "],\n";
-  o += "    \"window_kernel_bytes\": " + opt_long(m.kernel_rcvbuf) + ",\n";
-  o += "    \"window_requested_bytes\": " + opt_long(m.window_requested) + ",\n";
+  // Named for what they are. SO_RCVBUF is a socket receive buffer, not the TCP
+  // advertised window -- the window the peer sees also depends on autotuning,
+  // scaling and how full the buffer currently is. -w/-y are still described as
+  // a window in the CLI, because that is what they have always meant there, but
+  // the machine-readable record should not repeat the imprecision.
+  //
+  // These were window_requested_bytes / window_kernel_bytes through schema 1.
+  // The rename also fixes a duplicate key: the -w/-y range and the sampled draw
+  // were both emitted as "window_requested_bytes", so a parser taking the last
+  // occurrence silently lost the range.
+  o += "    \"recv_buffer_range_bytes\": [" + std::to_string(m.window_lower) +
+       ", " + std::to_string(m.window_upper) + "],\n";
+  o += "    \"recv_buffer_requested_bytes\": " + opt_long(m.window_requested) +
+       ",\n";
+  o += "    \"recv_buffer_effective_bytes\": " + opt_long(m.kernel_rcvbuf) +
+       ",\n";
   // A consumer comparing runs across platforms needs this without inferring it
   // from the two byte counts.
-  o += "    \"window_overridden_by_kernel\": " +
+  o += "    \"recv_buffer_overridden\": " +
        std::string(m.window_overridden ? "true" : "false") + ",\n";
   // Emitted for every run, not only h2 ones, so a consumer can compare the two
   // without special-casing: on an HTTP/2 attack these differ, and any
