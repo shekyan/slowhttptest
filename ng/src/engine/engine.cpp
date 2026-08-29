@@ -1097,6 +1097,10 @@ struct Engine::Impl {
   // attack has not been told the connection exists, which is what keeps every
   // attack ignorant of both.
   void drive_setup(Conn& c) {
+    // The loop is structural, not iterative: every arm below returns, so this
+    // runs exactly one step per call and cannot monopolise the event loop the
+    // way an unbounded drain could. Anything added here that does not return
+    // changes that, and would need a budget like on_readable() has.
     for (;;) {
       if (c.sock.ready()) {
         begin_conversation(c);
@@ -2271,9 +2275,15 @@ struct Engine::Impl {
     const char* why = reactor_failed ? "event loop failed"
                       : gave_up      ? "giving up"
                                      : "finished";
+    // "connected" alone reads as "connections that worked", which it is not:
+    // it counts TCP connects, before the proxy CONNECT or TLS handshake that
+    // may still fail. Only the third number ever carried the attack. Against a
+    // proxy refusing CONNECT the two differ completely, and a reader who took
+    // the first as the load applied would overstate the test by every failed
+    // handshake.
     if (chatty())
       std::fprintf(stderr,
-                 "\n\nDone (%s). opened=%ld connected=%ld ready=%ld"
+                 "\n\nDone (%s). opened=%ld tcp_connected=%ld attack_ready=%ld"
                  " peer_closed=%ld connect_failed=%ld setup_failed=%ld"
                  " connect_timeout=%ld\n",
                  why, opened_total, connected_total, ready_total,

@@ -309,6 +309,15 @@ Verdict EventLog::evaluate(double threshold) const {
                     meta.mode_label.c_str(), meta.connections);
     }
     v.scope = buf;
+    // On an HTTP/2 run the outcome and the oracle are on different protocols,
+    // and the outcome is what gets quoted. "SERVICE DENIED under HTTP/2 rapid
+    // reset" reads as a denial of the h2 service; what was actually observed is
+    // that an HTTP/1.1 client stopped being served while an h2 attack ran. That
+    // is strong evidence of impact and weak evidence about h2 specifically, so
+    // the qualifier travels with the headline rather than sitting in the caveat
+    // list underneath it.
+    if (meta.attack_http2)
+      v.scope += ", availability measured over " + meta.probe_protocol;
   }
 
   // ---- what this run cannot rule out -------------------------------------
