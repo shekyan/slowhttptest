@@ -92,7 +92,12 @@ struct RunMeta {
   int read_len = 0;              // -z
   int window_lower = 0;          // -w
   int window_upper = 0;          // -y
-  int kernel_rcvbuf = -1;        // what SO_RCVBUF actually became
+  int kernel_rcvbuf = -1;        // what SO_RCVBUF actually became, once connected
+  int window_requested = -1;     // the -w/-y draw for the connection sampled
+  // Set when the kernel granted so much more than was asked that -w/-y are not
+  // in force. Slow read depends on a small receive window, so this changes what
+  // the run measured and has to reach the report rather than the console alone.
+  bool window_overridden = false;
   long probe_interval_ms = 0;
   long probe_timeout_ms = 0;
   long degraded_above_ms = 0;

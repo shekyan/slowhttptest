@@ -628,6 +628,7 @@ struct Engine::Impl {
   std::size_t cand_idx = 0;
   bool address_pinned = false;
   bool logged_window_ = false;
+  int requested_rcvbuf_ = -1;  // the -w/-y draw for the connection we sampled
   bool logged_tls_ = false;
   std::uint64_t bytes_read_total = 0;
   std::string last_setup_error_;  // kept for the scheme-mismatch hint
@@ -766,18 +767,13 @@ struct Engine::Impl {
       note_connect_failure(c.sock.connect_errno());
       return;  // retry on a later ramp tick, possibly on the next candidate
     }
-    if (opts.recv_buffer > 0 && !logged_window_) {
-      logged_window_ = true;
-      interrupt_status();
-      log.meta.kernel_rcvbuf = c.sock.recv_buffer_size();
-      // Report what the kernel actually granted: it clamps to its own floor and
-      // typically reports double the request, so the effective window is bigger
-      // than asked. Silently pretending otherwise would misrepresent the test.
-      if (chatty())
-        std::fprintf(stderr,
-                   "  advertised window: requested %d B, kernel SO_RCVBUF %d B\n",
-                   opts.recv_buffer, c.sock.recv_buffer_size());
-    }
+    // The granted buffer is NOT read here. At this point the socket is still in
+    // a non-blocking connect(), and SO_RCVBUF mid-handshake is a transient that
+    // matches neither the request nor the result -- measured on macOS: request
+    // 212, mid-handshake 8404, established 326640. It is sampled in
+    // begin_conversation() instead, once the connection actually exists.
+    if (opts.recv_buffer > 0 && requested_rcvbuf_ < 0)
+      requested_rcvbuf_ = opts.recv_buffer;
     if (!c.sock.ready()) {
       c.in_flight = true;
       ++in_flight_conns;
@@ -1012,6 +1008,52 @@ struct Engine::Impl {
   }
 
   // Hands the freshly usable socket to the attack for its opening bytes.
+  // Records what SO_RCVBUF the kernel actually settled on, once the connection
+  // is established. Sampled here rather than at open() because the value during
+  // a non-blocking connect is neither the request nor the outcome.
+  //
+  // The gap between the two is not a rounding detail. -w/-y exist to make the
+  // receiving window small, which is the entire mechanism of slow read: the
+  // server's data backs up because this end will not take it. Where the kernel
+  // overrides that, the attack still runs but holds far more data per
+  // connection than asked for, and a report that prints only the request would
+  // describe a test that did not happen. Measured on macOS 15: 212 requested,
+  // 326640 granted, and re-applying after connect is undone within a second by
+  // receive-buffer autotuning (net.inet.tcp.doautorcvbuf).
+  void report_advertised_window(Conn& c) {
+    if (logged_window_ || requested_rcvbuf_ <= 0) return;
+    const int granted = c.sock.recv_buffer_size();
+    if (granted < 0) return;
+    logged_window_ = true;
+    log.meta.kernel_rcvbuf = granted;
+    log.meta.window_requested = requested_rcvbuf_;
+
+    // Kernels round up and add bookkeeping overhead; Linux reports double the
+    // request. Only flag the case where the granted buffer is so much larger
+    // that the requested window is not meaningfully in force.
+    log.meta.window_overridden = granted > requested_rcvbuf_ * 4;
+    if (!chatty()) return;
+    interrupt_status();
+    std::fprintf(stderr,
+                 "  advertised window: requested %d B, kernel SO_RCVBUF %d B\n",
+                 requested_rcvbuf_, granted);
+    if (log.meta.window_overridden)
+      std::fprintf(stderr,
+                   "  WARNING: the kernel granted %dx the requested window, so"
+                   " -w/-y are not\n"
+                   "           controlling it on this platform. Each connection"
+                   " will absorb far\n"
+                   "           more data before the window closes.%s\n",
+                   granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1),
+#if defined(__APPLE__)
+                   " macOS receive-buffer autotuning\n"
+                   "           overrides SO_RCVBUF at connect; see"
+                   " net.inet.tcp.doautorcvbuf.");
+#else
+                   "");
+#endif
+  }
+
   void begin_conversation(Conn& c) {
     ++ready_total;
     if (c.in_flight) {
@@ -1024,6 +1066,7 @@ struct Engine::Impl {
       if (chatty())
         std::fprintf(stderr, "  TLS: %s\n", log.meta.tls_description.c_str());
     }
+    report_advertised_window(c);
     attack.on_open(c.id);
     apply(c, attack.on_connect(c.id));
   }

@@ -788,7 +788,12 @@ std::string render_html(const EventLog& log, const Verdict& v) {
     param("Advertised window", std::to_string(m.window_lower) + "–" +
                                    std::to_string(m.window_upper) + " B requested");
     if (m.kernel_rcvbuf >= 0)
-      param("Kernel SO_RCVBUF", group(m.kernel_rcvbuf) + " B actual");
+      param("Kernel SO_RCVBUF",
+            group(m.kernel_rcvbuf) + " B actual" +
+                (m.window_overridden
+                     ? " — kernel overrode the requested window, so -w/-y were"
+                       " not in force"
+                     : ""));
   } else {
     param("Followup interval", std::to_string(m.interval_s) + " s (-i)");
   }

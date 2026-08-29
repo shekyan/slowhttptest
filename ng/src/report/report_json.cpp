@@ -85,6 +85,11 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "    \"window_requested_bytes\": [" + std::to_string(m.window_lower) + ", " +
        std::to_string(m.window_upper) + "],\n";
   o += "    \"window_kernel_bytes\": " + opt_long(m.kernel_rcvbuf) + ",\n";
+  o += "    \"window_requested_bytes\": " + opt_long(m.window_requested) + ",\n";
+  // A consumer comparing runs across platforms needs this without inferring it
+  // from the two byte counts.
+  o += "    \"window_overridden_by_kernel\": " +
+       std::string(m.window_overridden ? "true" : "false") + ",\n";
   // Emitted for every run, not only h2 ones, so a consumer can compare the two
   // without special-casing: on an HTTP/2 attack these differ, and any
   // conclusion drawn from probe results is qualified by that.

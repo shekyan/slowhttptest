@@ -336,6 +336,19 @@ Verdict EventLog::evaluate(double threshold) const {
   // separate stream limits, often a different backend entirely -- so "held"
   // here is weaker than it looks, and "denied" implicates something both paths
   // share. Either way the reader has to know which door was knocked on.
+  // Slow read works by advertising a window too small for the response, so a
+  // kernel that overrides it changes the attack rather than merely the log line.
+  // The run is still valid -- the window does eventually close -- but it closed
+  // around a far bigger buffer than the operator asked for, and a reader
+  // comparing runs across platforms needs to know that.
+  if (meta.window_overridden && meta.window_requested > 0) {
+    v.caveats.push_back(
+        "The kernel granted a " + std::to_string(meta.kernel_rcvbuf) +
+        " B receive buffer against the " + std::to_string(meta.window_requested) +
+        " B requested by -w/-y, so the advertised window was not under this "
+        "tool's control. Each connection absorbed more of the response than "
+        "intended before backing up.");
+  }
   if (meta.attack_http2) {
     v.caveats.push_back(
         "Availability was measured with " + meta.probe_protocol +
