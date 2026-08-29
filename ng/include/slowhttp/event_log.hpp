@@ -102,6 +102,11 @@ struct RunMeta {
   long probe_timeout_ms = 0;
   long degraded_above_ms = 0;
   std::string tls_description;   // "TLSv1.3 / TLS_AES_256_GCM_SHA384"
+  // Which reactor backend carried the run: "epoll", "kqueue" or "poll".
+  // Recorded because the choice varies by platform and by
+  // SLOWHTTP_REACTOR, and two machines disagreeing about a result is
+  // not debuggable without it.
+  std::string reactor;
   // Which protocol carried the attack, and which carried the availability
   // probe. They are not always the same: the HTTP/2 attacks speak h2 while the
   // probe is an ordinary HTTP/1.1 GET, so on an h2 run the oracle is measuring

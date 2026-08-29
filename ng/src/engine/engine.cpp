@@ -1807,6 +1807,15 @@ struct Engine::Impl {
     fill_meta();
 
     reactor = Reactor::create();
+    // Which I/O backend ran is part of what the run did, and until now nothing
+    // said. The choice varies by platform and by SLOWHTTP_REACTOR, the
+    // backends differ in what they report -- kqueue cannot tell a caller
+    // registering no interest that a peer hung up, poll and epoll can -- and a
+    // result that differs between two machines is not debuggable without
+    // knowing which one each used.
+    log.meta.reactor = reactor->name();
+    if (chatty())
+      std::fprintf(stderr, "  reactor: %s\n", log.meta.reactor.c_str());
     closer.reset(new Closer(closer_threads(cfg.connections)));
 
     // Refuse an impossible connection count before opening a single socket.

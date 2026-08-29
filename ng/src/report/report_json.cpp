@@ -108,6 +108,7 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "    \"attack_protocol\": " +
        q(m.attack_http2 ? "HTTP/2" : "HTTP/1.1") + ",\n";
   o += "    \"probe_protocol\": " + q(m.probe_protocol) + ",\n";
+  o += "    \"reactor\": " + q(m.reactor) + ",\n";
   o += "    \"probe_interval_ms\": " + std::to_string(m.probe_interval_ms) + ",\n";
   o += "    \"probe_timeout_ms\": " + std::to_string(m.probe_timeout_ms) + ",\n";
   o += "    \"degraded_above_ms\": " + std::to_string(m.degraded_above_ms) + ",\n";
