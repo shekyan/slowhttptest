@@ -169,7 +169,11 @@ void print_usage() {
       "  -o base                 report base name; writes base.html and base.json\n"
       "  --availability-threshold F\n"
       "                          share of probes served for the CI pass (0.95)\n"
-      "  --fail-on-status LIST   codes that also fail the CI gate, e.g. 5xx\n"
+      // "gate" invited the reading that this changes the exit status. It does
+      // not: the exit status says whether the test ran, and the criterion is
+      // reported as .criterion.pass in the JSON, which is what automation gates
+      // on. The man page has always said "criterion"; this line said "gate".
+      "  --fail-on-status LIST   codes that also fail .criterion.pass, e.g. 5xx\n"
       "\n"
       "Output:\n"
       "  -v level                verbosity 0-4 (1): fatal, info, error, warn, debug\n"
