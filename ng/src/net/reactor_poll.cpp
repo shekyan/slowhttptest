@@ -151,20 +151,39 @@ class PollReactor : public Reactor {
 std::unique_ptr<Reactor> make_kqueue_reactor();
 #endif
 
-// kqueue where it exists, poll everywhere else.
+#if defined(__linux__)
+#define SLOWHTTP_HAVE_EPOLL 1
+std::unique_ptr<Reactor> make_epoll_reactor();
+#endif
+
+// kqueue on the BSDs, epoll on Linux, poll everywhere else.
 //
 // SLOWHTTP_REACTOR=poll forces the portable backend. That exists so the two can
 // be compared on the same machine and the same target -- a backend that is only
 // ever exercised on one platform is a backend nobody has checked against the
 // other, and every behavioural difference between these two has to be found by
-// running them side by side.
+// running them side by side. e2e_http2_poll exercises it on every platform for
+// the same reason: poll() is now the default nowhere, and a backend nothing
+// runs is a backend that rots.
 std::unique_ptr<Reactor> Reactor::create() {
-#ifdef SLOWHTTP_HAVE_KQUEUE
+#if defined(SLOWHTTP_HAVE_KQUEUE) || defined(SLOWHTTP_HAVE_EPOLL)
   const char* forced = ::getenv("SLOWHTTP_REACTOR");
-  if (!forced || std::strcmp(forced, "poll") != 0) {
+  const bool want_poll = forced && std::strcmp(forced, "poll") == 0;
+#endif
+#ifdef SLOWHTTP_HAVE_KQUEUE
+  if (!want_poll) {
     if (auto kq = make_kqueue_reactor()) return kq;
     // Falling back rather than failing: a machine that cannot create a kqueue
     // can still run the test, just with the old ceiling.
+  }
+#endif
+#ifdef SLOWHTTP_HAVE_EPOLL
+  if (!want_poll) {
+    // Same fallback reasoning: a container or seccomp policy that refuses
+    // epoll_create1 should degrade to poll() rather than refuse to run. On
+    // Linux poll() has no OPEN_MAX ceiling, so the fallback is a slower run
+    // rather than a smaller one.
+    if (auto ep = make_epoll_reactor()) return ep;
   }
 #endif
   return std::unique_ptr<Reactor>(new PollReactor());

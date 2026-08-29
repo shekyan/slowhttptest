@@ -84,6 +84,9 @@ add_library(slowhttp STATIC
   # Compiled everywhere; the file guards itself and the factory only reaches for
   # it on platforms that have kqueue.
   $<$<OR:$<PLATFORM_ID:Darwin>,$<PLATFORM_ID:FreeBSD>,$<PLATFORM_ID:OpenBSD>,$<PLATFORM_ID:NetBSD>>:src/net/reactor_kqueue.cpp>
+  # Same arrangement for Linux: compiled only where epoll exists, and the
+  # factory in reactor_poll.cpp decides whether to use it.
+  $<$<PLATFORM_ID:Linux>:src/net/reactor_epoll.cpp>
   src/net/socket.cpp
   src/net/address.cpp
   src/net/tls.cpp

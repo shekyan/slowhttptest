@@ -264,11 +264,19 @@ staircase, HTML + JSON reporting, install rules, man page, tests, CI.
 Also done since: kqueue, HTTP/2 (all three attacks), `-4`/`-6`, a `./configure`
 front end for packagers, and the report naming the protocol it actually used.
 
-Remaining:
+Remaining: nothing. Both items below are done; they are kept because the
+measurements behind them are the argument, and one of them corrects what this
+section used to claim.
 
-1. **An epoll backend for Linux.** kqueue is done and was the urgent half; the
-   measurements that motivated it are kept below because they say something the
-   headline does not -- CPU was never the problem:
+1. ~~**An epoll backend for Linux**~~ — done. Default on Linux;
+   `SLOWHTTP_REACTOR=poll` still forces the portable backend, and
+   `e2e_http2_poll` exercises it on every platform, because `poll()` is now the
+   default nowhere and a backend nothing runs is a backend that rots.
+
+   Two measurements motivated the two backends, and they do not say the same
+   thing.
+
+   On macOS, holding connections with `poll()`:
 
    | connections | held | system CPU (40 s run) | share of a core |
    |---|---|---|---|
@@ -279,20 +287,41 @@ Remaining:
 
    Cost grows about `N^1.36` — mildly superlinear, not quadratic, because
    `fire_timers` drains every due timer per wake so wakeups batch rather than
-   scaling with N. **CPU is therefore not the reason to do this.**
+   scaling with N. **CPU was not the reason to do kqueue.** The reason was a
+   hard ceiling: Darwin's `poll()` rejects `nfds > OPEN_MAX` with `EINVAL`, and
+   `OPEN_MAX` is a compile-time 10 240 that no file-descriptor limit raises
+   (measured: the syscall starts failing at nfds 10 256). kqueue has no such
+   limit, so on macOS/BSD it is not an optimisation — it is the only way past
+   ~10 k connections, which is well inside the range needed to stress a modern
+   event-driven server (§1).
 
-   The reason is that `poll()` has a hard ceiling. On Darwin it rejects
-   `nfds > OPEN_MAX` with `EINVAL`, and `OPEN_MAX` is a compile-time 10 240 that
-   no file-descriptor limit raises (measured: the syscall starts failing at
-   nfds 10 256). kqueue has no such limit. So on macOS/BSD a kqueue backend is
-   not an optimization — it is the only way past ~10 k connections, which is
-   well inside the range needed to stress a modern event-driven server (§1).
+   On Linux there is no `OPEN_MAX` ceiling, so the argument had to be the O(n)
+   scan — and this section used to admit that had never been measured. It has
+   now. Identical runs, same target and duration, differing only in
+   `SLOWHTTP_REACTOR`, CPU from `wait4` rusage:
 
-   On Linux `poll()` has no `OPEN_MAX` limit, so the ceiling there is the O(n)
-   scan and `RLIMIT_NOFILE` instead. That has not been measured.
+   | connections | `poll` total CPU | `epoll` total CPU | `poll` share of a core |
+   |---|---|---|---|
+   | 500 | 0.14 s | 0.11 s | 0.7% |
+   | 1 000 | 0.25 s | 0.18 s | 1.3% |
+   | 2 000 | 0.85 s | 0.34 s | 4.3% |
+   | 4 000 | 2.27 s | 0.48 s | 11.3% |
+   | 8 000 | **7.25 s** | **1.00 s** | **36.2%** |
 
-   Do kqueue first: it is the platform where the wall is hard, near, and hit by
-   the maintainer's own machine.
+   `poll` grows about `N^1.4`; `epoll` is essentially linear. At 8 000
+   connections epoll costs 7.3x less CPU — 5.0% of a core against 36.2%.
+
+   So on Linux, unlike macOS, **CPU is the reason.** That inverts what this
+   section previously implied. It said "do kqueue first: it is the platform
+   where the wall is hard, near, and hit by the maintainer's own machine",
+   which was right about the wall and backwards about the cost: the platform
+   whose scan cost was unmeasured turned out to be the platform where it is
+   worst.
+
+   Caveat on the numbers: taken in a Docker Desktop linuxkit VM on Apple
+   Silicon, not on bare metal. The ratio is the finding, because both arms ran
+   on the same kernel and host under the same load; the absolute CPU should not
+   be quoted as representative of a production Linux box.
 2. ~~**HTTP/2**~~ — done; see §5. Slow read (CVE-2019-9517), rapid reset
    (CVE-2023-44487) and the CONTINUATION flood, all verified against nginx
    1.31.4.
