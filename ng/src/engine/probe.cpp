@@ -2,6 +2,8 @@
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/probe.hpp"
 
+#include "slowhttp/request.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -23,32 +25,28 @@ constexpr std::size_t kMaxStatusLine = 8192;
 // Connection: close, no keep-alive games. If it looked unusual a WAF could treat
 // it differently from the traffic we are claiming to measure.
 std::string build_probe_request(const Config& cfg, bool through_proxy) {
-  std::string target = through_proxy && !cfg.target.tls()
-                           ? cfg.target.scheme + "://" +
-                                 cfg.target.authority() + cfg.target.path
-                           : cfg.target.path;
-  std::string req;
-  req.reserve(256);
-  req += "GET ";
-  req += target;
-  req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg.target.host_header() + "\r\n";
-  // Exactly the run's User-Agent, with nothing appended to mark it as the probe.
-  // A distinguishable probe is the confound the report's own caveats warn about:
-  // a WAF could shed the attack traffic while still serving the probe, and the
-  // tool would then report "held" for a service that was not serving anyone else.
-  // The tool still identifies itself here -- the agent and the Referer say so --
-  // it just does not look like a different client than the one under test.
-  req += "User-Agent: " + cfg.user_agent + "\r\n";
-  req += "Accept: */*\r\n";
-  // The probe carries the caller's cookie and -1 headers too. Without them an
-  // authenticated or host-routed target would answer the probe from a different
-  // code path than the one under attack, and the verdict would describe the
-  // wrong endpoint.
-  req += cfg.caller_headers();
-  req += "Connection: close\r\n";
-  req += "\r\n";
-  return req;
+  RequestSpec spec = RequestSpec::from(cfg);
+  // Always GET, whatever -t the attack uses: the probe asks whether the service
+  // answers an ordinary client, not whether it accepts the attack's verb.
+  spec.method = "GET";
+  // The probe's own proxy decision, which is not always the attack's: -e can
+  // send probes through a proxy the attack does not use, and vice versa.
+  if (through_proxy && !cfg.target.tls())
+    spec.http11_target =
+        cfg.target.scheme + "://" + cfg.target.authority() + cfg.target.path;
+  else
+    spec.http11_target = cfg.target.path;
+  // Accept is */* here rather than the run's -A value: the probe is asking for
+  // any answer at all, and a narrow Accept could earn a 406 that says nothing
+  // about availability.
+  spec.set("Accept", "*/*");
+  spec.set("Connection", "close");
+
+  // Everything else -- User-Agent, Cookie, -1 headers, Referer -- comes from the
+  // same place the attack's request does. That is the point: an authenticated or
+  // host-routed target must answer the probe from the code path under attack,
+  // or the verdict describes a different endpoint.
+  return spec.serialize_http11() + "\r\n";
 }
 
 // Pulls NNN out of "HTTP/1.1 NNN Reason". Returns -1 for anything that is not a

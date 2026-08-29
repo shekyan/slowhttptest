@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "slowhttp/http2.hpp"
+#include "slowhttp/request.hpp"
 
 namespace slowhttp {
 
@@ -66,24 +67,10 @@ Action SlowReadH2::on_readable(ConnId id, const char* /*data*/,
 
 void SlowReadH2::append_request(std::string& out,
                                 std::uint32_t stream_id) const {
-  std::string block;
-  // Pseudo-headers first and in this order, per RFC 7540 section 8.1.2.1. A
-  // server is entitled to reset the stream if they are not.
-  http2::hpack_literal(block, ":method", cfg_.effective_verb());
-  http2::hpack_literal(block, ":scheme", cfg_.target.tls() ? "https" : "http");
-  http2::hpack_literal(block, ":authority", cfg_.target.host_header());
-  http2::hpack_literal(block, ":path", cfg_.target.path);
-
-  // Header names must be lowercase in HTTP/2; the 1.1 spellings would be
-  // malformed. Connection-specific headers are omitted entirely for the same
-  // reason (RFC 7540 section 8.1.2.2).
-  http2::hpack_literal(block, "user-agent", cfg_.user_agent);
-  http2::hpack_literal(block, "accept", cfg_.accept);
-  // Cookie, Referer and every -1 header, from the same place the HTTP/1.1
-  // attacks get them, so an authenticated or host-routed target is addressed
-  // identically whichever protocol carries the attack.
-  for (const auto& h : cfg_.caller_headers_h2())
-    http2::hpack_literal(block, h.first, h.second);
+  // What the request is comes from RequestSpec; what this attack does to it --
+  // complete the request so the server starts answering, then never read the
+  // answer -- is below.
+  const std::string block = RequestSpec::from(cfg_).serialize_http2();
 
   // END_STREAM: the request is complete, so the server may answer immediately
   // and start filling its buffers. Withholding it would be a different attack

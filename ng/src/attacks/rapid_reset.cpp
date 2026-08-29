@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "slowhttp/http2.hpp"
+#include "slowhttp/request.hpp"
 
 namespace slowhttp {
 
@@ -43,20 +44,10 @@ RapidReset::RapidReset(const Config& cfg)
   per_tick_ = std::max(1, std::min(kMaxBurst, (rate + 9) / 10));
 
   // The request is the same every time; only the stream id changes. Encoding it
-  // once keeps the per-burst work to framing.
-  http2::hpack_literal(header_block_, ":method", cfg_.effective_verb());
-  http2::hpack_literal(header_block_, ":scheme",
-                       cfg_.target.tls() ? "https" : "http");
-  http2::hpack_literal(header_block_, ":authority", cfg_.target.host_header());
-  http2::hpack_literal(header_block_, ":path", cfg_.target.path);
-  http2::hpack_literal(header_block_, "user-agent", cfg_.user_agent);
-  http2::hpack_literal(header_block_, "accept", cfg_.accept);
-  // Cookie, Referer and every -1 header, as the HTTP/1.1 attacks send them.
-  // A reset stream still reaches routing and authentication, so a run against a
-  // tenant-routed or authenticated endpoint has to carry them or it is
-  // exercising a different service from the one that was named.
-  for (const auto& h : cfg_.caller_headers_h2())
-    http2::hpack_literal(header_block_, h.first, h.second);
+  // once keeps the per-burst work to framing. What this attack does with the
+  // request -- open a stream and cancel it before the answer arrives -- is in
+  // burst().
+  header_block_ = RequestSpec::from(cfg_).serialize_http2();
 }
 
 void RapidReset::on_open(ConnId id) {

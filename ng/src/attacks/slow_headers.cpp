@@ -4,6 +4,8 @@
 
 #include <cstddef>
 
+#include "slowhttp/request.hpp"
+
 namespace slowhttp {
 
 SlowHeaders::SlowHeaders(const Config& cfg)
@@ -40,15 +42,10 @@ Action SlowHeaders::on_readable(ConnId /*id*/, const char* /*data*/,
 std::string SlowHeaders::initial_request() const {
   std::string req;
   req.reserve(256);
-  req += cfg_.effective_verb();
-  req += ' ';
-  req += cfg_.request_target();
-  req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host_header() + "\r\n";
-  req += "User-Agent: " + cfg_.user_agent + "\r\n";
-  req += "Accept: " + cfg_.accept + "\r\n";
-  req += cfg_.caller_headers();
+  req += RequestSpec::from(cfg_).serialize_http11();
   // Intentionally NO terminating CRLF here: the request stays "unfinished".
+  // That omission is the whole attack; everything above it is an ordinary
+  // request, built where every other attack builds one.
   return req;
 }
 

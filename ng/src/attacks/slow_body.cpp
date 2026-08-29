@@ -2,6 +2,8 @@
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/attacks/slow_body.hpp"
 
+#include "slowhttp/request.hpp"
+
 #include <cstddef>
 
 namespace slowhttp {
@@ -57,18 +59,13 @@ Action SlowBody::on_readable(ConnId /*id*/, const char* /*data*/,
 std::string SlowBody::build_headers() const {
   std::string req;
   req.reserve(320);
-  req += cfg_.effective_verb();
-  req += ' ';
-  req += cfg_.request_target();
-  req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host_header() + "\r\n";
-  req += "User-Agent: " + cfg_.user_agent + "\r\n";
+  RequestSpec spec = RequestSpec::from(cfg_);
   // The promise the server will wait on: far more body than we intend to send.
-  req += "Content-Length: " + std::to_string(cfg_.content_length) + "\r\n";
-  req += "Content-Type: " + cfg_.content_type + "\r\n";
-  req += "Accept: " + cfg_.accept + "\r\n";
-  req += cfg_.caller_headers();
-  req += "Connection: close\r\n";
+  // This is the attack; everything else about the request is ordinary.
+  spec.set("Content-Length", std::to_string(cfg_.content_length));
+  spec.set("Content-Type", cfg_.content_type);
+  spec.set("Connection", "close");
+  req += spec.serialize_http11();
   // Headers end here -- deliberately complete, unlike Slowloris. Only the body
   // that follows is withheld.
   req += "\r\n";

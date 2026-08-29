@@ -97,6 +97,7 @@ add_library(slowhttp STATIC
   src/attacks/slow_body.cpp
   src/attacks/range.cpp
   src/config/cli.cpp
+  src/config/request.cpp
   src/report/event_log.cpp
   src/report/report_json.cpp
   src/report/report_html.cpp

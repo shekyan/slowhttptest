@@ -2,6 +2,8 @@
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/attacks/slow_read.hpp"
 
+#include "slowhttp/request.hpp"
+
 #include <algorithm>
 #include <cstddef>
 
@@ -53,20 +55,14 @@ Action SlowRead::on_readable(ConnId id, const char* /*data*/, std::size_t len) {
 std::string SlowRead::build_request() const {
   std::string one;
   one.reserve(256);
-  one += cfg_.effective_verb();
-  one += ' ';
-  one += cfg_.request_target();
-  one += " HTTP/1.1\r\n";
-  one += "Host: " + cfg_.target.host_header() + "\r\n";
-  one += "User-Agent: " + cfg_.user_agent + "\r\n";
-  one += "Accept: " + cfg_.accept + "\r\n";
+  RequestSpec spec = RequestSpec::from(cfg_);
   // Ask for an uncompressed response: the bigger the body the server has to push
   // through our pinched window, the longer it stays stuck. Compression would work
   // against the attack.
-  one += "Accept-Encoding: identity\r\n";
+  spec.set("Accept-Encoding", "identity");
   // Keep-alive so a pipelined burst (-k) is answered on this one connection.
-  one += "Connection: keep-alive\r\n";
-  one += cfg_.caller_headers();
+  spec.set("Connection", "keep-alive");
+  one += spec.serialize_http11();
   one += "\r\n";  // complete request, unlike Slowloris
 
   // Pipelining: stack -k copies so a keep-alive server queues several responses
