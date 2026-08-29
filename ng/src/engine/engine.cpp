@@ -946,10 +946,31 @@ struct Engine::Impl {
   }
 
   void flush(Conn& c) {
+    // Bounded for the same reason on_readable() is, though not for the same
+    // risk. This loop is fed by outbuf, which the attacks fill, so a hostile
+    // peer cannot extend it -- it can only end it early with EAGAIN. Measured
+    // across rapid reset, -B and -H, including against a peer that accepts and
+    // never reads: one iteration, largest outbuf 2529 bytes.
+    //
+    // The bound is here so the invariant holds by construction rather than by
+    // the current attacks happening to emit small frames. An Action::Send
+    // carrying a megabyte payload would otherwise sit on the event loop for as
+    // long as the socket kept accepting it, with the probe and every timer
+    // waiting behind it. Leaving early is safe because interest_for() re-arms
+    // kWrite while bytes remain queued.
+    constexpr int kMaxWriteOpsPerDispatch = 64;
+    constexpr std::uint64_t kMaxWriteBytesPerDispatch = 256 * 1024;
+    int ops = 0;
+    std::uint64_t written = 0;
+
     while (c.outpos < c.outbuf.size()) {
+      if (++ops > kMaxWriteOpsPerDispatch ||
+          written >= kMaxWriteBytesPerDispatch)
+        break;
       long n = c.sock.send_some(c.outbuf.data() + c.outpos,
                                 c.outbuf.size() - c.outpos);
       if (n > 0) {
+        written += static_cast<std::uint64_t>(n);
         trace(4, "conn %d: socket %d wrote %ld byte(s)", c.id, c.sock.fd(), n);
         c.outpos += static_cast<std::size_t>(n);
         c.sent_bytes += n;
@@ -1411,7 +1432,14 @@ struct Engine::Impl {
     // A level that never reached its target says nothing about that target, in
     // either direction. "held" would be the more dangerous of the two mistakes
     // -- it reads as a server that coped with a load it was never given.
-    if (!lvl.ramped) {
+    //
+    // A level with no probes at all is the same mistake by a different route.
+    // The CLI refuses --capacity with --no-probe, but the probe can still be
+    // missing at runtime: if prober->start() fails the engine drops it and the
+    // run continues, and every level would then report "held" on the strength of
+    // connection occupancy alone. That is a statement about this client, not
+    // about the target's service.
+    if (!lvl.ramped || lvl.probes_total == 0) {
       lvl.inconclusive = true;
       lvl.denied = false;
     }
@@ -1419,7 +1447,13 @@ struct Engine::Impl {
 
     if (chatty()) {
       interrupt_status();
-      if (lvl.inconclusive)
+      if (lvl.inconclusive && lvl.probes_total == 0)
+        std::fprintf(stderr,
+                     "\n  level %d: INCONCLUSIVE -- no availability probe ran,"
+                     " so this says only that the client held %d connection(s),"
+                     " not that the service answered anyone\n",
+                     lvl.connections, lvl.reached_max);
+      else if (lvl.inconclusive)
         std::fprintf(stderr,
                      "\n  level %d: INCONCLUSIVE -- only %d connection(s) were"
                      " ever up, so the %d/%d probes served describe that load,"

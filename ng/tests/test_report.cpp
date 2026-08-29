@@ -273,6 +273,35 @@ static void test_capacity_level_that_never_ramped() {
         "the HTML level table says inconclusive rather than held");
 }
 
+// A level that reached its target but was never probed measures the client, not
+// the service. The CLI refuses --capacity with --no-probe, but a probe that
+// fails to start at runtime leaves the engine in exactly this state.
+static void test_capacity_level_with_no_probes() {
+  EventLog log = make_log(2, 100);
+  for (double t = 0; t <= 100; t += 2) add(log, t, Availability::Ok, 20);
+
+  CapacityLevel unprobed;
+  unprobed.connections = 5000;
+  unprobed.reached_max = 5000;   // the client held every connection it asked for
+  unprobed.reached_min = 5000;
+  unprobed.ramped = true;
+  unprobed.hold_s = 15;
+  unprobed.probes_total = 0;     // and nothing ever asked the server a question
+  unprobed.probes_served = 0;
+  unprobed.inconclusive = true;
+  log.capacity.push_back(unprobed);
+
+  const Verdict v = log.evaluate(0.95);
+  check(!v.threshold_measured,
+        "a level nobody probed does not bracket a denial threshold");
+
+  const std::string json = render_json(log, v);
+  check(contains(json, "\"inconclusive\": true"),
+        "JSON marks an unprobed level inconclusive, not held");
+  check(!contains(json, "\"denied\": true"),
+        "and does not call it denied either");
+}
+
 static void test_threshold_refused_without_capacity() {
   EventLog log = make_log(2, 100);
   log.meta.rate = 50;
@@ -371,6 +400,7 @@ int main() {
   test_inconclusive_too_few_probes();
   test_capacity_bracket();
   test_capacity_level_that_never_ramped();
+  test_capacity_level_with_no_probes();
   test_http2_run_discloses_probe_protocol();
   test_threshold_refused_without_capacity();
   test_renderers_agree();
