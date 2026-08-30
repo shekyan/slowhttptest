@@ -10,10 +10,11 @@
 # The autotools .am/.in sources and the generated `configure` are tracked and
 # must reach the image; only their build-time output is excluded here.
 
-.git
-.gitignore
-.github
-.claude
+# Nothing dot-prefixed belongs in the image. The build needs the source tree,
+# the generated `configure`, and the Dockerfile; version control, CI definitions
+# and whatever local editor or tooling state happens to be lying around are all
+# context that would be copied in for nothing.
+.*
 
 # autotools output
 Makefile
