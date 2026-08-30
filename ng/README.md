@@ -14,11 +14,15 @@ rationale, and the roadmap.
 
 - **Library + CLI split** — `libslowhttp` (engine) is independent of `cli/` and
   unit-testable.
-- **Reactor abstraction** (`slowhttp/reactor.hpp`) with two backends behind one
-  interface: `poll()` everywhere, and **kqueue** on macOS/BSD, which is not an
+- **Reactor abstraction** (`slowhttp/reactor.hpp`) with three backends behind one
+  interface: **kqueue** on macOS/BSD, **epoll** on Linux, and `poll()` as the
+  portable fallback. They are there for different reasons. kqueue is not an
   optimisation but the only way past Darwin's fixed `OPEN_MAX` ceiling of 10240
-  descriptors. `-V` reports which one a build will use. An epoll backend for
-  Linux drops in the same way and is not yet written.
+  descriptors; epoll is an optimisation, and a large one — at 8000 connections
+  `poll()` costs 7.3x the CPU (36.2% of a core against 5.0%). `-V` reports which
+  a build will use, and every run logs which one it actually used.
+  `SLOWHTTP_REACTOR=poll` forces the portable backend so the three can be
+  compared on one machine.
 - **Attack state-machine interface** (`slowhttp/attack.hpp`) — attacks decide *what
   bytes to dribble and when*; the engine owns all I/O and timers.
 - **Six attack modes**, each wired end-to-end against a real target. Four over
@@ -48,11 +52,6 @@ rationale, and the roadmap.
 
 ## Not yet ported
 
-- **epoll**, for Linux. kqueue is done, and it was the urgent one: Darwin's
-  `poll()` refuses more than `OPEN_MAX` (10240) descriptors and no
-  file-descriptor limit moves it. Linux `poll()` has no such wall, so the
-  ceiling there is the O(n) scan and `RLIMIT_NOFILE`, which has not been
-  measured.
 - **HTTP/2 over an HTTP proxy.** `--http2` with `-d` is refused for `http://`
   targets: proxying plain http rewrites the request line, which an HTTP/2 proxy
   would have to parse. `https://` works, because `-d` is then a `CONNECT`
@@ -200,12 +199,20 @@ TLS: enabled (OpenSSL)
 reactor: kqueue, bounded by the file descriptor limit
 ```
 
+On Linux the same line reads `reactor: epoll`, and `SLOWHTTP_REACTOR=poll`
+makes it read `poll` on either platform.
+
 Both of the last two matter in a bug report. A build without TLS behaves
-differently in a way that is otherwise invisible, and the reactor decides the
-connection ceiling: `poll()` on macOS cannot watch more than a fixed `OPEN_MAX`
-of 10240 descriptors whatever `ulimit -n` says, while kqueue is bounded only by
-the descriptor limit. A `-c` above the ceiling is refused at startup rather than
-discovered ten thousand sockets in.
+differently in a way that is otherwise invisible, and the reactor decides both
+the connection ceiling and the CPU cost of holding them: `poll()` on macOS
+cannot watch more than a fixed `OPEN_MAX` of 10240 descriptors whatever
+`ulimit -n` says, while kqueue and epoll are bounded only by the descriptor
+limit. A `-c` above the ceiling is refused at startup rather than discovered ten
+thousand sockets in.
+
+Every run also logs the reactor it actually used, not just the one the build
+prefers — the two differ when `SLOWHTTP_REACTOR` is set, or when a container
+policy refuses `epoll_create1` and the run falls back to `poll()`.
 
 ## Try it locally — watch a real denial of service
 
@@ -286,13 +293,20 @@ python3 tests/mock_slow_server.py 8080 --workers 8
 ```
 
 ```
-  level 4: 5/5 probes served, median 0 ms -> held
-  level 8: 0/2 probes served, median -1 ms -> DENIED
+  level 4: 5/5 probes served, median 1 ms, occupancy 4-4 -> held
+  level 8: 0/3 probes served, median -1 ms, occupancy 8-8 -> DENIED
 denial threshold: 4 < n <= 8 connections (step 4)
 ```
 
 Always a bracket, never a point estimate: the resolution is the step size, and
 claiming better would be inventing precision.
+
+`occupancy` is what the level actually held, sampled across the hold — not what
+it asked for. They are the same here; when they are not, the level is reported
+`INCONCLUSIVE` rather than held or denied, because probes taken at 700
+connections say nothing about 1000. A level with no probes at all is
+inconclusive for the same reason: it would otherwise read as "the service
+coped" on the strength of connection count alone.
 
 ## Reports — `-g`
 

@@ -94,11 +94,26 @@ asserted in a unit test with no network.
 
 ### The reactor
 
-`Reactor` is an interface over readiness multiplexing. `poll()` ships as the
-portable default (Linux/macOS/BSD, no dependencies). epoll and kqueue backends
-drop in behind the same interface without touching the engine — the reason the
-abstraction exists at all, since `select()`'s `FD_SETSIZE` ceiling is a real
-limit on the original.
+`Reactor` is an interface over readiness multiplexing, with three backends
+behind it: kqueue on macOS/BSD, epoll on Linux, `poll()` as the portable
+fallback and as the forced comparison backend (`SLOWHTTP_REACTOR=poll`). All
+three arrived without touching the engine, which is the reason the abstraction
+exists at all — `select()`'s `FD_SETSIZE` ceiling is a real limit on the
+original tool.
+
+They are not interchangeable in what they report, and the engine depends on the
+difference. `poll()` and epoll deliver `POLLERR`/`EPOLLHUP` whether or not the
+caller asked for anything, so slow read — which registers no interest precisely
+because it must not drain the socket — still hears that a peer has gone. kqueue
+has no equivalent: `EV_EOF` is a flag on a filter's event rather than a filter
+of its own, so asking for hangups there would mean registering for readability
+and waking on every byte the attack refuses to read. On that platform slow read
+hears nothing and relies on the once-a-second TCP-state sweep instead.
+
+All three are level-triggered. The engine leaves sockets partially drained on
+purpose — `on_readable()` stops at a per-dispatch budget and expects the
+descriptor to be reported again on the next wakeup — so an edge-triggered
+backend would strand exactly the connections the tool is built to hold.
 
 ## 4. The four attacks, and why each is distinct
 

@@ -459,6 +459,23 @@ Default 1.
 .It Fl y Ar bytes
 End of that range.
 Default 512.
+.Pp
+These set
+.Dv SO_RCVBUF ,
+which the kernel is free to override, and some do.
+On macOS the receive buffer is resized when the connection establishes and
+keeps growing afterwards, so a requested 200 bytes becomes several hundred
+kilobytes and
+.Fl w Ns / Ns Fl y
+do not control the window at all.
+The run still works, but each connection absorbs far more of the response than
+asked before it backs up.
+.Nm
+detects this, warns, names the cause, and records it in the report as
+.Li recv_buffer_overridden ,
+because it changes what the run measured rather than only how it was logged.
+Results from a platform that overrides are not comparable with one that does
+not.
 .It Fl k Ar n
 Repeat the request this many times per connection, to multiply the response
 size on servers supporting persistent connections.
@@ -550,14 +567,40 @@ with
 .Fl f
 will not match it either, there being no command line left to match.
 .Ss Connection ceiling
+Three reactor backends sit behind one interface:
+.Sy kqueue
+on macOS and the BSDs,
+.Sy epoll
+on Linux, and
+.Sy poll
+as the portable fallback.
+.Nm Fl V
+reports which a build will use and what ceiling it has, and every run logs the
+one it actually used \(em they differ when
+.Ev SLOWHTTP_REACTOR
+is set, or when a sandbox refuses
+.Xr epoll_create1 2
+and the run falls back.
+.Pp
 The
 .Sy poll
 reactor cannot watch more descriptors than the platform allows, and on some
 platforms that is a fixed
 .Dv OPEN_MAX
-rather than something the file descriptor limit controls.
-.Nm Fl V
-reports the ceiling.
+rather than something the file descriptor limit controls \(em on Darwin it is
+10240 whatever
+.Ic ulimit Fl n
+says.
+.Sy kqueue
+and
+.Sy epoll
+are bounded only by the descriptor limit.
+.Pp
+The backends also differ in cost, which matters at scale rather than for
+correctness: holding 8000 connections costs about 7 times more CPU under
+.Sy poll
+than under
+.Sy epoll .
 A
 .Fl c
 above it is refused at startup rather than discovered thousands of sockets in.
