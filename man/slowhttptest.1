@@ -31,6 +31,7 @@
 .Op Fl e Ar probe traffic directed through HTTP proxy at host:port
 .Op Fl f Ar value of Content-type header
 .Op Fl i Ar interval in seconds
+.Op Fl j Ar cookie
 .Op Fl k Ar request multiply factor
 .Op Fl l Ar test duration in seconds
 .Op Fl m Ar value of Accept header
@@ -102,7 +103,12 @@ Specifies HTTP proxy server to connect to for probe connections.
 .It Fl f Ar content-type
 Specifies the value of Content-Type header.
 .It Fl i Ar seconds
-Specifies the interval between follow up data for slowrois and Slow POST tests.
+Specifies the interval between follow up data for slowloris and Slow POST tests.
+.It Fl j Ar cookie
+Specifies the value of the
+.Sy Cookie
+header, for example
+.Dq Li "user_id=1001; timeout=9000" .
 .It Fl k Ar pipeline factor
 Specifies number of times the resource would be requested per socket in Slow Read test.
 .It Fl l Ar seconds
