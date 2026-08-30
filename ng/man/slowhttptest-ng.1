@@ -13,7 +13,7 @@
 .\"  See the License for the specific language governing permissions and
 .\"  limitations under the License.
 .\"
-.Dd August 10, 2026
+.Dd August 29, 2026
 .Dt SLOWHTTPTEST-NG 1
 .Os
 .Sh NAME
@@ -23,6 +23,7 @@
 .Nm
 .Bk -words
 .Op Fl H | B | R | X
+.Op Fl \-http2 | \-rapid-reset | \-continuation-flood
 .Op Fl u Ar url
 .Op Fl c Ar connections
 .Op Fl r Ar rate
@@ -93,6 +94,10 @@ The server blocks
 .Em sending .
 Neither a header nor a body timeout helps; the defense is a send timeout.
 .El
+.Pp
+Three further modes are specific to HTTP/2 and are described under
+.Sx HTTP/2 modes :
+slow read over h2, rapid reset, and the CONTINUATION flood.
 .Ss General options
 .Bl -tag -width Ds
 .It Fl u Ar url
@@ -265,6 +270,21 @@ requests use absolute-URI form.
 .It Fl e Ar host : Ns Ar port
 Route only the availability probe through this proxy, to measure availability
 from a different network path than the one being saturated.
+.El
+.Ss HTTP/2 modes
+Two attacks exist only here, because they abuse framing and flow control that
+HTTP/1.1 does not have:
+.Fl \-rapid-reset
+and
+.Fl \-continuation-flood ,
+each of which implies
+.Fl \-http2 .
+A third, slow read, exists in both protocols and becomes strictly stronger over
+HTTP/2 \(em that is what
+.Fl \-http2
+selects.
+The remaining options here tune those attacks rather than choosing one.
+.Bl -tag -width Ds
 .It Fl \-http2
 Speak HTTP/2 instead of HTTP/1.1.
 Implemented for slow read
@@ -344,6 +364,9 @@ Rate-limited deliberately.
 This is a load generator aimed at a known amplifier, and at the default
 connection count it already asks a vulnerable server to process several thousand
 requests a second.
+.El
+.Ss Address family
+.Bl -tag -width Ds
 .It Fl 4 , Fl \-ipv4
 .It Fl 6 , Fl \-ipv6
 Resolve the target to IPv4 or IPv6 addresses only.

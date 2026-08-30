@@ -4,9 +4,9 @@
 .\"  Licensed under the Apache License, Version 2.0 (the "License");
 .\"  you may not use this file except in compliance with the License.
 .\"  You may obtain a copy of the License at
-.\" 
+.\"
 .\"  http://www.apache.org/licenses/LICENSE-2.0
-.\" 
+.\"
 .\"  Unless required by applicable law or agreed to in writing, software
 .\"  distributed under the License is distributed on an "AS IS" BASIS,
 .\"  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -43,7 +43,7 @@
 .Op Fl 1 Ar HTTP header
 .Op Fl u Ar absolute URL
 .Op Fl v Ar output verbosity level
-.Op Fl w Ar advertised window size range start 
+.Op Fl w Ar advertised window size range start
 .Op Fl x Ar max length of follow up data
 .Op Fl y Ar advertised window size range end
 .Op Fl z Ar slow read from receive buffer in bytes
@@ -134,15 +134,16 @@ Specifies the maximum length of follow up data for slowloris and Slow POST tests
 .It Fl y Ar bytes
 Specifies the end of the range the TCP advertised window size would be picked from in Slow Read test.
 .It Fl z Ar bytes
-Specifies the number of bytes to read from receive buffer with each read() operation.
+Specifies the number of bytes to read from the receive buffer with each
+.Xr read 2
+operation.
 .El
 .Sh ENVIRONMENT
-.Pp
 .Bl -tag -width Ds
 .It Ev SSL_CERT
 Specifies client certificate (PEM format)
 .It Ev SSL_KEY
-Specifies client private key (PEM format) 
+Specifies client private key (PEM format)
 .El
 .Sh EXAMPLES
 Start a slowloris test of host.example.com with 1000 connections, statistics goes into my_header_stats,
@@ -184,10 +185,8 @@ Specifying another connection channel for probe connections helps to make sure t
 shows valid statistics for availability of server under test:
 .Pp
 .Dl $ slowhttptest -e 10.10.0.1:8080 -c 8000 -X -u https://host.example.com/resources/index.html
+.Sh AUTHORS
+.An Sergey Shekyan Aq Mt shekyan@gmail.com
 .Pp
-.Sh AUTHOR
-Sergey Shekyan
-.Aq shekyan@gmail.com .
-.Pp 
 Project page
 .Aq https://github.com/shekyan/slowhttptest/ .
