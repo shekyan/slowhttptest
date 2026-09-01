@@ -113,9 +113,18 @@ target_compile_options(slowhttp PRIVATE -Wall -Wextra)
 target_link_libraries(slowhttp PUBLIC Threads::Threads)
 
 # One source of truth for the version. It reaches the -V output, the help text,
-# the User-Agent and the report, so a release bump is this line in project()
-# and nothing else.
-target_compile_definitions(slowhttp PRIVATE SLOWHTTP_VERSION="${PROJECT_VERSION}")
+# the User-Agent and the report, so a release bump is the line in project() plus
+# the suffix below.
+#
+# The suffix is separate because project(VERSION) only accepts numbers, while a
+# pre-release has to be distinguishable from the release it precedes. Without it
+# every 2.0.0 beta reports "2.0.0" -- a bug report would not say which build it
+# came from, and neither would the tool_version in its own JSON. Empty for a
+# final release.
+set(SLOWHTTP_VERSION_SUFFIX "-beta2" CACHE STRING
+    "Appended to the reported version, e.g. -beta2. Empty for a release.")
+target_compile_definitions(slowhttp PRIVATE
+    SLOWHTTP_VERSION="${PROJECT_VERSION}${SLOWHTTP_VERSION_SUFFIX}")
 
 if(SLOWHTTP_TLS)
   target_compile_definitions(slowhttp PUBLIC SLOWHTTP_HAVE_TLS)

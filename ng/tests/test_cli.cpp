@@ -590,8 +590,19 @@ static void test_version() {
      const std::string v = slowhttp::kToolVersion;
      check(!v.empty() && v != "0.0.0-unknown",
            "the version was supplied by the build system");
-     check(v.find_first_not_of("0123456789.") == std::string::npos,
-           "the version is a plain dotted number");
+     // A pre-release suffix is legitimate -- project(VERSION) only accepts
+     // numbers, so "-beta2" is appended separately and has to survive here or
+     // two betas become indistinguishable in bug reports. What must stay true
+     // is that the numeric part leads: anything else means the build system
+     // was bypassed, which is what this check exists to catch.
+     const std::string numeric = v.substr(0, v.find('-'));
+     check(!numeric.empty() &&
+               numeric.find_first_not_of("0123456789.") == std::string::npos,
+           "the version starts with a plain dotted number");
+     check(v.find('-') == std::string::npos ||
+               v.find_first_not_of(
+                   "0123456789.-abcdefghijklmnopqrstuvwxyz") == std::string::npos,
+           "any pre-release suffix is lowercase alphanumeric");
      Config cfg;
      run({"slowhttptest-ng"}, cfg);
      check(cfg.user_agent.find(v) != std::string::npos,
