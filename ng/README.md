@@ -44,7 +44,7 @@ rationale, and the roadmap.
   the attack *and* the probe, plus request bodies from a literal or file
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
-  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`.
+  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P` and `--chunked`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real
@@ -626,6 +626,11 @@ because in both cases the request headers completed instantly.
 # slow body: server waits for a body that never finishes arriving
 python3 tests/mock_slow_server.py 8080 --workers 4
 ./build/slowhttptest-ng -B -u http://127.0.0.1:8080/ -c 12 -i 5 -s 100000 -l 60
+
+# same hold, chunked framing: no Content-Length is declared at all, so a body
+# size cap enforced against one has nothing to enforce. The terminating
+# zero-length chunk is never sent, which is what keeps the request unfinished.
+./build/slowhttptest-ng -B --chunked -u http://127.0.0.1:8080/ -c 12 -i 5 -l 60
 
 # range: a 13 KB request naming 2002 overlapping ranges
 python3 tests/mock_slow_server.py 8080 --workers 4 --body-bytes 1000000

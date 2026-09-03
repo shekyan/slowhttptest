@@ -160,6 +160,26 @@ Value of the
 .Sy Content-Length
 header for body modes.
 Default 4096.
+Not sent under
+.Fl -chunked ,
+which declares no length.
+.It Fl -chunked
+Frame the
+.Fl B
+body with
+.Sy Transfer-Encoding: chunked
+instead of declaring a
+.Sy Content-Length .
+Each dribbled fragment is sent as its own chunk, and the terminating
+zero-length chunk is never sent, so the request never completes.
+The two headers are never sent together: that pairing is the request
+smuggling desync described in RFC 9112 6.1, and a server rejecting it
+would resemble a target defending itself.
+Because no length is declared, this reaches servers that cap request
+bodies by
+.Sy Content-Length
+alone, and there is no promised length to exhaust, so connections are held
+for the whole run rather than recycled.
 .It Fl t Ar verb
 Request verb.
 Defaults to GET for slow headers and slow read, POST for slow
@@ -194,6 +214,9 @@ reads the body from a file, as in
 .Xr curl 1 .
 .Fl s
 is raised above the payload if needed, so the body still never completes.
+Under
+.Fl -chunked
+there is no length to raise.
 .It Fl A Ar user-agent , Fl -user-agent Ar user-agent
 Value of the
 .Sy User-Agent

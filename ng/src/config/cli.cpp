@@ -137,6 +137,8 @@ void print_usage() {
       "Slow body (-B) options:\n"
       "  -s bytes                Content-Length header value (4096)\n"
       "  -P, --data D            request body; @file reads it from a file\n"
+      "  --chunked               Transfer-Encoding: chunked instead of -s;\n"
+      "                          the terminating chunk is never sent\n"
       "\n"
       "Range (-R) options:\n"
       "  -a start                left boundary of the ranges in the Range header (5)\n"
@@ -422,6 +424,7 @@ enum {
   kOptRapidReset,
   kOptH2ResetRate,
   kOptContinuation,
+  kOptChunked,
 };
 
 const struct option kLongOptions[] = {
@@ -435,6 +438,7 @@ const struct option kLongOptions[] = {
     {"header", required_argument, nullptr, '1'},
     {"data", required_argument, nullptr, 'P'},
     {"user-agent", required_argument, nullptr, 'A'},
+    {"chunked", no_argument, nullptr, kOptChunked},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
     {"connect-timeout", required_argument, nullptr, kOptConnectTimeout},
@@ -476,6 +480,9 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   std::string url = "http://localhost/";
   int tmp = 0;
   int o;
+  // Only so --chunked can say that an explicit -s will not be sent. The
+  // default is worth no warning; a value the user typed is.
+  bool content_length_set = false;
   // Mirrors the classic flag set; unimplemented modes still parse so scripts and
   // help stay stable.
   optind = 1;
@@ -500,13 +507,16 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case 'x': if (!parse_positive(tmp, 'x')) return CliResult::kError;
                 cfg.max_random_data_len = tmp < 2 ? 2 : tmp; break;
       case 's': if (!parse_positive(tmp, 's')) return CliResult::kError;
-                cfg.content_length = tmp; break;
+                cfg.content_length = tmp; content_length_set = true; break;
       case 't': cfg.verb = optarg; break;
       case 'f': cfg.content_type = optarg; break;
       case 'm': cfg.accept = optarg; break;
       case 'j': cfg.cookie = optarg; break;
       case 'A': cfg.user_agent = optarg; break;
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
+      case kOptChunked:
+        cfg.chunked = true;
+        break;
       case kOptNoReferer: cfg.referer.clear(); break;
       case kOptConnectTimeout:
         if (!parse_long_int(tmp, "connect-timeout", 0, 86400))
@@ -668,6 +678,28 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
     return CliResult::kError;
   }
 
+  if (cfg.chunked) {
+    if (cfg.mode != Mode::SlowBody) {
+      // Only -B sends a body, so there would be nothing to chunk -- and a
+      // Transfer-Encoding header on a bodyless request is a request-smuggling
+      // shape that some servers reject outright, which would look like the
+      // attack landing.
+      std::fprintf(stderr,
+                   "Error: --chunked frames the request body, which only the"
+                   " slow body mode (-B) sends\n");
+      return CliResult::kError;
+    }
+    // -s is the Content-Length promise. Chunked framing makes no such promise,
+    // and sending both is the classic smuggling desync, so Content-Length is
+    // simply not sent. Saying so is better than letting -s look effective.
+    if (content_length_set && cfg.log_level >= 1)
+      std::fprintf(stderr,
+                   "Note: --chunked sends no Content-Length, so -s %d is unused;"
+                   " the body ends only at the terminating chunk, which is"
+                   " never sent\n",
+                   cfg.content_length);
+  }
+
   if (!cfg.body_data.empty()) {
     if (cfg.mode != Mode::SlowBody) {
       // Nothing else ever sends a body, so a payload here would be silently
@@ -680,8 +712,10 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
     // The attack works by promising more body than it delivers. A payload at or
     // past the promise would complete the request, the server would answer, and
     // the hold would end -- so the promise is raised to keep it a hold.
+    // Under --chunked there is no promise to outlive: the request ends at a
+    // terminating chunk that is never sent, however large the payload is.
     const long need = static_cast<long>(cfg.body_data.size()) + 4096;
-    if (need > cfg.content_length) {
+    if (!cfg.chunked && need > cfg.content_length) {
       if (cfg.log_level >= 1)
         std::fprintf(stderr,
                      "Note: raising -s from %d to %ld so the %zu-byte body from"

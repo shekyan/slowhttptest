@@ -13,6 +13,17 @@
 
 namespace slowhttp {
 
+// One body fragment in chunked framing: chunk-size CRLF chunk-data CRLF, size
+// in lowercase hex with no extensions (RFC 9112 7.1).
+//
+// Free rather than a private member so the framing can be tested directly. The
+// empty case is the reason: an empty fragment would encode as the terminating
+// zero-length chunk and complete the request, which is the one thing this
+// attack must never do. No caller can currently pass one -- but that is a
+// property of today's callers, not of the framing, and it is exactly the kind
+// of guarantee that quietly stops holding.
+std::string chunk_frame(const std::string& body);
+
 // Slow body, a.k.a. R-U-Dead-Yet (RUDY): send a POST whose headers are complete
 // and valid -- including a large Content-Length -- then deliver the body a few
 // bytes at a time. The server has been told exactly how many bytes to expect, so
@@ -21,6 +32,12 @@ namespace slowhttp {
 // The distinction from Slowloris matters operationally: because the *headers*
 // finish immediately, a request-header timeout never fires. The defense here is a
 // separate request-body or total-request timeout.
+//
+// With --chunked the promise is dropped for framing: Transfer-Encoding: chunked
+// replaces Content-Length, every body fragment goes out as its own chunk, and
+// the terminating zero-length chunk is never sent. The hold is the same idea
+// reached a different way, and it survives a body-size cap that is enforced
+// against a declared Content-Length, because nothing is declared.
 class SlowBody : public Attack {
  public:
   explicit SlowBody(const Config& cfg);
@@ -35,6 +52,9 @@ class SlowBody : public Attack {
  private:
   std::string build_headers() const;
   std::string followup_chunk();
+  // Applies chunk_frame() when --chunked is on, and returns the fragment
+  // untouched otherwise, so callers stay framing-agnostic.
+  std::string frame(std::string body) const;
   std::string random_token(int max_len);
 
   const Config& cfg_;

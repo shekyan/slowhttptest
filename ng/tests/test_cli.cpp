@@ -130,6 +130,14 @@ static void test_flags() {
     Config cfg;
     check(run({"slowhttptest-ng", "stray"}, cfg) == CliResult::kError,
           "stray positional argument rejected");
+
+    // Only -B sends a body, so --chunked anywhere else would frame nothing --
+    // and a Transfer-Encoding on a bodyless request is a smuggling shape some
+    // servers reject, which would read as the target defending itself.
+    check(run({"slowhttptest-ng", "-H", "--chunked"}, cfg) == CliResult::kError,
+          "--chunked rejected outside slow body mode");
+    check(run({"slowhttptest-ng", "-B", "--chunked"}, cfg) == CliResult::kRun,
+          "--chunked accepted with -B");
   }
   {
     Config cfg;

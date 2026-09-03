@@ -182,6 +182,14 @@ struct Config {
   int max_random_data_len = 32;          // -x  max size of each random name/value
   int content_length = 4096;             // -s  Content-Length for body modes
 
+  // --chunked: frame the body with Transfer-Encoding: chunked instead of
+  // promising a Content-Length. The hold is stronger rather than merely
+  // different -- a chunked body ends only at the terminating zero-length chunk,
+  // which is never sent, so there is no declared length for the server to
+  // measure the request against and nothing for -s to say. A server that caps
+  // request bodies by Content-Length alone has nothing to cap here.
+  bool chunked = false;
+
   std::string verb;                      // -t  (defaults per mode)
   // -A, or kDefaultUserAgent, or -- with --random-user-agent -- one of
   // kUserAgents picked for the run.
