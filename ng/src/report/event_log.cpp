@@ -169,6 +169,15 @@ Verdict EventLog::evaluate(double threshold) const {
   std::vector<long> served_ms;
   double served_s = 0, degraded_s = 0;
 
+  // What the target actually said, among the probes it answered. A 503 counts
+  // as served on purpose -- the server answered, and calling that a denial
+  // would conflate it with silence -- but the summary must not then describe a
+  // run of nothing but 503s as answering "normally". Tallied over the attack
+  // window only, so a healthy baseline does not dilute it.
+  int answered_in_window = 0;
+  int non_2xx_in_window = 0;
+  std::vector<std::pair<int, int>> status_tally;  // code -> count, answered only
+
   for (std::size_t i = 0; i < probes.size(); ++i) {
     const ProbeSample& p = probes[i];
     if (p.t < attack_start_s || p.t > window_end) continue;
@@ -182,6 +191,15 @@ Verdict EventLog::evaluate(double threshold) const {
     if (span < 0) span = 0;
 
     if (p.status_fails) ++v.probes_failing_status;
+
+    if (p.state != Availability::Denied && p.status > 0) {
+      ++answered_in_window;
+      if (p.status < 200 || p.status > 299) ++non_2xx_in_window;
+      bool seen = false;
+      for (auto& c : status_tally)
+        if (c.first == p.status) { ++c.second; seen = true; break; }
+      if (!seen) status_tally.push_back({p.status, 1});
+    }
 
     switch (p.state) {
       case Availability::Ok:
@@ -241,6 +259,31 @@ Verdict EventLog::evaluate(double threshold) const {
   for (const auto* p : base)
     if (p->state != Availability::Ok) baseline_unhealthy = true;
 
+  // "normally" is a claim about the responses, not just their arrival, and a
+  // run answered entirely with 503s has not earned it. Names the code when the
+  // target spoke with one voice, counts them when it did not, and says nothing
+  // extra when everything was 2xx.
+  auto status_phrase = [&]() -> std::string {
+    if (answered_in_window == 0 || non_2xx_in_window == 0)
+      return " normally throughout the test";
+    if (status_tally.size() == 1)
+      return " throughout the test, every one with status " +
+             std::to_string(status_tally[0].first);
+    std::string worst;
+    int worst_n = 0;
+    for (const auto& c : status_tally)
+      if ((c.first < 200 || c.first > 299) && c.second > worst_n) {
+        worst_n = c.second;
+        worst = std::to_string(c.first);
+      }
+    // "9 of them" when it was all nine reads as though some were fine.
+    if (non_2xx_in_window == answered_in_window)
+      return " throughout the test, every one with a non-2xx status (most often "
+             + worst + ")";
+    return " throughout the test, " + std::to_string(non_2xx_in_window) +
+           " of them with a non-2xx status (most often " + worst + ")";
+  };
+
   if (v.probes_total < kMinProbesForVerdict) {
     v.outcome = Outcome::Inconclusive;
     v.summary =
@@ -280,13 +323,17 @@ Verdict EventLog::evaluate(double threshold) const {
         std::to_string(v.probes_degraded) + " of " +
         std::to_string(v.probes_total) + " responses took longer than " +
         std::to_string(meta.degraded_above_ms) +
-        " ms. Service was slowed, not denied.";
+        " ms. Service was slowed, not denied." +
+        (non_2xx_in_window > 0
+             ? " " + std::to_string(non_2xx_in_window) + " of the answers"
+               " carried a non-2xx status."
+             : "");
   } else {
     v.outcome = Outcome::Held;
     v.summary =
         "The target answered " + std::to_string(v.probes_served) + " of " +
-        std::to_string(v.probes_total) +
-        " probes normally throughout the test. Under these conditions it held.";
+        std::to_string(v.probes_total) + " probes" + status_phrase() +
+        ". Under these conditions it held.";
   }
 
   {
