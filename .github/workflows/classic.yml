@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+# CI for the classic autotools tool in src/. The C++17 rewrite is covered by
+# ng.yml.
+#
+# This did not exist until now. ng.yml is path-filtered to ng/, so a change to
+# src/ ran no build at all, and the only thing compiling the classic tree was
+# the CodeQL scan -- which runs on master and a weekly cron, and is a security
+# analysis rather than a build-and-test gate. The Travis badge that used to
+# stand in for this had been dead since 2021.
+name: classic
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'man/slowhttptest.1'
+      - 'configure.ac'
+      - 'configure'
+      - 'Makefile.am'
+      - 'Makefile.in'
+      - 'm4/**'
+      - 'aclocal.m4'
+      - 'config.h.in'
+      - '.github/workflows/classic.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'man/slowhttptest.1'
+      - 'configure.ac'
+      - 'configure'
+      - 'Makefile.am'
+      - 'Makefile.in'
+      - 'm4/**'
+      - 'aclocal.m4'
+      - 'config.h.in'
+      - '.github/workflows/classic.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Ubuntu runners ship the dev package; macOS needs Homebrew's keg, which
+      # configure now locates by itself -- that discovery is the thing most
+      # worth exercising here, since hardcoded Intel paths made ./configure fail
+      # outright on Apple Silicon until 1.10.0.
+      - name: Install OpenSSL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Configure
+        run: ./configure
+
+      - name: Build
+        run: make
+
+      # Printed for the log, not asserted. VERSION reaches the binary through
+      # config.h, which config.status generates from AC_INIT in the same run --
+      # so comparing the two would compare a value against itself.
+      - name: Show the version under test
+        run: ./src/slowhttptest -h 2>&1 | head -3
+
+      # A compile check alone would not have caught the things people actually
+      # report. This runs a short test against a local server and requires the
+      # reports to appear, with stdout redirected the way CI always has it.
+      - name: Smoke test against a local server
+        run: |
+          python3 -m http.server 8099 --bind 127.0.0.1 >/dev/null 2>&1 &
+          sleep 2
+          ./src/slowhttptest -c 10 -H -r 20 -l 5 -x 3 -p 2 \
+              -u http://127.0.0.1:8099/ -g -o "$RUNNER_TEMP/report" > "$RUNNER_TEMP/run.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/run.log"
+          test $rc -eq 0 || { echo "exited $rc"; exit 1; }
+          test -s "$RUNNER_TEMP/report.csv"  || { echo "no CSV report"; exit 1; }
+          test -s "$RUNNER_TEMP/report.html" || { echo "no HTML report"; exit 1; }
+
+      # Distro packaging is why this tool is still autotools, so the install has
+      # to keep working -- DESTDIR included, which every packaging system uses.
+      - name: Install into a staging root
+        run: |
+          make install DESTDIR="$PWD/stage"
+          test -x stage/usr/local/bin/slowhttptest
+          test -f stage/usr/local/share/man/man1/slowhttptest.1

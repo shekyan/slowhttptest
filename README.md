@@ -4,6 +4,7 @@ Any actions and or activities related to the code provided is solely your respon
 
 # SlowHTTPTest #
 
+[![classic](https://github.com/shekyan/slowhttptest/actions/workflows/classic.yml/badge.svg)](https://github.com/shekyan/slowhttptest/actions/workflows/classic.yml)
 [![ng](https://github.com/shekyan/slowhttptest/actions/workflows/ng.yml/badge.svg)](https://github.com/shekyan/slowhttptest/actions/workflows/ng.yml)
 [![CodeQL](https://github.com/shekyan/slowhttptest/actions/workflows/codeql.yml/badge.svg)](https://github.com/shekyan/slowhttptest/actions/workflows/codeql.yml)
 
