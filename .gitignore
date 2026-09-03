@@ -10,3 +10,4 @@ src/*.o
 stamp-h1
 src/slowhttptest
 
+configure~

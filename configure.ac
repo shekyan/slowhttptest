@@ -8,6 +8,17 @@ AC_CONFIG_SRCDIR([src/slowhttptest.cc])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
+# Do not try to re-run aclocal/automake/autoconf during an ordinary build.
+#
+# configure, Makefile.in and aclocal.m4 are all committed, and automake's
+# default rules rebuild them whenever configure.ac looks newer. git checks
+# files out in alphabetical order, so configure.ac is always written after
+# aclocal.m4 and is therefore always newer -- meaning `make` on a fresh clone
+# reliably tried to run aclocal and died with "Error 127" on any machine
+# without the autotools installed. That is most people, and every CI runner.
+# Maintainers regenerate with autoreconf -i, or ./configure --enable-maintainer-mode.
+AM_MAINTAINER_MODE([disable])
+
 # Where is OpenSSL?
 #
 # macOS ships LibreSSL headers that must not be shadowed, so Homebrew keeps
