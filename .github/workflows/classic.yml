@@ -82,6 +82,57 @@ jobs:
           test -s "$RUNNER_TEMP/report.csv"  || { echo "no CSV report"; exit 1; }
           test -s "$RUNNER_TEMP/report.html" || { echo "no HTML report"; exit 1; }
 
+      # Guards the whole truncation/overflow class. An over-long option value
+      # must be refused with a message, never silently cut and never a crash:
+      # a truncated Cookie makes the tool authenticate as nobody and attack the
+      # unauthenticated path while the report claims the request went as asked.
+      # A long -o is called out separately because it reaches a fixed
+      # report-filename buffer rather than a header buffer.
+      #
+      # The error text is asserted, not just the exit status: with no server
+      # listening the tool also exits non-zero, so a status-only check would
+      # pass even if the value had been quietly truncated.
+      - name: Over-long option values are refused, not truncated
+        run: |
+          set -u
+          fail=0
+          refuses() {  # flag, value, label
+            out=$(./src/slowhttptest -H -l 1 -c 1 -"$1" "$2" \
+                    -u http://127.0.0.1:8099/ 2>&1); rc=$?
+            case $rc in
+              134|139)
+                echo "FAIL: -$1 crashed (rc=$rc) on $3"; fail=1 ;;
+              *)
+                if echo "$out" | grep -q "value is .* bytes, max:"; then
+                  echo "ok: -$1 refused $3"
+                else
+                  echo "FAIL: -$1 did not refuse $3 (rc=$rc)"; fail=1
+                fi ;;
+            esac
+          }
+          big() { python3 -c "print('x'*$1)"; }
+          refuses j "$(big 9000)"  "a 9000-byte cookie"
+          refuses 1 "X-T: $(big 9000)" "a 9000-byte header"
+          refuses m "$(big 9000)"  "a 9000-byte Accept"
+          refuses f "$(big 9000)"  "a 9000-byte Content-Type"
+          refuses t "$(big 40)"    "a 40-byte verb"
+          refuses o "$(big 5000)"  "a 5000-byte report base"
+          test $fail -eq 0 || exit 1
+
+      # The other half: a value that fits must go out whole. 1 KB used to be the
+      # ceiling, which a JWT cookie exceeds.
+      - name: Header values under the limit are sent intact
+        run: |
+          python3 -m http.server 8099 --bind 127.0.0.1 >/dev/null 2>&1 &
+          sleep 2
+          ./src/slowhttptest -H -l 4 -c 2 -i 2 \
+            -j "$(python3 -c "print('J'*2000)")" \
+            -u http://127.0.0.1:8099/ >/dev/null 2>&1 \
+            || { echo "a 2000-byte cookie was rejected"; exit 1; }
+          ./src/slowhttptest -H -l 4 -c 2 -i 2 -g -o "$RUNNER_TEMP/len" \
+            -u http://127.0.0.1:8099/ >/dev/null 2>&1
+          test -s "$RUNNER_TEMP/len.csv" || { echo "-o regressed"; exit 1; }
+
       # Distro packaging is why this tool is still autotools, so the install has
       # to keep working -- DESTDIR included, which every packaging system uses.
       - name: Install into a staging root

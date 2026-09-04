@@ -382,11 +382,14 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
   }
   // init statistics
   if(need_stats_) {
-    char csv_file_name[1024] = {0};
-    char html_file_name[1024] = {0};
+    // Sized to hold the longest base the parser accepts plus its extension, and
+    // written with snprintf: the old sprintf into a buffer the same size as the
+    // base could overrun it by the length of the extension alone.
+    char csv_file_name[1040] = {0};
+    char html_file_name[1040] = {0};
     if(path && strlen(path)) {
-      sprintf(csv_file_name, "%s.csv", path);  
-      sprintf(html_file_name, "%s.html", path);  
+      snprintf(csv_file_name, sizeof(csv_file_name), "%s.csv", path);
+      snprintf(html_file_name, sizeof(html_file_name), "%s.html", path);
     } else {
       time_t rawtime;
       struct tm * timeinfo;

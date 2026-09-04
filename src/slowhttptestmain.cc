@@ -129,6 +129,23 @@ static bool parse_int(int &val, long max = INT_MAX) {
   }
 }
 
+// Option values are copied into fixed-size buffers. Truncating one silently is
+// worse than refusing it: a cut Cookie authenticates as nobody, so the run goes
+// on to attack the unauthenticated code path while every report it writes says
+// the request was sent as asked. A tool whose whole output is a claim about
+// what the server did must not quietly change what it asked the server.
+static bool copy_opt(char *dst, size_t cap, const char *src) {
+  size_t len = strlen(src);
+  if(len >= cap) {
+    printf("Error: -%c value is %lu bytes, max: %lu\r\n", optopt,
+           (unsigned long) len, (unsigned long) (cap - 1));
+    info();
+    return false;
+  }
+  memcpy(dst, src, len + 1);
+  return true;
+}
+
 // global flag to indicite if we need to run
 int g_running = true;
 
@@ -148,14 +165,27 @@ int main(int argc, char **argv) {
     info();
     return -1;
   }
-  char url[1024] = { 0 };
-  char path[1024] = { 0 };
+  // 8 KB for anything that carries a caller-supplied header value or URL. The
+  // old 1 KB was below what real deployments use: a JWT in -j, a signed URL
+  // with a long query string, or an Authorization header in -1 all exceed it,
+  // and each was being silently cut. 8 KB matches the default request-header
+  // limit of Apache and nginx, so a value this tool accepts is one a server
+  // will too.
+  //
+  // -d/-e take a host:port and -t an HTTP verb; neither has a real case for
+  // more room, and a bound that reflects the input is worth more than a
+  // uniform one.
+  char url[8192] = { 0 };
+  // -o, the report base name. Bounded like a filename rather than like a header
+  // value: it is concatenated with ".csv"/".html" into a fixed buffer
+  // downstream, so its ceiling belongs to the filesystem, not to HTTP.
+  char report_base[1024] = { 0 };
   char proxy[1024] = { 0 };
   char verb[16] = { 0 };
-  char content_type[1024] = { 0 };
-  char accept[1024] = { 0 };
-  char cookie[1024] = { 0 };
-  char header[1024] = { 0 };
+  char content_type[8192] = { 0 };
+  char accept[8192] = { 0 };
+  char cookie[8192] = { 0 };
+  char header[8192] = { 0 };
   // default values
   int conn_cnt            = 50;
   int content_length      = 4096;
@@ -196,15 +226,18 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'd':
-        strncpy(proxy, optarg, 1023);
+        if(!copy_opt(proxy, sizeof(proxy), optarg))
+          return -1;
         proxy_type = slowhttptest::eHTTPProxy;
         break;
       case 'e':
-        strncpy(proxy, optarg, 1023);
+        if(!copy_opt(proxy, sizeof(proxy), optarg))
+          return -1;
         proxy_type = slowhttptest::eProbeProxy;
         break;
       case 'f':
-        strncpy(content_type, optarg, 1023);
+        if(!copy_opt(content_type, sizeof(content_type), optarg))
+          return -1;
         break;
       case 'h':
         usage();
@@ -230,10 +263,12 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'j':
-        strncpy(cookie, optarg, 1023);
+        if(!copy_opt(cookie, sizeof(cookie), optarg))
+          return -1;
         break;
       case '1':
-        strncpy(header, optarg, 1023);
+        if(!copy_opt(header, sizeof(header), optarg))
+          return -1;
         break;
       case 'k':
         if(!parse_int(pipeline_factor, 10))
@@ -244,14 +279,16 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'm':
-        strncpy(accept, optarg, 1023);
+        if(!copy_opt(accept, sizeof(accept), optarg))
+          return -1;
         break;
       case 'n':
         if(!parse_int(read_interval))
           return -1;
         break;
       case 'o':
-        strncpy(path, optarg, 1023);
+        if(!copy_opt(report_base, sizeof(report_base), optarg))
+          return -1;
         break;
       case 'p':
         if(!parse_int(probe_interval))
@@ -266,10 +303,12 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 't':
-        strncpy(verb, optarg, 15);
+        if(!copy_opt(verb, sizeof(verb), optarg))
+          return -1;
         break;
       case 'u':
-        strncpy(url, optarg, 1023);
+        if(!copy_opt(url, sizeof(url), optarg))
+          return -1;
         break;
       case 'v':
         tmp = strtol(optarg, 0, 10);
@@ -329,7 +368,7 @@ int main(int argc, char **argv) {
       type, need_stats, pipeline_factor, probe_interval,
       range_start, range_limit, read_interval, read_len,
       window_lower_limit, window_upper_limit, proxy_type, debug_level));
-  if(!slow_test->init(url, verb, path, proxy, content_type, accept, cookie, header)) {
+  if(!slow_test->init(url, verb, report_base, proxy, content_type, accept, cookie, header)) {
     slowlog(LOG_FATAL, "%s: error setting up slow HTTP test\n", __FUNCTION__);
     return -1;
   } else if(!slow_test->run_test()) {

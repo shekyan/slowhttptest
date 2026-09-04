@@ -129,6 +129,14 @@ Specifies the value of Content-Length header for Slow POST test.
 Specifies the verb to use in HTTP request.
 .It Fl 1 Ar header
 Specifies an HTTP header to use in HTTP request.
+.Pp
+This value, like
+.Fl j , m , f ,
+and
+.Fl u ,
+is limited to 8192 bytes.
+Values longer than the limit are refused with an error rather than truncated,
+so a request is never sent with a header the caller did not ask for.
 .It Fl u Ar URL
 Specifies the URL.
 .It Fl v Ar level
