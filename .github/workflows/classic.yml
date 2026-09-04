@@ -65,7 +65,10 @@ jobs:
       # config.h, which config.status generates from AC_INIT in the same run --
       # so comparing the two would compare a value against itself.
       - name: Show the version under test
-        run: ./src/slowhttptest -h 2>&1 | head -3
+        # `-h` exits 1 and `head` closes the pipe early, either of which trips
+        # the `-eo pipefail` Actions runs this with. Nothing here is an
+        # assertion -- it exists to put the version in the log.
+        run: ./src/slowhttptest -h 2>&1 | head -3 || true
 
       # A compile check alone would not have caught the things people actually
       # report. This runs a short test against a local server and requires the
@@ -75,8 +78,8 @@ jobs:
           python3 -m http.server 8099 --bind 127.0.0.1 >/dev/null 2>&1 &
           sleep 2
           ./src/slowhttptest -c 10 -H -r 20 -l 5 -x 3 -p 2 \
-              -u http://127.0.0.1:8099/ -g -o "$RUNNER_TEMP/report" > "$RUNNER_TEMP/run.log" 2>&1
-          rc=$?
+              -u http://127.0.0.1:8099/ -g -o "$RUNNER_TEMP/report" \
+              > "$RUNNER_TEMP/run.log" 2>&1 && rc=0 || rc=$?
           cat "$RUNNER_TEMP/run.log"
           test $rc -eq 0 || { echo "exited $rc"; exit 1; }
           test -s "$RUNNER_TEMP/report.csv"  || { echo "no CSV report"; exit 1; }
@@ -97,8 +100,12 @@ jobs:
           set -u
           fail=0
           refuses() {  # flag, value, label
+            # Actions runs this with `bash -eo pipefail`, where a failing
+            # command substitution in an assignment aborts the step before the
+            # status can be inspected -- and refusing is a non-zero exit, which
+            # is exactly what this step is here to observe.
             out=$(./src/slowhttptest -H -l 1 -c 1 -"$1" "$2" \
-                    -u http://127.0.0.1:8099/ 2>&1); rc=$?
+                    -u http://127.0.0.1:8099/ 2>&1) && rc=0 || rc=$?
             case $rc in
               134|139)
                 echo "FAIL: -$1 crashed (rc=$rc) on $3"; fail=1 ;;
@@ -130,7 +137,7 @@ jobs:
             -u http://127.0.0.1:8099/ >/dev/null 2>&1 \
             || { echo "a 2000-byte cookie was rejected"; exit 1; }
           ./src/slowhttptest -H -l 4 -c 2 -i 2 -g -o "$RUNNER_TEMP/len" \
-            -u http://127.0.0.1:8099/ >/dev/null 2>&1
+            -u http://127.0.0.1:8099/ >/dev/null 2>&1 || true
           test -s "$RUNNER_TEMP/len.csv" || { echo "-o regressed"; exit 1; }
 
       # Distro packaging is why this tool is still autotools, so the install has
