@@ -1858,7 +1858,18 @@ struct Engine::Impl {
     signal(SIGPIPE, SIG_IGN);
 
     if (cfg.probe_enabled) {
-      prober.reset(new Prober(cfg, tls));
+      // The probe speaks HTTP/1.1, so it must not inherit the attack's ALPN.
+      // Sharing the h2 context made it negotiate h2 and then send an HTTP/1.1
+      // request, which a conforming server will not answer -- reported as the
+      // target denying service.
+      std::shared_ptr<TlsContext> probe_tls = tls;
+      if (tls && cfg.http2) {
+        std::string perr2;
+        probe_tls = TlsContext::create(/*verify_peer=*/false, perr2,
+                                       /*alpn_h2=*/false);
+        if (!probe_tls) probe_tls = tls;
+      }
+      prober.reset(new Prober(cfg, probe_tls));
       std::string perr;
       // The address the attack is using, so the oracle cannot drift onto a
       // different one. Empty when a proxy is in play, where the probe is meant
