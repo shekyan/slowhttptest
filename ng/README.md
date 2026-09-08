@@ -576,6 +576,46 @@ refusal to conclude from an unhealthy baseline — is locked in by
 > e.g. `requested 3 B, kernel SO_RCVBUF 8195 B`. Kernels clamp to a floor and
 > typically report double the request, so the effective window is larger than
 > asked for. The attack still works; the number is reported rather than assumed.
+>
+> On macOS the gap can be much wider than a doubling — 2 B requested, 324208 B
+> granted has been measured — at which point the run is describing receive-buffer
+> autotuning rather than the target. Over HTTP/2 there is a way out:
+> `--window-trickle N` throttles with the flow-control window instead, which the
+> server may not exceed (RFC 9113 §6.9), so the limit is the same wherever the
+> run executes.
+
+### `--window-trickle` — throttling with flow control instead of the kernel
+
+`-w`/`-y` are a request to the kernel. A stream window is a promise the server
+must keep, so under `--window-trickle N` the tool advertises `N` bytes as the
+initial stream window and replenishes stream and connection windows by `N` each
+`-n` interval, leaving `SO_RCVBUF` alone.
+
+```bash
+# hold a response with the flow-control window rather than the socket buffer
+./build/slowhttptest-ng -X --http2 --h2-streams 100 -c 30     --window-trickle 64 -n 20 -z 64 -l 300 -u https://target/big-resource
+```
+
+It also outlives the defence that works. A send timeout catches a reader that
+has stopped completely and releases what was buffered; a trickle keeps every
+stream demonstrably progressing, so the timer never fires. Measured against
+nginx (`send_timeout` 60s, 30 connections × 100 streams, 20 MB resource):
+
+| | t=45s | t=60s | t=75s | t=90s |
+|---|---|---|---|---|
+| stalled (`-w`/`-y`) | 429 MB | 429 MB | 166 MB | 165 MB |
+| `--window-trickle 64` | 302 MB | 303 MB | 302 MB | 301 MB |
+
+Peak is lower, because the window bounds what the server may hand over, but it
+is *retained* rather than released at the one-minute mark.
+
+How much one stalled stream pins depends on the response, so aim `-u` at a large
+one. A server that buffers holds up to one body per stream; a reverse proxy with
+`proxy_buffering on` holds the entire upstream response, because it must drain
+the upstream to free that connection. Measured against nginx proxying a 20 MB
+origin: 19.9 MB per stalled stream, against 84 KB for the same file served
+directly — and that lands in the proxy's temp path, so it is disk rather than
+resident memory.
 
 > **On what `held` counts.** A connection the server has already closed is in
 > `CLOSE_WAIT` — it pins nothing and is not part of the attack. Slow read cannot

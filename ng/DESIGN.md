@@ -85,9 +85,12 @@ socket, and the library is embeddable.
 
 **2. Attacks never do I/O.** An attack is a per-connection state machine whose
 hooks (`on_connect`, `on_timer`, `on_readable`) return an `Action` —
-send / read / close / reconnect, plus an optional timer. The engine owns
-sockets, timers, socket options, and the event loop. Attacks decide *what bytes
-to dribble and when*; nothing else.
+send / read / close / reconnect, plus an optional timer. One action may both
+send and read (`send_then_read`), because the directions are independent at the
+socket level and an attack that must do both on a tick should not have to
+alternate ticks and halve its own cadence to say so. The engine owns sockets,
+timers, socket options, and the event loop. Attacks decide *what bytes to
+dribble and when*; nothing else.
 
 This is why each attack is ~80 lines and why the whole protocol contract can be
 asserted in a unit test with no network.
@@ -151,6 +154,16 @@ an explicit application-layer flow-control window (`SETTINGS_INITIAL_WINDOW_SIZE
 one connection can pin ~100 streams — evading the per-IP connection limits that
 are the standard Slowloris mitigation.
 
+The first of those was described here long before it was used. The h2 attack
+opened the window as far as the protocol allows and throttled with `SO_RCVBUF`
+— the one thing the kernel *does* clamp, and on macOS by five orders of
+magnitude: 2 B requested, 324208 B granted. Runs like that measured local
+autotuning rather than the target, and the tool said so in its own caveats while
+this section claimed the opposite advantage. `--window-trickle N` takes it:
+advertise `N` as the initial window, replenish by `N` each interval, leave
+`SO_RCVBUF` alone. The window is binding on the server, so the throttle is the
+same wherever the run executes.
+
 The most damaging variant is **CVE-2019-9517 (Internal Data Buffering)**: open the
 HTTP/2 window so the server generates and queues a large response, while starving
 the TCP window so it can never drain. That piles data into the server's
@@ -183,6 +196,17 @@ is bounded, so it holds. What gives way is whatever is behind it -- with
 requests against an eight-worker backend and denied the service outright. The
 32x multiplier is `--h2-streams`, and per-IP connection limits, the standard
 Slowloris mitigation, saw four connections.
+
+Turning buffering back *on* moves the cost rather than removing it. A proxy that
+buffers must drain the upstream to free that connection, so it holds the whole
+response instead of a send window: measured against nginx proxying a 20 MB
+origin, 19.9 MB per stalled stream against 84 KB for the same file served
+directly, and 200 streams put 3975 MB into the proxy's temp path. That is disk,
+not resident memory -- separating `anon` from `file` in the cgroup counters was
+what showed it, and nginx degraded gracefully when the path filled, logging
+`No space left on device` and continuing to serve. So it is a consumption
+multiplier rather than a denial, and which resource it lands in depends on a
+setting most operators never revisit.
 
 ## 6. Measuring the outcome, not the attack
 
