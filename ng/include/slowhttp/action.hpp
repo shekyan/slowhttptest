@@ -48,6 +48,19 @@ struct Action {
     a.rearm = next;
     return a;
   }
+  // Send bytes and, on the same tick, read at most `n`.
+  //
+  // The two directions are independent at the socket level, and an attack that
+  // must do both -- replenish a flow-control window, then sip what it just
+  // authorised -- should not have to alternate ticks to say so. Alternating
+  // halves the cadence of each, so the interval the operator asked for is not
+  // the interval either one runs at.
+  static Action send_then_read(std::string b, std::size_t n,
+                               std::optional<Millis> next = std::nullopt) {
+    Action a = send(std::move(b), next);
+    a.read_bytes = n;
+    return a;
+  }
   static Action close() {
     Action a;
     a.kind = Kind::Close;

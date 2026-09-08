@@ -388,24 +388,31 @@ static void test_window_trickle_handshake() {
         "trickle: one WINDOW_UPDATE per stream plus one for the connection");
 }
 
-static void test_window_trickle_alternates() {
+static void test_window_trickle_sends_and_reads() {
   Config cfg = h2_config();
   cfg.window_trickle = 32;
   cfg.h2_streams = 3;
+  cfg.read_len = 9;
   slowhttp::SlowReadH2 attack(cfg);
   attack.on_open(0);
   attack.on_connect(0);
 
-  // Replenish and sip must alternate. Only sending lets the socket buffer fill
-  // and hands the throttle back to TCP; only reading strands every stream at
-  // its initial window.
-  slowhttp::Action a = attack.on_timer(0);
-  slowhttp::Action b = attack.on_timer(0);
-  check(a.kind != b.kind, "trickle: replenish and sip alternate");
-  const slowhttp::Action& snd = a.kind == slowhttp::Action::Kind::Send ? a : b;
-  check(snd.kind == slowhttp::Action::Kind::Send, "trickle: one of the two ticks sends");
-  check(snd.bytes == attack.trickle_frames(),
-        "trickle: the sending tick sends the WINDOW_UPDATE batch");
+  // One tick must do both. Replenishing without reading lets the socket buffer
+  // fill and hands the throttle back to TCP; reading without replenishing
+  // strands every stream at its initial window. Splitting them across ticks
+  // would run each at half the -n that was asked for.
+  slowhttp::Action t = attack.on_timer(0);
+  check(t.kind == slowhttp::Action::Kind::Send,
+        "trickle: the tick sends the WINDOW_UPDATE batch");
+  check(t.bytes == attack.trickle_frames(),
+        "trickle: it sends exactly the replenish batch");
+  check(t.read_bytes == 9,
+        "trickle: the same tick also sips, so neither runs at half cadence");
+  check(static_cast<bool>(t.rearm), "trickle: and re-arms");
+
+  slowhttp::Action u = attack.on_timer(0);
+  check(u.kind == t.kind && u.read_bytes == t.read_bytes,
+        "trickle: every tick is the same, with no alternation left");
 }
 
 static void test_no_trickle_unchanged() {
@@ -414,9 +421,9 @@ static void test_no_trickle_unchanged() {
   slowhttp::SlowReadH2 attack(cfg);
   attack.on_open(0);
   attack.on_connect(0);
-  check(attack.on_timer(0).kind == slowhttp::Action::Kind::Read &&
-        attack.on_timer(0).kind == slowhttp::Action::Kind::Read,
-        "no trickle: every tick still sips, as before");
+  slowhttp::Action a = attack.on_timer(0);
+  check(a.kind == slowhttp::Action::Kind::Read && a.bytes.empty(),
+        "no trickle: every tick still just sips, sending nothing, as before");
   check(attack.trickle_frames().empty(),
         "no trickle: no replenish batch is built");
 }
@@ -424,7 +431,7 @@ static void test_no_trickle_unchanged() {
 int main() {
   test_slow_read_h2();
   test_window_trickle_handshake();
-  test_window_trickle_alternates();
+  test_window_trickle_sends_and_reads();
   test_no_trickle_unchanged();
   test_rapid_reset();
   test_continuation_flood();

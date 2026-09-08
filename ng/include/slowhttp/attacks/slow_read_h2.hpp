@@ -82,9 +82,6 @@ class SlowReadH2 : public Attack {
   std::size_t read_len_;
   std::mt19937 rng_;
   std::string trickle_;
-  // Replenish and sip alternate: an Action is one or the other, and both must
-  // happen for the window to be the constraint rather than the socket buffer.
-  std::vector<bool> replenish_next_;
   std::vector<long> per_conn_read_;
   long bytes_read_ = 0;
   // How much this run has authorised the server to send, per connection --

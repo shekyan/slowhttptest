@@ -27,7 +27,6 @@ SlowReadH2::SlowReadH2(const Config& cfg)
               cfg.read_interval)),
       read_len_(static_cast<std::size_t>(cfg.read_len < 1 ? 1 : cfg.read_len)),
       rng_(std::random_device{}()),
-      replenish_next_(static_cast<std::size_t>(cfg.connections), true),
       per_conn_read_(static_cast<std::size_t>(cfg.connections), 0) {
   handshake_ = build_handshake();
   trickle_ = build_trickle();
@@ -50,8 +49,6 @@ ConnOptions SlowReadH2::conn_options(ConnId /*id*/) {
 void SlowReadH2::on_open(ConnId id) {
   if (id >= 0 && static_cast<std::size_t>(id) < per_conn_read_.size())
     per_conn_read_[id] = 0;
-  if (id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size())
-    replenish_next_[id] = true;
 }
 
 Action SlowReadH2::on_connect(ConnId /*id*/) {
@@ -62,23 +59,16 @@ Action SlowReadH2::on_connect(ConnId /*id*/) {
   return Action::send(handshake_, read_interval_);
 }
 
-Action SlowReadH2::on_timer(ConnId id) {
+Action SlowReadH2::on_timer(ConnId /*id*/) {
   if (cfg_.window_trickle <= 0) return Action::read(read_len_, read_interval_);
-
-  // Alternate replenish and sip. Sending the windows without ever reading would
-  // let the socket buffer fill and hand the throttle back to TCP; reading
-  // without replenishing would strand every stream at its initial window.
-  const bool replenish =
-      id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size()
-          ? replenish_next_[id]
-          : true;
-  if (id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size())
-    replenish_next_[id] = !replenish;
-
-  if (!replenish) return Action::read(read_len_, read_interval_);
+  // Replenish and sip on the same tick. Both are needed every interval --
+  // sending without reading lets the socket buffer fill and hands the throttle
+  // back to TCP, reading without replenishing strands every stream at its
+  // initial window -- and doing them on alternate ticks would run each at half
+  // the -n the operator asked for.
   window_granted_ +=
       static_cast<long>(cfg_.window_trickle) * static_cast<long>(streams_);
-  return Action::send(trickle_, read_interval_);
+  return Action::send_then_read(trickle_, read_len_, read_interval_);
 }
 
 Action SlowReadH2::on_readable(ConnId id, const char* /*data*/,

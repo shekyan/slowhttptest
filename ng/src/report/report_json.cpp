@@ -92,8 +92,23 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   // The rename also fixes a duplicate key: the -w/-y range and the sampled draw
   // were both emitted as "window_requested_bytes", so a parser taking the last
   // occurrence silently lost the range.
-  o += "    \"recv_buffer_range_bytes\": [" + std::to_string(m.window_lower) +
-       ", " + std::to_string(m.window_upper) + "],\n";
+  // Under --window-trickle the throttle is the HTTP/2 flow-control window and
+  // SO_RCVBUF is left at the default, so -w/-y describe nothing that ran. Emit
+  // the trickle instead of a range that was not applied.
+  //
+  // recv_buffer_range_bytes is therefore nullable from here on. The schema is
+  // not bumped for it: null appears only when --window-trickle was passed, so
+  // no run a consumer could already have seen changes shape, and a reader
+  // meeting a null is by definition reading a run that used a flag postdating
+  // their parser.
+  o += "    \"h2_window_trickle_bytes\": " +
+       (m.window_trickle > 0 ? std::to_string(m.window_trickle)
+                             : std::string("null")) + ",\n";
+  if (m.window_trickle > 0)
+    o += "    \"recv_buffer_range_bytes\": null,\n";
+  else
+    o += "    \"recv_buffer_range_bytes\": [" + std::to_string(m.window_lower) +
+         ", " + std::to_string(m.window_upper) + "],\n";
   o += "    \"recv_buffer_requested_bytes\": " + opt_long(m.window_requested) +
        ",\n";
   o += "    \"recv_buffer_effective_bytes\": " + opt_long(m.kernel_rcvbuf) +

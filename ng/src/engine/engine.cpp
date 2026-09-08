@@ -1020,7 +1020,10 @@ struct Engine::Impl {
     if (a.kind == Action::Kind::Send) c.outbuf += a.bytes;
     if (a.rearm && c.active) arm_timer(c, Clock::now() + *a.rearm);
     if (!c.active) return;
-    if (a.kind == Action::Kind::Read && depth < kMaxActionDepth) {
+    // Keyed on read_bytes rather than the kind, so a Send may carry a read
+    // with it. A zero-length read is skipped rather than issued: recv() of 0
+    // returns 0, which this engine reads as the peer having closed.
+    if (a.read_bytes > 0 && depth < kMaxActionDepth) {
       if (!read_once(c, a.read_bytes, depth + 1)) return;
     }
     if (c.sock.ready() && c.outpos < c.outbuf.size())
@@ -1962,7 +1965,7 @@ struct Engine::Impl {
         if (cfg.window_trickle > 0)
           row("HTTP/2 window trickle:", "%d bytes / stream / %lld sec",
               cfg.window_trickle,
-              static_cast<long long>(cfg.read_interval.count()) * 2);
+              static_cast<long long>(cfg.read_interval.count()));
         else
           row("receive window range:", "%d - %d", cfg.window_lower,
               cfg.window_upper);
