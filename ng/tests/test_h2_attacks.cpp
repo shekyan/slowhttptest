@@ -137,7 +137,7 @@ static void test_slow_read_h2() {
 
   atk.on_open(0);
   const Action a = atk.on_connect(0);
-  check(a.kind == Action::Kind::Send, "on_connect sends the opening burst");
+  check(a.kind == slowhttp::Action::Kind::Send, "on_connect sends the opening burst");
   check(a.rearm && *a.rearm == std::chrono::milliseconds(2000),
         "the first sip is scheduled at the read interval");
   check(starts_with_preface(a.bytes), "the burst starts with the client preface");
@@ -176,7 +176,7 @@ static void test_slow_read_h2() {
   }
 
   const Action t = atk.on_timer(0);
-  check(t.kind == Action::Kind::Read && t.read_bytes == 7,
+  check(t.kind == slowhttp::Action::Kind::Read && t.read_bytes == 7,
         "the timer sips exactly -z bytes");
   check(t.rearm && *t.rearm == std::chrono::milliseconds(2000),
         "sips re-arm at the read interval");
@@ -199,7 +199,7 @@ static void test_rapid_reset() {
 
   atk.on_open(0);
   const Action a = atk.on_connect(0);
-  check(a.kind == Action::Kind::Send, "on_connect sends preface and first burst");
+  check(a.kind == slowhttp::Action::Kind::Send, "on_connect sends preface and first burst");
   check(a.rearm && *a.rearm == std::chrono::milliseconds(100),
         "the next burst is scheduled one tick out");
   check(starts_with_preface(a.bytes), "the burst starts with the client preface");
@@ -234,7 +234,7 @@ static void test_rapid_reset() {
         "the counter matches the frames emitted");
 
   const Action t = atk.on_timer(0);
-  check(t.kind == Action::Kind::Send && t.bytes.size() > 9,
+  check(t.kind == slowhttp::Action::Kind::Send && t.bytes.size() > 9,
         "each tick emits another burst of frames");
   check(atk.streams_reset() == 2 * atk.per_tick(),
         "the counter keeps counting across bursts");
@@ -259,7 +259,7 @@ static void test_continuation_flood() {
 
   atk.on_open(0);
   const Action a = atk.on_connect(0);
-  check(a.kind == Action::Kind::Send, "on_connect sends the opening");
+  check(a.kind == slowhttp::Action::Kind::Send, "on_connect sends the opening");
   check(a.rearm && *a.rearm == std::chrono::milliseconds(3000),
         "fragments are spaced by -i");
   check(starts_with_preface(a.bytes), "the opening starts with the preface");
@@ -279,7 +279,7 @@ static void test_continuation_flood() {
   }
 
   const Action t = atk.on_timer(0);
-  check(t.kind == Action::Kind::Send && t.rearm, "on_timer dribbles a fragment");
+  check(t.kind == slowhttp::Action::Kind::Send && t.rearm, "on_timer dribbles a fragment");
   const std::vector<Frame> frag = parse_frames(t.bytes, 0);
   check(frag.size() == 1 &&
             frag[0].type == static_cast<std::uint8_t>(FrameType::Continuation) &&
@@ -360,8 +360,72 @@ static void test_h2_carries_caller_headers() {
   }
 }
 
+
+// --window-trickle moves the throttle from SO_RCVBUF, which the kernel may
+// ignore, to the HTTP/2 stream window, which the server may not exceed.
+static void test_window_trickle_handshake() {
+  Config cfg = h2_config();
+  cfg.window_trickle = 64;
+  cfg.h2_streams = 4;
+  slowhttp::SlowReadH2 attack(cfg);
+  const std::string hs = attack.on_connect(0).bytes;
+
+  // SETTINGS_INITIAL_WINDOW_SIZE must carry the trickle, not the maximum: the
+  // server running ahead of us is exactly what this prevents.
+  bool found = false;
+  for (std::size_t i = 0; i + 6 <= hs.size(); ++i) {
+    if (static_cast<unsigned char>(hs[i]) == 0x00 &&
+        static_cast<unsigned char>(hs[i + 1]) == 0x04) {
+      unsigned long v = 0;
+      for (int k = 2; k < 6; ++k)
+        v = (v << 8) | static_cast<unsigned char>(hs[i + k]);
+      if (v == 64) { found = true; break; }
+    }
+  }
+  check(found, "trickle: SETTINGS advertises the trickle as initial window");
+  check(!attack.trickle_frames().empty(), "trickle: replenish batch is built");
+  check(attack.trickle_frames().size() == static_cast<std::size_t>(5) * (9 + 4),
+        "trickle: one WINDOW_UPDATE per stream plus one for the connection");
+}
+
+static void test_window_trickle_alternates() {
+  Config cfg = h2_config();
+  cfg.window_trickle = 32;
+  cfg.h2_streams = 3;
+  slowhttp::SlowReadH2 attack(cfg);
+  attack.on_open(0);
+  attack.on_connect(0);
+
+  // Replenish and sip must alternate. Only sending lets the socket buffer fill
+  // and hands the throttle back to TCP; only reading strands every stream at
+  // its initial window.
+  slowhttp::Action a = attack.on_timer(0);
+  slowhttp::Action b = attack.on_timer(0);
+  check(a.kind != b.kind, "trickle: replenish and sip alternate");
+  const slowhttp::Action& snd = a.kind == slowhttp::Action::Kind::Send ? a : b;
+  check(snd.kind == slowhttp::Action::Kind::Send, "trickle: one of the two ticks sends");
+  check(snd.bytes == attack.trickle_frames(),
+        "trickle: the sending tick sends the WINDOW_UPDATE batch");
+}
+
+static void test_no_trickle_unchanged() {
+  Config cfg = h2_config();
+  cfg.window_trickle = 0;
+  slowhttp::SlowReadH2 attack(cfg);
+  attack.on_open(0);
+  attack.on_connect(0);
+  check(attack.on_timer(0).kind == slowhttp::Action::Kind::Read &&
+        attack.on_timer(0).kind == slowhttp::Action::Kind::Read,
+        "no trickle: every tick still sips, as before");
+  check(attack.trickle_frames().empty(),
+        "no trickle: no replenish batch is built");
+}
+
 int main() {
   test_slow_read_h2();
+  test_window_trickle_handshake();
+  test_window_trickle_alternates();
+  test_no_trickle_unchanged();
   test_rapid_reset();
   test_continuation_flood();
   test_h2_carries_caller_headers();

@@ -27,11 +27,18 @@ SlowReadH2::SlowReadH2(const Config& cfg)
               cfg.read_interval)),
       read_len_(static_cast<std::size_t>(cfg.read_len < 1 ? 1 : cfg.read_len)),
       rng_(std::random_device{}()),
+      replenish_next_(static_cast<std::size_t>(cfg.connections), true),
       per_conn_read_(static_cast<std::size_t>(cfg.connections), 0) {
   handshake_ = build_handshake();
+  trickle_ = build_trickle();
 }
 
 ConnOptions SlowReadH2::conn_options(ConnId /*id*/) {
+  // With --window-trickle the flow-control window is the throttle and the
+  // kernel is deliberately left out of it: squeezing SO_RCVBUF too would put
+  // back the very thing the flag exists to stop mattering, and the run could
+  // no longer say which of the two limited the server.
+  if (cfg_.window_trickle > 0) return ConnOptions{};
   int lo = std::max(1, cfg_.window_lower);
   int hi = std::max(lo, cfg_.window_upper);
   std::uniform_int_distribution<int> dist(lo, hi);
@@ -43,6 +50,8 @@ ConnOptions SlowReadH2::conn_options(ConnId /*id*/) {
 void SlowReadH2::on_open(ConnId id) {
   if (id >= 0 && static_cast<std::size_t>(id) < per_conn_read_.size())
     per_conn_read_[id] = 0;
+  if (id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size())
+    replenish_next_[id] = true;
 }
 
 Action SlowReadH2::on_connect(ConnId /*id*/) {
@@ -53,8 +62,23 @@ Action SlowReadH2::on_connect(ConnId /*id*/) {
   return Action::send(handshake_, read_interval_);
 }
 
-Action SlowReadH2::on_timer(ConnId /*id*/) {
-  return Action::read(read_len_, read_interval_);
+Action SlowReadH2::on_timer(ConnId id) {
+  if (cfg_.window_trickle <= 0) return Action::read(read_len_, read_interval_);
+
+  // Alternate replenish and sip. Sending the windows without ever reading would
+  // let the socket buffer fill and hand the throttle back to TCP; reading
+  // without replenishing would strand every stream at its initial window.
+  const bool replenish =
+      id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size()
+          ? replenish_next_[id]
+          : true;
+  if (id >= 0 && static_cast<std::size_t>(id) < replenish_next_.size())
+    replenish_next_[id] = !replenish;
+
+  if (!replenish) return Action::read(read_len_, read_interval_);
+  window_granted_ +=
+      static_cast<long>(cfg_.window_trickle) * static_cast<long>(streams_);
+  return Action::send(trickle_, read_interval_);
 }
 
 Action SlowReadH2::on_readable(ConnId id, const char* /*data*/,
@@ -88,20 +112,46 @@ std::string SlowReadH2::build_handshake() const {
   // Open the stream window as far as the protocol allows, and refuse push so
   // the server does not spend its budget on streams this client never asked
   // for -- the point is to make it queue *this* response.
+  const std::uint32_t initial_window =
+      cfg_.window_trickle > 0 ? static_cast<std::uint32_t>(cfg_.window_trickle)
+                              : http2::kMaxWindow;
   http2::write_frame(
       out, http2::FrameType::Settings, http2::kFlagNone, 0,
       http2::settings_payload(
-          {{http2::kSettingsInitialWindowSize, http2::kMaxWindow},
+          {{http2::kSettingsInitialWindowSize, initial_window},
            {http2::kSettingsEnablePush, 0}}));
 
-  // And the connection window, which SETTINGS does not cover.
-  http2::write_frame(
-      out, http2::FrameType::WindowUpdate, http2::kFlagNone, 0,
-      http2::window_update_payload(http2::kMaxWindow - kConnectionWindowStart));
+  // And the connection window, which SETTINGS does not cover. Under a trickle
+  // it is left at its default 65535 and replenished alongside the streams --
+  // opening it wide here would make it useless as a second brake, but it must
+  // not be smaller than the streams it carries or it, rather than the
+  // per-stream window, becomes what the run is measuring.
+  if (cfg_.window_trickle <= 0)
+    http2::write_frame(
+        out, http2::FrameType::WindowUpdate, http2::kFlagNone, 0,
+        http2::window_update_payload(http2::kMaxWindow -
+                                     kConnectionWindowStart));
 
   // Client-initiated streams are odd and must ascend (RFC 7540 section 5.1.1).
   std::uint32_t id = 1;
   for (int i = 0; i < streams_; ++i, id += 2) append_request(out, id);
+  return out;
+}
+
+std::string SlowReadH2::build_trickle() const {
+  std::string out;
+  if (cfg_.window_trickle <= 0) return out;
+  const std::uint32_t inc = static_cast<std::uint32_t>(cfg_.window_trickle);
+  // The connection window is shared by every stream, so it has to be replenished
+  // by the total, not by one stream's worth, or it runs dry first and the run
+  // measures the connection window instead of the stream windows.
+  http2::write_frame(
+      out, http2::FrameType::WindowUpdate, http2::kFlagNone, 0,
+      http2::window_update_payload(inc * static_cast<std::uint32_t>(streams_)));
+  std::uint32_t id = 1;
+  for (int i = 0; i < streams_; ++i, id += 2)
+    http2::write_frame(out, http2::FrameType::WindowUpdate, http2::kFlagNone,
+                       id, http2::window_update_payload(inc));
   return out;
 }
 

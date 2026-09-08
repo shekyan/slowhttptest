@@ -1757,6 +1757,7 @@ struct Engine::Impl {
     // stays right as attacks are added.
     log.meta.mode_label = attack.name();
     log.meta.attack_http2 = cfg.http2;
+    log.meta.window_trickle = cfg.window_trickle;
     log.meta.connections = cfg.connections;
     log.meta.rate = cfg.rate;
     log.meta.duration_s = static_cast<long>(cfg.duration.count());
@@ -1955,8 +1956,16 @@ struct Engine::Impl {
           addr.candidates().size(),
           addr.candidates().size() == 1 ? "" : "s");
       if (cfg.mode == Mode::SlowRead) {
-        row("receive window range:", "%d - %d", cfg.window_lower,
-            cfg.window_upper);
+        // Under --window-trickle the throttle is the HTTP/2 flow-control
+        // window and SO_RCVBUF is left alone, so printing -w/-y here would
+        // name a control that is not in force.
+        if (cfg.window_trickle > 0)
+          row("HTTP/2 window trickle:", "%d bytes / stream / %lld sec",
+              cfg.window_trickle,
+              static_cast<long long>(cfg.read_interval.count()) * 2);
+        else
+          row("receive window range:", "%d - %d", cfg.window_lower,
+              cfg.window_upper);
         row("read rate from receive buffer:", "%d bytes / %lld sec",
             cfg.read_len, static_cast<long long>(cfg.read_interval.count()));
       } else {

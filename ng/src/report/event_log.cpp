@@ -405,6 +405,19 @@ Verdict EventLog::evaluate(double threshold) const {
         "tool's control. Each connection absorbed more of the response than "
         "intended before backing up.");
   }
+  // Worth stating positively: unlike SO_RCVBUF, a flow-control window is
+  // binding on the server, so a trickled run measures the target rather than
+  // the local kernel's autotuning.
+  if (meta.window_trickle > 0) {
+    v.caveats.push_back(
+        "Delivery was throttled by the HTTP/2 flow-control window (" +
+        std::to_string(meta.window_trickle) +
+        " B per stream per interval), not by SO_RCVBUF, so the limit was "
+        "binding on the target rather than subject to local autotuning. Each "
+        "stalled stream can hold up to one response body on a server that "
+        "buffers, and a buffering reverse proxy holds the whole upstream "
+        "response rather than a send window.");
+  }
   if (meta.attack_http2) {
     v.caveats.push_back(
         "Availability was measured with " + meta.probe_protocol +

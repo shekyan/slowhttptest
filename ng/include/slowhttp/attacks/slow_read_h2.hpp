@@ -62,10 +62,18 @@ class SlowReadH2 : public Attack {
   // The opening burst, for reporting and for tests.
   std::size_t handshake_size() const { return handshake_.size(); }
   int streams_per_connection() const { return streams_; }
+  // The WINDOW_UPDATE batch sent on each replenish tick; empty unless
+  // --window-trickle is on. Exposed so tests can check the framing without
+  // needing a server.
+  const std::string& trickle_frames() const { return trickle_; }
+  bool trickling() const { return cfg_.window_trickle > 0; }
 
  private:
   std::string build_handshake() const;
   void append_request(std::string& out, std::uint32_t stream_id) const;
+  // One WINDOW_UPDATE per stream plus one for the connection, all of
+  // --window-trickle bytes.
+  std::string build_trickle() const;
 
   const Config& cfg_;
   int streams_;
@@ -73,8 +81,15 @@ class SlowReadH2 : public Attack {
   std::chrono::milliseconds read_interval_;
   std::size_t read_len_;
   std::mt19937 rng_;
+  std::string trickle_;
+  // Replenish and sip alternate: an Action is one or the other, and both must
+  // happen for the window to be the constraint rather than the socket buffer.
+  std::vector<bool> replenish_next_;
   std::vector<long> per_conn_read_;
   long bytes_read_ = 0;
+  // How much this run has authorised the server to send, per connection --
+  // the ceiling on what it may have queued for us.
+  long window_granted_ = 0;
 };
 
 }  // namespace slowhttp

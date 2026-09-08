@@ -326,6 +326,43 @@ limits, the usual Slowloris mitigation, do not see it.
 Streams to pin per connection with
 .Fl \-http2 .
 Default 100.
+.It Fl \-window-trickle Ar N
+Throttle an HTTP/2 slow read with the flow-control window rather than
+.Sy SO_RCVBUF :
+advertise
+.Ar N
+bytes as the initial stream window and replenish it by
+.Ar N
+on every other
+.Fl n
+interval.
+Requires
+.Fl X Fl \-http2 .
+.Pp
+.Fl w
+and
+.Fl y
+are advisory.
+The kernel routinely grants a receive buffer hundreds of times larger than
+asked for, and the run then measures local autotuning rather than the target.
+A flow-control window is not advisory
+.Pq RFC 9113 Sx 6.9 :
+the server may not exceed it, so the limit binds wherever the run executes.
+.Pp
+It also keeps every stream demonstrably progressing.
+A server-side send timeout is the defence that does catch a fully stalled
+reader, and it releases the buffered response when it fires; a trickle resets
+that timer for a few bytes per stream per interval, so the response stays
+queued for the length of the run.
+Peak memory held is lower than a full stall, because the window bounds what the
+server may hand over, but it is retained instead of released.
+.Pp
+How much one stream can pin depends on the response, so aim
+.Fl u
+at a large one.
+A server that buffers holds up to one body per stalled stream, and a reverse
+proxy with response buffering enabled holds the whole upstream response rather
+than a send window.
 .It Fl \-rapid-reset
 HTTP/2 rapid reset, CVE-2023-44487.
 Implies

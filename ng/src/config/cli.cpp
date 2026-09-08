@@ -152,6 +152,8 @@ void print_usage() {
       "  -k num                  repeat the request N times per connection (1)\n"
       "  --http2                 speak HTTP/2; starves both flow-control windows\n"
       "  --h2-streams N          streams pinned per connection with --http2 (100)\n"
+      "  --window-trickle N      hold h2 stream windows at N bytes, replenishing\n"
+      "                          N per -n interval, instead of SO_RCVBUF (off)\n"
       "  --h2-reset-rate N       streams reset per second per connection (100)\n"
       "\n"
       "Availability probe (the verdict is based on this):\n"
@@ -425,6 +427,7 @@ enum {
   kOptH2ResetRate,
   kOptContinuation,
   kOptChunked,
+  kOptWindowTrickle,
 };
 
 const struct option kLongOptions[] = {
@@ -439,6 +442,7 @@ const struct option kLongOptions[] = {
     {"data", required_argument, nullptr, 'P'},
     {"user-agent", required_argument, nullptr, 'A'},
     {"chunked", no_argument, nullptr, kOptChunked},
+    {"window-trickle", required_argument, nullptr, kOptWindowTrickle},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
     {"connect-timeout", required_argument, nullptr, kOptConnectTimeout},
@@ -516,6 +520,10 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
       case kOptChunked:
         cfg.chunked = true;
+        break;
+      case kOptWindowTrickle:
+        if (!parse_long_int(cfg.window_trickle, "window-trickle", 1, 1048576))
+          return CliResult::kError;
         break;
       case kOptNoReferer: cfg.referer.clear(); break;
       case kOptConnectTimeout:
@@ -675,6 +683,16 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
                  "Error: advertised window range start (-w %d) is above its"
                  " end (-y %d)\n",
                  cfg.window_lower, cfg.window_upper);
+    return CliResult::kError;
+  }
+
+  if (cfg.window_trickle > 0 && !(cfg.mode == Mode::SlowRead && cfg.http2)) {
+    // The window it trickles is an HTTP/2 stream window. Nothing else here has
+    // one, and silently ignoring the flag would leave the run measuring
+    // SO_RCVBUF while the operator believed otherwise.
+    std::fprintf(stderr,
+                 "Error: --window-trickle governs HTTP/2 stream flow control,"
+                 " so it needs slow read over HTTP/2 (-X --http2)\n");
     return CliResult::kError;
   }
 

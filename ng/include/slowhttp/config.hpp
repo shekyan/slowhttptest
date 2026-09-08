@@ -150,6 +150,19 @@ struct Config {
   // attacks rather than the same attack over different framing.
   bool http2 = false;    // --http2
   int h2_streams = 100;  // --h2-streams, streams pinned per connection
+
+  // --window-trickle N: with slow read over HTTP/2, hold the stream windows at
+  // N bytes and replenish them by N on every -n interval, instead of opening
+  // them as far as the protocol allows.
+  //
+  // Without it the throttle is SO_RCVBUF, which the kernel is free to ignore --
+  // it routinely grants a buffer hundreds of times larger than -w/-y asked for,
+  // and the run then measures the kernel's autotuning rather than the target.
+  // A flow-control window is not advisory: the server may not exceed it. It
+  // also keeps each stream demonstrably progressing, so a server-side send
+  // timeout -- the defence that does catch a stalled reader -- never fires.
+  // 0 leaves the window wide open, which is the original behaviour.
+  int window_trickle = 0;
   // --h2-reset-rate: streams opened and cancelled per second, per
   // connection. Bounded by default because this is a load generator
   // aimed at a known amplifier: with -c 50 the default is already 5000

@@ -44,7 +44,8 @@ rationale, and the roadmap.
   the attack *and* the probe, plus request bodies from a literal or file
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
-  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P` and `--chunked`.
+  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`
+  and `--window-trickle`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real

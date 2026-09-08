@@ -94,6 +94,9 @@ struct RunMeta {
   int window_upper = 0;          // -y
   int kernel_rcvbuf = -1;        // what SO_RCVBUF actually became, once connected
   int window_requested = -1;     // the -w/-y draw for the connection sampled
+  // --window-trickle, 0 when off. Recorded because it changes which limit the
+  // run was actually measuring.
+  int window_trickle = 0;
   // Set when the kernel granted so much more than was asked that -w/-y are not
   // in force. Slow read depends on a small receive window, so this changes what
   // the run measured and has to reach the report rather than the console alone.
