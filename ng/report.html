@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>slowhttptest-ng — slow read (HTTP/2) against https://exler.es:443/archive/lel-svad.htm</title>
+<style>
+:root {
+  --ground:#f6f7f9; --surface:#ffffff; --surface-2:#fbfcfd;
+  --ink:#111820; --ink-2:#5a6673; --ink-3:#8a95a1;
+  --rule:#dfe4ea; --rule-2:#eef1f5; --accent:#0b7a85;
+  --ok:#0ca30c; --degraded:#fab219; --denied:#d03b3b; --unknown:#8a95a1;
+  --ok-ink:#0a7a0a; --degraded-ink:#8a5d00; --denied-ink:#b52d2d; --unknown-ink:#5a6673;
+  --ok-bg:#e8f5ee; --degraded-bg:#fbf1dc; --denied-bg:#f9e7e4; --unknown-bg:#eef1f5;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#0c1014; --surface:#131a21; --surface-2:#0f161c;
+    --ink:#e6ecf2; --ink-2:#9aa7b4; --ink-3:#6b7885;
+    --rule:#232d37; --rule-2:#1b232b; --accent:#3fd0de;
+    /* status marks deliberately NOT overridden: a state keeps the same colour in
+       both themes so it never has to be relearned */
+    --ok-ink:#35c435; --degraded-ink:#fab219; --denied-ink:#f06a6a; --unknown-ink:#9aa7b4;
+    --ok-bg:#14261e; --degraded-bg:#2a2313; --denied-bg:#2b1714; --unknown-bg:#1b232b;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#0c1014; --surface:#131a21; --surface-2:#0f161c;
+  --ink:#e6ecf2; --ink-2:#9aa7b4; --ink-3:#6b7885;
+  --rule:#232d37; --rule-2:#1b232b; --accent:#3fd0de;
+  --ok-ink:#35c435; --degraded-ink:#fab219; --denied-ink:#f06a6a; --unknown-ink:#9aa7b4;
+  --ok-bg:#14261e; --degraded-bg:#2a2313; --denied-bg:#2b1714; --unknown-bg:#1b232b;
+}
+:root[data-theme="light"] {
+  --ground:#f6f7f9; --surface:#ffffff; --surface-2:#fbfcfd;
+  --ink:#111820; --ink-2:#5a6673; --ink-3:#8a95a1;
+  --rule:#dfe4ea; --rule-2:#eef1f5; --accent:#0b7a85;
+  --ok-ink:#0a7a0a; --degraded-ink:#8a5d00; --denied-ink:#b52d2d; --unknown-ink:#5a6673;
+  --ok-bg:#e8f5ee; --degraded-bg:#fbf1dc; --denied-bg:#f9e7e4; --unknown-bg:#eef1f5;
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans);
+       line-height:1.55; -webkit-font-smoothing:antialiased; }
+.wrap { max-width:1120px; margin:0 auto; padding:32px 24px 64px;
+        display:flex; flex-direction:column; gap:28px; }
+.masthead { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+            gap:12px 24px; padding-bottom:16px; border-bottom:2px solid var(--ink); }
+.tool { font-family:var(--mono); font-size:13px; font-weight:700; letter-spacing:0.08em;
+        text-transform:uppercase; color:var(--accent); }
+.tool span { color:var(--ink-3); font-weight:400; }
+.runstamp { font-family:var(--mono); font-size:12px; color:var(--ink-3);
+            font-variant-numeric:tabular-nums; }
+h1 { font-family:var(--mono); font-size:26px; font-weight:700; letter-spacing:-0.01em;
+     margin:0; flex-basis:100%; text-wrap:balance; }
+.verdict { display:grid; grid-template-columns:6px 1fr; background:var(--surface);
+           border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+.verdict-stripe.v-ok  { background:var(--ok); }
+.verdict-stripe.v-deg { background:var(--degraded); }
+.verdict-stripe.v-den { background:var(--denied); }
+.verdict-stripe.v-unk { background:var(--unknown); }
+.verdict-body { padding:20px 22px; display:flex; flex-direction:column; gap:8px; }
+.verdict-line { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.verdict-word { font-family:var(--mono); font-size:29px; font-weight:700;
+                letter-spacing:-0.02em; line-height:1.05; }
+.verdict-word.v-ok  { color:var(--ok-ink); }
+.verdict-word.v-deg { color:var(--degraded-ink); }
+.verdict-word.v-den { color:var(--denied-ink); }
+.verdict-word.v-unk { color:var(--unknown-ink); }
+.verdict-icon { flex:none; }
+.verdict-icon.v-ok  { color:var(--ok); }
+.verdict-icon.v-deg { color:var(--degraded); }
+.verdict-icon.v-den { color:var(--denied); }
+.verdict-icon.v-unk { color:var(--unknown); }
+.verdict-sub { font-family:var(--mono); font-size:12px; letter-spacing:0.06em;
+               text-transform:uppercase; color:var(--ink-3); }
+.verdict p { margin:0; color:var(--ink-2); max-width:68ch; font-size:15px; }
+.verdict b { color:var(--ink); font-weight:600; }
+.caveat { margin:0; font-size:13.5px !important; color:var(--ink-3) !important;
+          border-left:2px solid var(--rule); padding-left:12px; max-width:68ch; }
+.caveat b { color:var(--ink-2) !important; }
+.caveat ul { margin:6px 0 0; padding-left:18px; }
+.caveat li { margin:2px 0; }
+.stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:1px;
+         background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+.tile { background:var(--surface); padding:16px 18px; display:flex; flex-direction:column; gap:6px; }
+.tile-label { font-family:var(--mono); font-size:10.5px; letter-spacing:0.09em;
+              text-transform:uppercase; color:var(--ink-3); }
+.tile-value { font-family:var(--mono); font-size:27px; font-weight:700; line-height:1.05;
+              font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.tile-value.crit { color:var(--denied-ink); }
+.tile-value.warn { color:var(--degraded-ink); }
+.tile-value.good { color:var(--ok-ink); }
+.tile-value.muted { color:var(--ink-3); font-size:18px; font-weight:400; padding-top:6px; }
+.tile-note { font-family:var(--mono); font-size:11.5px; color:var(--ink-3);
+             font-variant-numeric:tabular-nums; }
+.card { background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+        padding:20px 22px 16px; }
+.card-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+             flex-wrap:wrap; margin-bottom:4px; }
+h2 { font-family:var(--mono); font-size:12px; font-weight:700; letter-spacing:0.1em;
+     text-transform:uppercase; margin:0; color:var(--ink); }
+.card-note { font-size:13px; color:var(--ink-3); max-width:60ch; }
+.chart-scroll { overflow-x:auto; }
+svg.chart { display:block; width:100%; min-width:640px; height:auto; }
+.panel-label { font-family:var(--mono); font-size:11px; fill:var(--ink-2);
+               letter-spacing:0.06em; text-transform:uppercase; }
+.axis-text { font-family:var(--mono); font-size:10.5px; fill:var(--ink-3); }
+.gridline { stroke:var(--rule-2); stroke-width:1; }
+.axisline { stroke:var(--rule); stroke-width:1; }
+.marker-line { stroke:var(--ink-3); stroke-width:1; stroke-dasharray:2 3; }
+.marker-dot { fill:var(--surface); stroke:var(--ink-2); stroke-width:1.5; }
+.marker-num { font-family:var(--mono); font-size:10px; font-weight:700; fill:var(--ink);
+              text-anchor:middle; }
+.seg-ok { fill:var(--ok); } .seg-degraded { fill:var(--degraded); }
+.seg-denied { fill:var(--denied); }
+.seg-sep { stroke:var(--surface); stroke-width:2; }
+.hatch-stroke { stroke:var(--surface); stroke-width:1.4; }
+.conn-area { fill:var(--accent); opacity:0.16; }
+.conn-line { stroke:var(--accent); stroke-width:2; fill:none; stroke-linejoin:round; }
+.lat-line { stroke:var(--ink-2); stroke-width:2; fill:none; stroke-linejoin:round; }
+.lat-dot { fill:var(--ink-2); stroke:var(--surface); stroke-width:2; }
+.lat-dot.warn { fill:var(--degraded); }
+.deadzone { fill:var(--denied); opacity:0.07; }
+.deadzone-label { font-family:var(--mono); font-size:11px; fill:var(--denied-ink);
+                  letter-spacing:0.08em; text-transform:uppercase; }
+.crosshair { stroke:var(--ink); stroke-width:1; opacity:0.45; pointer-events:none; }
+.legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:14px; padding-top:12px;
+          border-top:1px solid var(--rule-2); }
+.legend-item { display:flex; align-items:center; gap:7px; font-family:var(--mono);
+               font-size:11.5px; color:var(--ink-2); }
+.swatch { width:22px; height:11px; border-radius:1px; flex:none; }
+.markers { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; }
+.mk { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11.5px;
+      color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.mk-n { width:16px; height:16px; border-radius:50%; flex:none; border:1.5px solid var(--ink-2);
+        color:var(--ink); font-size:10px; font-weight:700; display:grid; place-items:center; }
+.mk time { color:var(--ink-3); }
+.table-scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-family:var(--mono); font-size:12.5px;
+        min-width:520px; }
+caption { text-align:left; font-size:13px; color:var(--ink-3); padding-bottom:10px;
+          font-family:var(--sans); }
+th, td { text-align:left; padding:7px 14px 7px 0; border-bottom:1px solid var(--rule-2);
+         font-variant-numeric:tabular-nums; vertical-align:top; }
+th { color:var(--ink-3); font-weight:400; font-size:10.5px; letter-spacing:0.09em;
+     text-transform:uppercase; border-bottom-color:var(--rule); }
+td.t { color:var(--ink-3); white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+.pill { display:inline-block; padding:1px 7px; border-radius:2px; font-size:10.5px;
+        letter-spacing:0.06em; text-transform:uppercase; }
+.pill.ok { background:var(--ok-bg); color:var(--ok-ink); }
+.pill.deg { background:var(--degraded-bg); color:var(--degraded-ink); }
+.pill.den { background:var(--denied-bg); color:var(--denied-ink); }
+.pill.unk { background:var(--unknown-bg); color:var(--unknown-ink); }
+.bracket { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:14px 16px;
+           margin:4px 0 18px; background:var(--surface-2); border:1px solid var(--rule);
+           border-radius:3px; }
+.bracket-label { font-family:var(--mono); font-size:10.5px; letter-spacing:0.09em;
+                 text-transform:uppercase; color:var(--ink-3); }
+.bracket-value { font-family:var(--mono); font-size:24px; font-weight:700;
+                 font-variant-numeric:tabular-nums; letter-spacing:-0.01em; }
+.bracket-value.muted { font-size:15px; font-weight:400; color:var(--ink-3); }
+.bracket-note { font-family:var(--mono); font-size:11.5px; color:var(--ink-3); }
+.params { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px,1fr));
+          gap:14px 28px; margin:0; }
+.param { display:flex; flex-direction:column; gap:2px; }
+.param dt { font-family:var(--mono); font-size:10.5px; letter-spacing:0.09em;
+            text-transform:uppercase; color:var(--ink-3); }
+.param dd { margin:0; font-family:var(--mono); font-size:13.5px;
+            font-variant-numeric:tabular-nums; word-break:break-all; }
+footer { border-top:1px solid var(--rule); padding-top:16px; font-size:12.5px;
+         color:var(--ink-3); display:flex; flex-direction:column; gap:6px; }
+footer code { font-family:var(--mono); color:var(--ink-2); }
+#tip { position:fixed; pointer-events:none; z-index:10; background:var(--surface);
+       border:1px solid var(--rule); border-radius:3px; padding:8px 10px;
+       font-family:var(--mono); font-size:11.5px; line-height:1.5; color:var(--ink);
+       box-shadow:0 4px 14px rgba(0,0,0,0.14); font-variant-numeric:tabular-nums;
+       opacity:0; transition:opacity 0.1s; white-space:nowrap; }
+#tip.on { opacity:1; }
+#tip .r { display:flex; gap:10px; justify-content:space-between; }
+#tip .k { color:var(--ink-3); }
+a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div class="tool">slowhttptest-ng <span>v2.0.0-beta2</span></div>
+    <div class="runstamp">run 2026-09-09 20:51:19 UTC · 18 s elapsed</div>
+    <h1>slow read (HTTP/2) against https://exler.es:443/archive/lel-svad.htm</h1>
+  </header>
+
+  <section class="verdict" aria-labelledby="verdict-word">
+    <div class="verdict-stripe v-unk"></div>
+    <div class="verdict-body">
+      <div class="verdict-line">
+        <svg class="verdict-icon v-unk" width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.2 9.3a2.9 2.9 0 1 1 3.6 2.9v1.9" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/><circle cx="12.4" cy="17.4" r="1.3" fill="currentColor"/></svg>
+        <strong class="verdict-word v-unk" id="verdict-word">INCONCLUSIVE</strong>
+        <span class="verdict-sub">under slow read (HTTP/2) at 30 connections, availability measured over HTTP/1.1</span>
+      </div>
+      <p>The target was already failing or slow before any load was applied, so whatever happened during the test cannot be attributed to the test. Fix or re-check the baseline and run again.</p>
+      <div class="caveat"><b>Not ruled out:</b>
+        <ul>
+          <li>Packet loss or congestion between this host and the target could produce the same probe timings as server-side exhaustion.</li>
+          <li>Rate limiting, a WAF, or an upstream shedding this client specifically would look identical from here.</li>
+          <li>An intermediary (load balancer, CDN, reverse proxy) may have failed or held up rather than the origin.</li>
+          <li>Single run — re-run to confirm.</li>
+          <li>Delivery was throttled by the HTTP/2 flow-control window (64 B per stream per interval), not by SO_RCVBUF, so the limit was binding on the target rather than subject to local autotuning. Each stalled stream can hold up to one response body on a server that buffers, and a buffering reverse proxy holds the whole upstream response rather than a send window.</li>
+          <li>Availability was measured with HTTP/1.1 requests, not over the HTTP/2 path the attack used. A target can serve HTTP/1.1 normally while its HTTP/2 side is exhausted, and the reverse is also possible.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats" aria-label="Key measurements">
+    <div class="tile">
+      <span class="tile-label">Time to denial</span>
+      <span class="tile-value muted">never</span>
+      <span class="tile-note">service answered throughout</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Unavailable</span>
+      <span class="tile-value good">0 s</span>
+      <span class="tile-note">0% of the attack window</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Denial threshold</span>
+      <span class="tile-value muted">not measured</span>
+      <span class="tile-note">see capacity section</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Recovery</span>
+      <span class="tile-value muted">n/a</span>
+      <span class="tile-note">service never went down</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Timeline</h2>
+      <p class="card-note">Three measurements on one shared time axis: whether the service answered, how many connections the tool actually held, and how long a probe took. Inside the attack window: <b>0 served</b>, <b>6 degraded</b>, <b>0 denied</b> of 6 probes.</p>
+    </div>
+
+    <div class="chart-scroll" id="chart-wrap">
+      <svg class="chart" id="chart" viewBox="0 0 1080 470" role="img"
+           aria-label="The target was already failing or slow before any load was applied, so whatever happened during the test cannot be attributed to the test. Fix or re-check the baseline and run again.">
+        <defs>
+          <pattern id="hatch-deg" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="7" class="hatch-stroke"/>
+          </pattern>
+          <pattern id="hatch-den" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="5" class="hatch-stroke"/>
+            <line x1="2.5" y1="0" x2="2.5" y2="5" class="hatch-stroke" stroke-width="0.7"/>
+          </pattern>
+        </defs>
+        <g id="plot"></g>
+      </svg>
+    </div>
+
+    <div class="legend" role="list">
+      <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--ok)"></span> served</span>
+      <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--degraded); background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--surface) 3px 4px)"></span> degraded &gt; 1000 ms</span>
+      <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--denied); background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface) 2px 3px)"></span> no response</span>
+    </div>
+
+    <div class="markers">
+      <span class="mk"><span class="mk-n">1</span> attack started <time>t=5.5 s</time></span>
+      <span class="mk"><span class="mk-n">2</span> attack stopped <time>t=17.8 s</time></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Event log</h2></div>
+    <div class="table-scroll">
+      <table>
+        <caption>Every state change, and the measurement that triggered it.</caption>
+        <thead><tr><th scope="col">Time</th><th scope="col">State</th><th scope="col">Event</th><th scope="col">Detail</th></tr></thead>
+        <tbody>
+          <tr><td class="t">0.0 s</td><td><span class="pill deg">degraded</span></td><td>Probe slowed</td><td>slow response: HTTP/1.1 200 OK</td></tr>
+          <tr><td class="t">5.5 s</td><td><span class="pill ok">served</span></td><td>Attack started</td><td>slow read (HTTP/2) · 30 connections · 50/s</td></tr>
+          <tr><td class="t">17.8 s</td><td><span class="pill ok">served</span></td><td>Attack stopped</td><td>giving up: no connection could be established</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Capacity search</h2>
+      <p class="card-note">Connections are held at each level and probed before stepping up, so the resolution is the step size rather than an accident of ramp timing.</p>
+    </div>
+    <div class="bracket">
+      <span class="bracket-label">Denial threshold</span>
+      <span class="bracket-value muted">not measured</span>
+      <span class="bracket-note">not measured: the connection ramp reaches its target faster than the probe samples it (100 connections per sample), so any threshold read off this run would be an artifact of ramp timing. Use --capacity for a staircase search.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Test parameters</h2></div>
+    <dl class="params">
+      <div class="param"><dt>Target</dt><dd>https://exler.es:443/archive/lel-svad.htm</dd></div>
+      <div class="param"><dt>Mode</dt><dd>slow read (HTTP/2) (-X --http2)</dd></div>
+      <div class="param"><dt>Connections</dt><dd>30</dd></div>
+      <div class="param"><dt>Connection rate</dt><dd>50 / s</dd></div>
+      <div class="param"><dt>Duration</dt><dd>300 s</dd></div>
+      <div class="param"><dt>Followup interval</dt><dd>10 s (-i)</dd></div>
+      <div class="param"><dt>Probe protocol</dt><dd>HTTP/1.1 (attack used HTTP/2)</dd></div>
+      <div class="param"><dt>Probe interval</dt><dd>2.0 s</dd></div>
+      <div class="param"><dt>Probe timeout</dt><dd>5.0 s (-p)</dd></div>
+      <div class="param"><dt>Degraded above</dt><dd>1000 ms</dd></div>
+      <div class="param"><dt>Baseline latency</dt><dd>not measured</dd></div>
+      <div class="param"><dt>User agent</dt><dd>Mozilla/5.0 (compatible; slowhttptest-ng/2.0.0-beta2; +https://github.com/shekyan/slowhttptest)</dd></div>
+    </dl>
+  </section>
+
+  <footer>
+    <div>Generated by <code>slowhttptest-ng</code> · exit code <code>3</code> · machine-readable companion carries <code>"outcome": "inconclusive"</code> and <code>"pass": false</code> against an availability threshold of <code>95%</code> (measured 0.0%).</div>
+    <div>Outcome is one of <code>denied</code>, <code>degraded</code>, <code>held</code>, or <code>inconclusive</code> — the last when the baseline was already unhealthy or too few probes landed to justify a conclusion.</div>
+    <div>Run only against systems you are authorized to test.</div>
+  </footer>
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+window.RUN = {
+  run_end: 17.78,
+  attack_start: 5.54,
+  attack_end: 17.78,
+  timeout_ms: 5000,
+  probes: [{t:0.00,state:"degraded",ms:1599},{t:2.00,state:"degraded",ms:1398},{t:4.00,state:"degraded",ms:1537},{t:6.00,state:"degraded",ms:1382},{t:8.00,state:"degraded",ms:1335},{t:10.00,state:"degraded",ms:1413},{t:12.01,state:"degraded",ms:1367},{t:14.01,state:"degraded",ms:1425},{t:16.01,state:"degraded",ms:1483}],
+  conns: [{t:0.53,n:0},{t:1.10,n:0},{t:1.70,n:0},{t:2.24,n:0},{t:2.74,n:0},{t:3.28,n:0},{t:3.80,n:0},{t:4.33,n:0},{t:4.84,n:0},{t:5.34,n:0},{t:5.92,n:0},{t:6.43,n:0},{t:6.95,n:0},{t:7.49,n:0},{t:7.99,n:0},{t:8.54,n:0},{t:9.10,n:0},{t:9.64,n:0},{t:10.20,n:0},{t:10.70,n:0},{t:11.21,n:0},{t:11.72,n:0},{t:12.24,n:0},{t:12.74,n:0},{t:13.26,n:0},{t:13.78,n:0},{t:14.34,n:0},{t:14.91,n:0},{t:15.43,n:0},{t:15.94,n:0},{t:16.44,n:0},{t:17.01,n:0},{t:17.59,n:0},{t:17.78,n:0}],
+  markers: [{t:5.54,label:"attack started"},{t:17.78,label:"attack stopped"}]
+};
+</script>
+<script>
+(function () {
+  "use strict";
+  var R = window.RUN;
+  var probes = R.probes || [], conns = R.conns || [];
+  var T_END = Math.max(R.run_end || 0, 1);
+
+  var svg = document.getElementById("chart");
+  if (!probes.length) {
+    document.getElementById("chart-wrap").innerHTML =
+      '<p class="card-note">No availability samples were collected, so there is ' +
+      'nothing to plot.</p>';
+    return;
+  }
+
+  var X0 = 66, X1 = 1064, W = X1 - X0;
+  var RIB_Y = 34, RIB_H = 34;
+  var CON_Y = 116, CON_H = 116, CON_B = CON_Y + CON_H;
+  var LAT_Y = 280, LAT_H = 104, LAT_B = LAT_Y + LAT_H;
+  var AXIS_Y = LAT_B;
+
+  function x(t) { return X0 + (t / T_END) * W; }
+
+  var connMax = 1;
+  conns.forEach(function (d) { if (d.n > connMax) connMax = d.n; });
+  var connTop = Math.max(1, Math.ceil(connMax * 1.1));
+  function yC(n) { return CON_B - (n / connTop) * CON_H; }
+
+  var lats = probes.filter(function (p) { return p.ms != null; })
+                   .map(function (p) { return p.ms; });
+  var loMs = lats.length ? Math.max(1, Math.min.apply(null, lats)) : 1;
+  var hiMs = lats.length ? Math.max.apply(null, lats) : 1000;
+  if (hiMs < loMs * 4) hiMs = loMs * 4;
+  var L0 = Math.log10(loMs), L1 = Math.log10(hiMs);
+  function yL(ms) {
+    if (L1 === L0) return LAT_B - LAT_H / 2;
+    return LAT_B - ((Math.log10(Math.max(ms, 1)) - L0) / (L1 - L0)) * LAT_H;
+  }
+
+  var NS = "http://www.w3.org/2000/svg";
+  function el(n, a) {
+    var e = document.createElementNS(NS, n);
+    for (var k in a) e.setAttribute(k, a[k]);
+    return e;
+  }
+  var g = document.getElementById("plot");
+  function add(e) { g.appendChild(e); return e; }
+  function text(s, X, Y, cls, anchor) {
+    var e = el("text", { x: X, y: Y, "class": cls });
+    if (anchor) e.setAttribute("text-anchor", anchor);
+    e.textContent = s;
+    return add(e);
+  }
+
+  // panel 1: availability ribbon. Merges consecutive same-state samples so the
+  // eye reads runs, not individual probes.
+  text("service availability", X0, RIB_Y - 10, "panel-label");
+  var stateClass = { served: "seg-ok", degraded: "seg-degraded", denied: "seg-denied" };
+  var stateFill = { served: null, degraded: "url(#hatch-deg)", denied: "url(#hatch-den)" };
+  var runStart = 0;
+  for (var i = 0; i <= probes.length; i++) {
+    var cur = probes[i], prev = probes[i - 1];
+    if (i > 0 && (!cur || cur.state !== prev.state)) {
+      var xs = x(probes[runStart].t);
+      var xe = cur ? x(cur.t) : x(T_END);
+      add(el("rect", { x: xs, y: RIB_Y, width: Math.max(1, xe - xs), height: RIB_H,
+                       "class": stateClass[prev.state] || "seg-ok" }));
+      if (stateFill[prev.state]) {
+        add(el("rect", { x: xs, y: RIB_Y, width: Math.max(1, xe - xs), height: RIB_H,
+                         fill: stateFill[prev.state] }));
+      }
+      if (cur) add(el("line", { x1: xe, y1: RIB_Y, x2: xe, y2: RIB_Y + RIB_H,
+                                "class": "seg-sep" }));
+      runStart = i;
+    }
+  }
+
+  // panel 2: connections actually held (not the -c that was asked for)
+  text("connections held", X0, CON_Y - 10, "panel-label");
+  [0, Math.round(connTop / 2), connTop].forEach(function (n) {
+    add(el("line", { x1: X0, y1: yC(n), x2: X1, y2: yC(n), "class": "gridline" }));
+    text(String(n), X0 - 10, yC(n) + 3.5, "axis-text", "end");
+  });
+  if (conns.length) {
+    var cPts = conns.map(function (d) {
+      return x(d.t).toFixed(1) + "," + yC(d.n).toFixed(1);
+    }).join(" ");
+    add(el("polygon", { points: X0 + "," + CON_B + " " + cPts + " " + X1 + "," + CON_B,
+                        "class": "conn-area" }));
+    add(el("polyline", { points: cPts, "class": "conn-line" }));
+  }
+
+  // panel 3: probe latency on a log scale, so 12 ms and 2 980 ms share an axis
+  text("probe response time", X0, LAT_Y - 10, "panel-label");
+  var ticks = [];
+  for (var e10 = Math.floor(L0); e10 <= Math.ceil(L1); e10++) {
+    var v = Math.pow(10, e10);
+    if (v >= loMs * 0.9 && v <= hiMs * 1.1) ticks.push(v);
+  }
+  if (ticks.length < 2) ticks = [loMs, hiMs];
+  ticks.forEach(function (ms) {
+    add(el("line", { x1: X0, y1: yL(ms), x2: X1, y2: yL(ms), "class": "gridline" }));
+    text(Math.round(ms) + " ms", X0 - 10, yL(ms) + 3.5, "axis-text", "end");
+  });
+
+  // stretches with no response at all: shaded, hatched and labelled, because an
+  // empty gap in a line chart reads as "no data" rather than "no service"
+  var zi = 0;
+  while (zi < probes.length) {
+    if (probes[zi].state !== "denied") { zi++; continue; }
+    var zs = zi;
+    while (zi < probes.length && probes[zi].state === "denied") zi++;
+    var d0 = x(probes[zs].t);
+    var d1 = zi < probes.length ? x(probes[zi].t) : x(T_END);
+    if (d1 - d0 < 2) d1 = d0 + 2;
+    add(el("rect", { x: d0, y: LAT_Y, width: d1 - d0, height: LAT_H, "class": "deadzone" }));
+    add(el("rect", { x: d0, y: LAT_Y, width: d1 - d0, height: LAT_H,
+                     fill: "url(#hatch-den)", opacity: "0.28" }));
+    if (d1 - d0 > 190) {
+      text("no response · timeout " + R.timeout_ms + " ms", (d0 + d1) / 2,
+           LAT_Y + LAT_H / 2 + 4, "deadzone-label", "middle");
+    }
+  }
+
+  // latency line, split around gaps so it never draws through a dead zone
+  var seg = [];
+  function flush() {
+    if (seg.length > 1) add(el("polyline", { points: seg.join(" "), "class": "lat-line" }));
+    seg = [];
+  }
+  probes.forEach(function (p) {
+    if (p.ms == null) { flush(); return; }
+    seg.push(x(p.t).toFixed(1) + "," + yL(p.ms).toFixed(1));
+  });
+  flush();
+  probes.forEach(function (p) {
+    if (p.ms == null) return;
+    add(el("circle", { cx: x(p.t), cy: yL(p.ms), r: 3.6,
+                       "class": "lat-dot" + (p.state === "degraded" ? " warn" : "") }));
+  });
+
+  // shared x axis
+  add(el("line", { x1: X0, y1: AXIS_Y, x2: X1, y2: AXIS_Y, "class": "axisline" }));
+  var stepChoices = [1, 2, 5, 10, 20, 30, 60, 120, 300, 600];
+  var step = stepChoices[stepChoices.length - 1];
+  for (var si = 0; si < stepChoices.length; si++) {
+    if (T_END / stepChoices[si] <= 8) { step = stepChoices[si]; break; }
+  }
+  for (var t = 0; t <= T_END + 0.001; t += step) {
+    add(el("line", { x1: x(t), y1: AXIS_Y, x2: x(t), y2: AXIS_Y + 5, "class": "axisline" }));
+    text(Math.round(t) + " s", x(t), AXIS_Y + 18, "axis-text", "middle");
+  }
+
+  // numbered event markers: the order is the story
+  (R.markers || []).forEach(function (m, idx) {
+    add(el("line", { x1: x(m.t), y1: RIB_Y, x2: x(m.t), y2: AXIS_Y, "class": "marker-line" }));
+    add(el("circle", { cx: x(m.t), cy: 14, r: 8.5, "class": "marker-dot" }));
+    text(String(idx + 1), x(m.t), 17.5, "marker-num", "middle");
+  });
+
+  // hover: one crosshair reads all three panels at the same instant
+  var cross = add(el("line", { x1: 0, y1: RIB_Y, x2: 0, y2: AXIS_Y, "class": "crosshair",
+                               visibility: "hidden" }));
+  var hit = add(el("rect", { x: X0, y: RIB_Y, width: W, height: AXIS_Y - RIB_Y,
+                             fill: "transparent" }));
+  var tip = document.getElementById("tip");
+  var label = { served: "served", degraded: "degraded", denied: "no response" };
+
+  function nearest(arr, t) {
+    return arr.reduce(function (a, b) {
+      return Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a;
+    });
+  }
+  function move(ev) {
+    var box = svg.getBoundingClientRect();
+    var t = ((ev.clientX - box.left) / box.width * 1080 - X0) / W * T_END;
+    t = Math.max(0, Math.min(T_END, t));
+    cross.setAttribute("visibility", "visible");
+    cross.setAttribute("x1", x(t));
+    cross.setAttribute("x2", x(t));
+    var p = nearest(probes, t);
+    var rows =
+      '<div class="r"><span class="k">t</span><span>' + t.toFixed(1) + ' s</span></div>' +
+      '<div class="r"><span class="k">state</span><span>' + (label[p.state] || p.state) +
+      '</span></div>' +
+      '<div class="r"><span class="k">probe</span><span>' +
+      (p.ms == null ? "timeout" : p.ms + " ms") + '</span></div>';
+    if (conns.length) {
+      var c = nearest(conns, t);
+      rows += '<div class="r"><span class="k">held</span><span>' + c.n + ' conn</span></div>';
+    }
+    tip.innerHTML = rows;
+    tip.classList.add("on");
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var tx = ev.clientX + 14, ty = ev.clientY - th - 10;
+    if (tx + tw > innerWidth - 8) tx = ev.clientX - tw - 14;
+    if (ty < 8) ty = ev.clientY + 16;
+    tip.style.left = tx + "px";
+    tip.style.top = ty + "px";
+  }
+  function leave() {
+    cross.setAttribute("visibility", "hidden");
+    tip.classList.remove("on");
+  }
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("mouseleave", leave);
+  hit.addEventListener("touchmove", function (e) { move(e.touches[0]); }, { passive: true });
+  hit.addEventListener("touchend", leave);
+})();
+</script>
+</body>
+</html>

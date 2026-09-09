@@ -1,0 +1,134 @@
+{
+  "tool": "slowhttptest-ng",
+  "version": "2.0.0-beta2",
+  "schema": 2,
+  "started_utc": "2026-09-09 20:51:19 UTC",
+  "target": {
+    "url": "https://exler.es:443/archive/lel-svad.htm",
+    "proxy": null,
+    "probe_proxy": null,
+    "tls": null
+  },
+  "parameters": {
+    "mode": "slow read (HTTP/2)",
+    "mode_flag": "-X --http2",
+    "connections": 30,
+    "rate_per_second": 50,
+    "duration_seconds": 300,
+    "followup_interval_seconds": 10,
+    "read_interval_seconds": 20,
+    "read_length_bytes": 64,
+    "h2_window_trickle_bytes": 64,
+    "recv_buffer_range_bytes": null,
+    "recv_buffer_requested_bytes": null,
+    "recv_buffer_effective_bytes": null,
+    "recv_buffer_overridden": false,
+    "attack_protocol": "HTTP/2",
+    "probe_protocol": "HTTP/1.1",
+    "reactor": "kqueue",
+    "probe_interval_ms": 2000,
+    "probe_timeout_ms": 5000,
+    "degraded_above_ms": 1000,
+    "user_agent": "Mozilla/5.0 (compatible; slowhttptest-ng/2.0.0-beta2; +https://github.com/shekyan/slowhttptest)"
+  },
+  "result": {
+    "outcome": "inconclusive",
+    "scope": "under slow read (HTTP/2) at 30 connections, availability measured over HTTP/1.1",
+    "summary": "The target was already failing or slow before any load was applied, so whatever happened during the test cannot be attributed to the test. Fix or re-check the baseline and run again.",
+    "baseline_ms": null,
+    "time_to_denial_seconds": null,
+    "unavailable_seconds": 0.00,
+    "unavailable_percent": 0.0,
+    "recovery_seconds": null,
+    "median_served_ms": null,
+    "probes": {
+      "total": 6,
+      "served": 0,
+      "degraded": 6,
+      "denied": 0,
+      "failing_status": 0
+    },
+    "availability": 0.0000,
+    "status_counts": {"200": 9}
+  },
+  "criterion": {
+    "availability_threshold": 0.9500,
+    "fail_on_status": null,
+    "pass": false
+  },
+  "denial_threshold": {
+    "measured": false,
+    "lower_exclusive": null,
+    "upper_inclusive": null,
+    "step": null,
+    "note": "not measured: the connection ramp reaches its target faster than the probe samples it (100 connections per sample), so any threshold read off this run would be an artifact of ramp timing. Use --capacity for a staircase search."
+  },
+  "not_ruled_out": [
+    "Packet loss or congestion between this host and the target could produce the same probe timings as server-side exhaustion.",
+    "Rate limiting, a WAF, or an upstream shedding this client specifically would look identical from here.",
+    "An intermediary (load balancer, CDN, reverse proxy) may have failed or held up rather than the origin.",
+    "Single run — re-run to confirm.",
+    "Delivery was throttled by the HTTP/2 flow-control window (64 B per stream per interval), not by SO_RCVBUF, so the limit was binding on the target rather than subject to local autotuning. Each stalled stream can hold up to one response body on a server that buffers, and a buffering reverse proxy holds the whole upstream response rather than a send window.",
+    "Availability was measured with HTTP/1.1 requests, not over the HTTP/2 path the attack used. A target can serve HTTP/1.1 normally while its HTTP/2 side is exhausted, and the reverse is also possible."
+  ],
+  "capacity_levels": [
+  ],
+  "timeline": {
+    "attack_start_seconds": 5.54,
+    "attack_end_seconds": 17.78,
+    "run_end_seconds": 17.78,
+    "probes": [
+      {"t": 0.00, "state": "degraded", "ms": 1599, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 2.00, "state": "degraded", "ms": 1398, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 4.00, "state": "degraded", "ms": 1537, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 6.00, "state": "degraded", "ms": 1382, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 8.00, "state": "degraded", "ms": 1335, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 10.00, "state": "degraded", "ms": 1413, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 12.01, "state": "degraded", "ms": 1367, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 14.01, "state": "degraded", "ms": 1425, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 16.01, "state": "degraded", "ms": 1483, "status": 200, "status_fails": false, "detail": "slow response: HTTP/1.1 200 OK"}
+    ],
+    "connections": [
+      {"t": 0.53, "held": 0, "target": 0},
+      {"t": 1.10, "held": 0, "target": 0},
+      {"t": 1.70, "held": 0, "target": 0},
+      {"t": 2.24, "held": 0, "target": 0},
+      {"t": 2.74, "held": 0, "target": 0},
+      {"t": 3.28, "held": 0, "target": 0},
+      {"t": 3.80, "held": 0, "target": 0},
+      {"t": 4.33, "held": 0, "target": 0},
+      {"t": 4.84, "held": 0, "target": 0},
+      {"t": 5.34, "held": 0, "target": 0},
+      {"t": 5.92, "held": 0, "target": 30},
+      {"t": 6.43, "held": 0, "target": 30},
+      {"t": 6.95, "held": 0, "target": 30},
+      {"t": 7.49, "held": 0, "target": 30},
+      {"t": 7.99, "held": 0, "target": 30},
+      {"t": 8.54, "held": 0, "target": 30},
+      {"t": 9.10, "held": 0, "target": 30},
+      {"t": 9.64, "held": 0, "target": 30},
+      {"t": 10.20, "held": 0, "target": 30},
+      {"t": 10.70, "held": 0, "target": 30},
+      {"t": 11.21, "held": 0, "target": 30},
+      {"t": 11.72, "held": 0, "target": 30},
+      {"t": 12.24, "held": 0, "target": 30},
+      {"t": 12.74, "held": 0, "target": 30},
+      {"t": 13.26, "held": 0, "target": 30},
+      {"t": 13.78, "held": 0, "target": 30},
+      {"t": 14.34, "held": 0, "target": 30},
+      {"t": 14.91, "held": 0, "target": 30},
+      {"t": 15.43, "held": 0, "target": 30},
+      {"t": 15.94, "held": 0, "target": 30},
+      {"t": 16.44, "held": 0, "target": 30},
+      {"t": 17.01, "held": 0, "target": 30},
+      {"t": 17.59, "held": 0, "target": 30},
+      {"t": 17.78, "held": 0, "target": 0}
+    ],
+    "events": [
+      {"t": 0.00, "state": "degraded", "event": "Probe slowed", "detail": "slow response: HTTP/1.1 200 OK"},
+      {"t": 5.54, "state": "served", "event": "Attack started", "detail": "slow read (HTTP/2) · 30 connections · 50/s"},
+      {"t": 17.78, "state": "served", "event": "Attack stopped", "detail": "giving up: no connection could be established"}
+    ]
+  },
+  "exit_code": 3
+}

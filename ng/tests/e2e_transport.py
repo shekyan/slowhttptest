@@ -559,6 +559,22 @@ def case_reports(tool, mock, port, tmpdir):
         with open(html_path) as fh:
             html = fh.read()
 
+        # The baseline calibration must actually have run. It measures the
+        # target's healthy latency and raises the "degraded" floor to a multiple
+        # of it, so a merely slow target is not called degraded from its first
+        # sample. It sat dead for the tool's whole life: it was invoked one line
+        # before attack_start_s was assigned, and baseline_probes() selects on
+        # `p.t < attack_start_s`, so it always sampled an empty set and returned
+        # without calibrating. Nothing noticed, because the default floor is
+        # reasonable for a fast target -- the damage only showed against a slow
+        # one, where every probe read as degraded before the attack began.
+        if data["result"].get("baseline_ms") is None:
+            return fail("baseline calibration",
+                        "baseline_ms is null: calibration did not run")
+        ok("baseline calibration",
+           f"baseline {data['result']['baseline_ms']} ms, degraded floor "
+           f"{data['parameters']['degraded_above_ms']} ms")
+
         outcome = data["result"]["outcome"]
         if outcome not in ("denied", "degraded", "held", "inconclusive"):
             return fail("report artifacts", f"unknown outcome {outcome!r}")

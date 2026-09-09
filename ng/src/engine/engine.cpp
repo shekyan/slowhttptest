@@ -377,6 +377,9 @@ constexpr const char* kLBlue = "\x1b[1;34m";
 constexpr const char* kGreen = "\x1b[0;32m";
 constexpr const char* kLGreen = "\x1b[1;32m";
 constexpr const char* kLRed = "\x1b[1;31m";
+// Degraded is neither served nor denied, and needs its own colour so the
+// live status can say so at a glance.
+constexpr const char* kLYellow = "\x1b[1;33m";
 constexpr const char* kReset = "\x1b[0m";
 
 // Wall-clock stamp in the classic tool's format, e.g. "Thu Aug 13 12:30:12
@@ -633,6 +636,12 @@ struct Engine::Impl {
   bool logged_tls_ = false;
   std::uint64_t bytes_read_total = 0;
   std::string last_setup_error_;  // kept for the scheme-mismatch hint
+  // The peer answered the ClientHello with a fatal no_application_protocol
+  // alert (RFC 7301 3.2): it does not speak any protocol we offered. Unlike a
+  // refused connect or a timeout, this is a settled answer -- every further
+  // attempt gets the same alert -- so the run stops instead of spending its
+  // duration rediscovering it.
+  bool alpn_refused_ = false;
   std::map<int, long> connect_errnos_;  // errno -> times seen
 
   Impl(const Config& c, Attack& a) : cfg(c), attack(a) {}
@@ -1126,6 +1135,9 @@ struct Engine::Impl {
           ++setup_failed_total;
           if (setup_failed_total == 1 && !c.sock.setup_error().empty()) {
             last_setup_error_ = c.sock.setup_error();
+            if (last_setup_error_.find("no application protocol") !=
+                std::string::npos)
+              alpn_refused_ = true;
             // Print the first one: a systematically failing handshake or a proxy
             // refusing CONNECT would otherwise look like a target that simply
             // drops connections, which is a completely different finding.
@@ -1367,9 +1379,23 @@ struct Engine::Impl {
   // answering in 500 ms under load.
   void calibrate_from_baseline() {
     if (!prober) return;
+    // Every baseline probe that got an answer, not only the ones already called
+    // healthy.
+    //
+    // Sampling Ok alone made this useless for exactly the targets it exists for.
+    // A site whose ordinary response is slower than the default 1000 ms floor
+    // has every baseline probe classified Degraded, so the sample set came back
+    // empty, calibration returned here, and the floor stayed at the default --
+    // leaving the target reading as degraded for the whole run, from before the
+    // attack started. Measured on a real site answering in ~1340 ms: every
+    // probe degraded, in the baseline phase, with nothing attacking it.
+    //
+    // A Degraded probe was answered and its latency is real, so it belongs in
+    // the median. Denied ones are excluded because they have no latency to
+    // contribute, only a timeout.
     std::vector<long> ok;
     for (const auto* p : log.baseline_probes())
-      if (p->state == Availability::Ok && p->ms >= 0) ok.push_back(p->ms);
+      if (p->state != Availability::Denied && p->ms >= 0) ok.push_back(p->ms);
     if (ok.empty()) return;
     std::sort(ok.begin(), ok.end());
     const long median = ok[ok.size() / 2];
@@ -1650,14 +1676,21 @@ struct Engine::Impl {
       std::snprintf(avail, sizeof(avail), "%s", "waiting for first probe");
     } else {
       const auto& p = log.probes.back();
-      const bool up = p.state == Availability::Ok;
+      // Three states, not two. Collapsing Degraded into "NO" reports a target
+      // that answered -- slowly -- as one that did not answer at all, and a
+      // site whose ordinary response time merely exceeds --degraded-above then
+      // reads as down before the attack has even started.
+      const char* word = p.state == Availability::Ok       ? "YES"
+                         : p.state == Availability::Degraded ? "SLOW"
+                                                             : "NO";
+      const char* colour = p.state == Availability::Ok       ? C(kLGreen)
+                           : p.state == Availability::Degraded ? C(kLYellow)
+                                                               : C(kLRed);
       if (p.ms >= 0)
-        std::snprintf(avail, sizeof(avail), "%s%s%s (%ld ms)",
-                      C(up ? kLGreen : kLRed), up ? "YES" : "NO", C(kReset),
-                      p.ms);
+        std::snprintf(avail, sizeof(avail), "%s%s%s (%ld ms)", colour, word,
+                      C(kReset), p.ms);
       else
-        std::snprintf(avail, sizeof(avail), "%s%s%s", C(up ? kLGreen : kLRed),
-                      up ? "YES" : "NO", C(kReset));
+        std::snprintf(avail, sizeof(avail), "%s%s%s", colour, word, C(kReset));
     }
 
     if (!use_colour() || verbose_log()) {
@@ -2032,9 +2065,15 @@ struct Engine::Impl {
         case Phase::Baseline:
           if (!prober || static_cast<int>(log.probes.size()) >= kBaselineProbes ||
               now >= phase_deadline) {
-            calibrate_from_baseline();
             phase = Phase::Attack;
             log.attack_start_s = elapsed(now);
+            // After attack_start_s, not before. baseline_probes() selects on
+            // `p.t < attack_start_s`, so calibrating first asked for the probes
+            // taken before time zero and always got none -- the sample set came
+            // back empty for every target, calibration returned immediately,
+            // and the floor stayed at the 1000 ms default on every run this
+            // tool has ever made.
+            calibrate_from_baseline();
             log.note(log.attack_start_s, Availability::Ok, "Attack started",
                      std::string(log.meta.mode_label) + " · " +
                          std::to_string(cfg.connections) + " connections · " +
@@ -2060,7 +2099,9 @@ struct Engine::Impl {
           // is simply not there (wrong port, nothing listening, every candidate
           // refused), or a setup chain that can never complete.
           if (ready_total == 0 &&
-              connect_failed_total + setup_failed_total >= kGiveUpAfterFailures) {
+              (alpn_refused_ ||
+               connect_failed_total + setup_failed_total >=
+                   kGiveUpAfterFailures)) {
             gave_up = true;
             done = true;
           }
@@ -2369,6 +2410,19 @@ struct Engine::Impl {
           std::fprintf(stderr,
                        "       This is a limit on THIS machine. The target was"
                        " never actually reached, so it is not implicated.\n");
+      } else if (alpn_refused_) {
+        // The server did not fail to answer -- it answered, refusing. Saying
+        // "down or firewalled" about a host that is serving perfectly well over
+        // HTTP/1.1 sends the operator to debug a target that has no fault.
+        std::fprintf(stderr,
+                     "       The target refused the TLS handshake with"
+                     " no_application_protocol (RFC 7301 3.2):\n"
+                     "       it does not offer HTTP/2 over ALPN. This is a"
+                     " healthy server declining a\n"
+                     "       protocol it does not speak, not an outage.\n"
+                     "       Drop --http2 (and --rapid-reset /"
+                     " --continuation-flood, which imply it) to test\n"
+                     "       this target over HTTP/1.1.\n");
       } else {
         std::fprintf(stderr,
                      "       The target may be down, firewalled, on another"
@@ -2386,6 +2440,21 @@ struct Engine::Impl {
                      std::strerror(kv.first));
     }
     scheme_mismatch_hint();
+
+    // Nothing reached the target, so there is nothing to conclude about it. The
+    // probe may well have been served throughout -- it is a separate connection
+    // and does not care that the attack never landed -- and rendering that as
+    // "SERVICE HELD ... PASS" would report a pass for a test that did not run,
+    // three lines under an ERROR saying exactly that.
+    if (ready_total == 0) {
+      std::fprintf(stderr,
+                   "\nNo verdict: no connection ever carried the attack, so"
+                   " nothing about the target's\n"
+                   "behaviour under load was measured. The probe results above"
+                   " describe a target\n"
+                   "that was never put under any.\n");
+      return log.exit_code ? log.exit_code : 3;
+    }
 
     // A run whose event loop stopped working measured nothing trustworthy after
     // that point, so it gets no verdict and no report. Printing "SERVICE HELD"
