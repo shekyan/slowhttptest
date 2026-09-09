@@ -149,6 +149,8 @@ void print_usage() {
       "  -z bytes                bytes to read per read() call (5)\n"
       "  -w bytes                advertised window range, low end (1)\n"
       "  -y bytes                advertised window range, high end (512)\n"
+      "                          both are advisory: the kernel may grant far\n"
+      "                          more, and --window-trickle does not use them\n"
       "  -k num                  repeat the request N times per connection (1)\n"
       "  --http2                 speak HTTP/2; starves both flow-control windows\n"
       "  --h2-streams N          streams pinned per connection with --http2 (100)\n"
