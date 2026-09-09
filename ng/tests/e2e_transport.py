@@ -117,6 +117,16 @@ def port_open(port, tls=False, timeout=2.0):
         return False
 
 
+# Runner speed, exported by CMake from SLOWHTTP_TEST_TIMEOUT_SCALE.
+#
+# Widening ctest's wall-clock budget does not help a case that decides from what
+# settles inside a fixed window. The capacity staircase holds each level for a
+# few seconds and reads the probes it gets; on a slower runner the level that
+# should register as denied can still be ramping when the hold ends, the
+# staircase steps past it, and the bracket comes back one step too high.
+SCALE = max(1, int(os.environ.get("SLOWHTTP_TEST_TIMEOUT_SCALE", "1")))
+
+
 def start_server(mock, port, extra=(), workers=WORKERS):
     log = tempfile.NamedTemporaryFile(mode="w+", suffix=".log", delete=False)
     proc = subprocess.Popen(
@@ -309,7 +319,7 @@ def case_capacity(tool, mock, port):
             "-u", f"http://127.0.0.1:{port}/", "-c", "32", "-r", "50", "-i", "5",
             "-p", "2", "--probe-interval", "1", "--capacity",
             "--capacity-start", "4", "--capacity-step", "4",
-            "--capacity-max", "16", "--capacity-hold", "5"])
+            "--capacity-max", "16", "--capacity-hold", str(5 * SCALE)])
         m = re.search(r"denial threshold: (\d+) < n <= (\d+)", err)
         if not m:
             return fail("capacity bracket", f"no bracket reported: {err[-400:]}")

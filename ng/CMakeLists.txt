@@ -244,6 +244,12 @@ set(SLOWHTTP_TEST_TIMEOUT_SCALE 1 CACHE STRING
 math(EXPR E2E_TIMEOUT_LONG "900 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 math(EXPR E2E_TIMEOUT_SHORT "300 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 
+# The scale is also exported to the tests themselves. Widening only ctest's
+# wall-clock budget does not help a case whose assertion depends on how much
+# settles inside a fixed window: the capacity staircase holds each level for a
+# few seconds and decides from the probes it gets, so on a slower runner the
+# level that should register as denied can still be ramping when the hold ends.
+
 # End-to-end: attack a local vulnerable server and assert it actually saturates.
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
@@ -252,7 +258,8 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_attacks.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py)
-  set_tests_properties(e2e_attacks PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG})
+  set_tests_properties(e2e_attacks PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG}
+    ENVIRONMENT "SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 
   # End-to-end: the HTTP/2 framing a peer actually has to accept.
   add_test(NAME e2e_http2
@@ -260,7 +267,8 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_http2.py
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
-  set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT})
+  set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT}
+    ENVIRONMENT "SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 
   # The same end-to-end run again, forced onto the poll() backend.
   #
@@ -276,7 +284,7 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
   set_tests_properties(e2e_http2_poll PROPERTIES
     LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT}
-    ENVIRONMENT "SLOWHTTP_REACTOR=poll")
+    ENVIRONMENT "SLOWHTTP_REACTOR=poll;SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 
   # End-to-end: TLS, proxying, the availability probe and the report artifacts.
   add_test(NAME e2e_transport
@@ -285,5 +293,6 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_slow_server.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_proxy.py)
-  set_tests_properties(e2e_transport PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG})
+  set_tests_properties(e2e_transport PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_LONG}
+    ENVIRONMENT "SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 endif()
