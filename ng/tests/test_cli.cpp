@@ -240,14 +240,18 @@ static void test_probe_and_report_flags() {
   }
   {
     Config cfg;
-    check(run({"slowhttptest-ng", "--availability-threshold", "0.8"}, cfg) ==
-              CliResult::kRun, "--availability-threshold parses");
+    check(run({"slowhttptest-ng", "--avail-threshold", "0.8"}, cfg) ==
+              CliResult::kRun, "--avail-threshold parses");
     check(cfg.availability_threshold == 0.8, "threshold applied");
   }
   {
     Config cfg;
-    check(run({"slowhttptest-ng", "--availability-threshold", "1.5"}, cfg) ==
-              CliResult::kError, "--availability-threshold rejects > 1");
+    check(run({"slowhttptest-ng", "--avail-threshold", "1.5"}, cfg) ==
+              CliResult::kError, "--avail-threshold rejects > 1");
+    // The beta shipped as --availability-threshold. It stays accepted, and out
+    // of -h, so a script written against the beta is not broken by the rename.
+    check(run({"slowhttptest-ng", "--availability-threshold", "0.8"}, cfg) ==
+              CliResult::kRun, "the pre-rename spelling still parses");
   }
 }
 

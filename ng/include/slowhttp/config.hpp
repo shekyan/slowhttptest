@@ -261,7 +261,7 @@ struct Config {
   std::string report_base = "slowhttptest-ng";  // -o  base name (.html/.json)
   // Fraction of probes that must be served for the JSON criterion to pass. Used
   // for CI gating; it is a stated threshold, not a claim about the target.
-  double availability_threshold = 0.95;  // --availability-threshold
+  double availability_threshold = 0.95;  // --avail-threshold
 
   // --fail-on-status: status codes that additionally fail the criterion. Affects
   // the CI gate only, never the denied/degraded/held outcome.

@@ -137,8 +137,8 @@ void print_usage() {
       "Slow body (-B) options:\n"
       "  -s bytes                Content-Length header value (4096)\n"
       "  -P, --data D            request body; @file reads it from a file\n"
-      "  --chunked               Transfer-Encoding: chunked instead of -s;\n"
-      "                          the terminating chunk is never sent\n"
+      "  --chunked               Transfer-Encoding: chunked instead of -s; the\n"
+      "                          terminating chunk is never sent\n"
       "\n"
       "Range (-R) options:\n"
       "  -a start                left boundary of the ranges in the Range header (5)\n"
@@ -148,22 +148,22 @@ void print_usage() {
       "  -n seconds              interval between read() calls (1)\n"
       "  -z bytes                bytes to read per read() call (5)\n"
       "  -w bytes                advertised window range, low end (1)\n"
-      "  -y bytes                advertised window range, high end (512)\n"
-      "                          both are advisory: the kernel may grant far\n"
-      "                          more, and --window-trickle does not use them\n"
+      "  -y bytes                advertised window range, high end (512); -w/-y are\n"
+      "                          advisory, the kernel may grant far more, and\n"
+      "                          --window-trickle does not use them at all\n"
       "  -k num                  repeat the request N times per connection (1)\n"
       "  --http2                 speak HTTP/2; starves both flow-control windows\n"
       "  --h2-streams N          streams pinned per connection with --http2 (100)\n"
-      "  --window-trickle N      hold h2 stream windows at N bytes, replenishing\n"
-      "                          N per -n interval, instead of SO_RCVBUF (off)\n"
+      "  --window-trickle N      hold h2 stream windows at N bytes, replenishing N per\n"
+      "                          -n interval, instead of SO_RCVBUF (off)\n"
       "  --h2-reset-rate N       streams reset per second per connection (100)\n"
       "\n"
       "Availability probe (the verdict is based on this):\n"
-      "  -p seconds              probe timeout; no answer at all = denied (5)\n"
-      "                          an answer is served or slow, never denied:\n"
-      "                          slow means it replied, late. Late is 5x\n"
-      "                          the target's own baseline latency,\n"
-      "                          measured before the attack starts\n"
+      "  -p seconds              probe timeout; no answer at all = denied (5). An\n"
+      "                          answer is served or slow, never denied: slow means\n"
+      "                          the target replied, late. The bar for late is 5x its\n"
+      "                          own baseline latency, measured before the attack\n"
+      "                          starts\n"
       "  --probe-interval SEC    seconds between probes (2)\n"
       "  --no-probe              do not measure availability; no verdict or report\n"
       "\n"
@@ -177,15 +177,10 @@ void print_usage() {
       "Reporting:\n"
       "  -g                      write a report (self-contained HTML + JSON)\n"
       "  -o base                 report base name; writes base.html and base.json\n"
-      "  --availability-threshold F\n"
-      "                          share of measured time served promptly (0.95).\n"
-      "                          Slow answers count against it without\n"
-      "                          counting as denial, so a target that\n"
-      "                          answers everything late can still fail\n"
-      // "gate" invited the reading that this changes the exit status. It does
-      // not: the exit status says whether the test ran, and the criterion is
-      // reported as .criterion.pass in the JSON, which is what automation gates
-      // on. The man page has always said "criterion"; this line said "gate".
+      "  --avail-threshold F     share of measured time served promptly (0.95). Slow\n"
+      "                          answers count against it without counting as denial,\n"
+      "                          so a target that answers everything late can still\n"
+      "                          fail\n"
       "  --fail-on-status LIST   codes that also fail .criterion.pass, e.g. 5xx\n"
       "\n"
       "Output:\n"
@@ -467,6 +462,9 @@ const struct option kLongOptions[] = {
     {"capacity-step", required_argument, nullptr, kOptCapacityStep},
     {"capacity-max", required_argument, nullptr, kOptCapacityMax},
     {"capacity-hold", required_argument, nullptr, kOptCapacityHold},
+    {"avail-threshold", required_argument, nullptr, kOptAvailabilityThreshold},
+    // The name this shipped under in 2.0.0-beta. Kept working, and kept out of
+    // -h, so scripts written against the beta do not break on the rename.
     {"availability-threshold", required_argument, nullptr,
      kOptAvailabilityThreshold},
     {nullptr, 0, nullptr, 0},
@@ -661,7 +659,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         cfg.capacity.hold = std::chrono::seconds(tmp); break;
       case kOptAvailabilityThreshold:
         if (!parse_fraction(cfg.availability_threshold,
-                            "availability-threshold"))
+                            "avail-threshold"))
           return CliResult::kError;
         break;
 

@@ -334,7 +334,7 @@ The JSON is for CI:
 }
 ```
 
-Gate on `.criterion.pass`, with the bar set by `--availability-threshold`. The
+Gate on `.criterion.pass`, with the bar set by `--avail-threshold`. The
 process exit code stays 0 for any completed measurement — finding a denial is a
 successful test run, not a failed one.
 

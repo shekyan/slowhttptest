@@ -56,6 +56,8 @@ SECTIONS = [
     ("Slow body (-B) options", [
         ("-s bytes", "Content-Length header value (4096)"),
         ("-P, --data D", "request body; @file reads it from a file"),
+        ("--chunked", "Transfer-Encoding: chunked instead of -s; the "
+                      "terminating chunk is never sent"),
     ]),
     ("Range (-R) options", [
         ("-a start", "left boundary of the ranges in the Range header (5)"),
@@ -65,14 +67,23 @@ SECTIONS = [
         ("-n seconds", "interval between read() calls (1)"),
         ("-z bytes", "bytes to read per read() call (5)"),
         ("-w bytes", "advertised window range, low end (1)"),
-        ("-y bytes", "advertised window range, high end (512)"),
+        ("-y bytes", "advertised window range, high end (512); -w/-y are "
+                     "advisory, the kernel may grant far more, and "
+                     "--window-trickle does not use them at all"),
         ("-k num", "repeat the request N times per connection (1)"),
         ("--http2", "speak HTTP/2; starves both flow-control windows"),
         ("--h2-streams N", "streams pinned per connection with --http2 (100)"),
+        ("--window-trickle N", "hold h2 stream windows at N bytes, "
+                               "replenishing N per -n interval, instead "
+                               "of SO_RCVBUF (off)"),
         ("--h2-reset-rate N", "streams reset per second per connection (100)"),
     ]),
     ("Availability probe (the verdict is based on this)", [
-        ("-p seconds", "probe timeout; no response = unavailable (5)"),
+        ("-p seconds", "probe timeout; no answer at all = denied (5). An "
+                       "answer is served or slow, never denied: slow "
+                       "means the target replied, late. The bar for late "
+                       "is 5x its own baseline latency, measured before "
+                       "the attack starts"),
         ("--probe-interval SEC", "seconds between probes (2)"),
         ("--no-probe", "do not measure availability; no verdict or report"),
     ]),
@@ -86,8 +97,12 @@ SECTIONS = [
     ("Reporting", [
         ("-g", "write a report (self-contained HTML + JSON)"),
         ("-o base", "report base name; writes base.html and base.json"),
-        ("--availability-threshold F", "share of probes served for the CI pass (0.95)"),
-        ("--fail-on-status LIST", "codes that also fail the CI gate, e.g. 5xx"),
+        ("--avail-threshold F", "share of measured time served promptly "
+                                "(0.95). Slow answers count against it "
+                                "without counting as denial, so a target "
+                                "that answers everything late can still "
+                                "fail"),
+        ("--fail-on-status LIST", "codes that also fail .criterion.pass, e.g. 5xx"),
     ]),
     ("Output", [
         ("-v level", "verbosity 0-4 (1): fatal, info, error, warn, debug"),

@@ -512,7 +512,7 @@ and
 .Pa base.json .
 Default
 .Pa slowhttptest-ng .
-.It Fl -availability-threshold Ar fraction
+.It Fl -avail-threshold Ar fraction
 Fraction of the measured attack window that must have been served promptly
 for the JSON criterion to pass.
 Default 0.95.
@@ -520,6 +520,10 @@ Default 0.95.
 Time spent slow counts against this without counting as denial, so a target
 that answers every probe late can still fall below the threshold.
 The counters and the summary distinguish the two; this one number does not.
+.Pp
+Accepted as
+.Fl -availability-threshold
+as well, the spelling 2.0.0-beta shipped with.
 .It Fl -fail-on-status Ar list
 Status codes that additionally fail the CI criterion, e.g.
 .Cm 5xx
