@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>slowhttptest-ng — slow read (HTTP/2) against https://exler.es:443/archive/lel-svad.htm</title>
+<title>slowhttptest-ng — slow read against https://exler.es:443/archive/lel-svad.htm</title>
 <style>
 :root {
   --ground:#f6f7f9; --surface:#ffffff; --surface-2:#fbfcfd;
@@ -189,8 +189,8 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
 <div class="wrap">
   <header class="masthead">
     <div class="tool">slowhttptest-ng <span>v2.0.0-beta2</span></div>
-    <div class="runstamp">run 2026-09-09 20:51:19 UTC · 18 s elapsed</div>
-    <h1>slow read (HTTP/2) against https://exler.es:443/archive/lel-svad.htm</h1>
+    <div class="runstamp">run 2026-09-09 21:54:26 UTC · 266 s elapsed</div>
+    <h1>slow read against https://exler.es:443/archive/lel-svad.htm</h1>
   </header>
 
   <section class="verdict" aria-labelledby="verdict-word">
@@ -199,7 +199,7 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
       <div class="verdict-line">
         <svg class="verdict-icon v-unk" width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.2 9.3a2.9 2.9 0 1 1 3.6 2.9v1.9" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/><circle cx="12.4" cy="17.4" r="1.3" fill="currentColor"/></svg>
         <strong class="verdict-word v-unk" id="verdict-word">INCONCLUSIVE</strong>
-        <span class="verdict-sub">under slow read (HTTP/2) at 30 connections, availability measured over HTTP/1.1</span>
+        <span class="verdict-sub">under slow read at 5000 connections</span>
       </div>
       <p>The target was already failing or slow before any load was applied, so whatever happened during the test cannot be attributed to the test. Fix or re-check the baseline and run again.</p>
       <div class="caveat"><b>Not ruled out:</b>
@@ -208,8 +208,7 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
           <li>Rate limiting, a WAF, or an upstream shedding this client specifically would look identical from here.</li>
           <li>An intermediary (load balancer, CDN, reverse proxy) may have failed or held up rather than the origin.</li>
           <li>Single run — re-run to confirm.</li>
-          <li>Delivery was throttled by the HTTP/2 flow-control window (64 B per stream per interval), not by SO_RCVBUF, so the limit was binding on the target rather than subject to local autotuning. Each stalled stream can hold up to one response body on a server that buffers, and a buffering reverse proxy holds the whole upstream response rather than a send window.</li>
-          <li>Availability was measured with HTTP/1.1 requests, not over the HTTP/2 path the attack used. A target can serve HTTP/1.1 normally while its HTTP/2 side is exhausted, and the reverse is also possible.</li>
+          <li>The kernel granted a 27336 B receive buffer against the 102 B requested by -w/-y, so the advertised window was not under this tool's control. Each connection absorbed more of the response than intended before backing up.</li>
         </ul>
       </div>
     </div>
@@ -218,13 +217,13 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
   <section class="stats" aria-label="Key measurements">
     <div class="tile">
       <span class="tile-label">Time to denial</span>
-      <span class="tile-value muted">never</span>
-      <span class="tile-note">service answered throughout</span>
+      <span class="tile-value crit">0 s</span>
+      <span class="tile-note">first probe timeout</span>
     </div>
     <div class="tile">
       <span class="tile-label">Unavailable</span>
-      <span class="tile-value good">0 s</span>
-      <span class="tile-note">0% of the attack window</span>
+      <span class="tile-value crit">237 s</span>
+      <span class="tile-note">99% of the attack window</span>
     </div>
     <div class="tile">
       <span class="tile-label">Denial threshold</span>
@@ -233,15 +232,15 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
     </div>
     <div class="tile">
       <span class="tile-label">Recovery</span>
-      <span class="tile-value muted">n/a</span>
-      <span class="tile-note">service never went down</span>
+      <span class="tile-value muted">not observed</span>
+      <span class="tile-note">still down when watching ended</span>
     </div>
   </section>
 
   <section class="card">
     <div class="card-head">
       <h2>Timeline</h2>
-      <p class="card-note">Three measurements on one shared time axis: whether the service answered, how many connections the tool actually held, and how long a probe took. Inside the attack window: <b>0 served</b>, <b>6 degraded</b>, <b>0 denied</b> of 6 probes.</p>
+      <p class="card-note">Three measurements on one shared time axis: whether the service answered, how many connections the tool actually held, and how long a probe took. Inside the attack window: <b>1 served</b>, <b>0 degraded</b>, <b>48 denied</b> of 49 probes.</p>
     </div>
 
     <div class="chart-scroll" id="chart-wrap">
@@ -262,13 +261,14 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
 
     <div class="legend" role="list">
       <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--ok)"></span> served</span>
-      <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--degraded); background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--surface) 3px 4px)"></span> degraded &gt; 1000 ms</span>
+      <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--degraded); background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--surface) 3px 4px)"></span> degraded &gt; 7405 ms</span>
       <span class="legend-item" role="listitem"><span class="swatch" style="background: var(--denied); background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface) 2px 3px)"></span> no response</span>
     </div>
 
     <div class="markers">
-      <span class="mk"><span class="mk-n">1</span> attack started <time>t=5.5 s</time></span>
-      <span class="mk"><span class="mk-n">2</span> attack stopped <time>t=17.8 s</time></span>
+      <span class="mk"><span class="mk-n">1</span> attack started <time>t=5.6 s</time></span>
+      <span class="mk"><span class="mk-n">2</span> first denial <time>t=6.0 s</time></span>
+      <span class="mk"><span class="mk-n">3</span> attack stopped <time>t=245.6 s</time></span>
     </div>
   </section>
 
@@ -280,8 +280,11 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
         <thead><tr><th scope="col">Time</th><th scope="col">State</th><th scope="col">Event</th><th scope="col">Detail</th></tr></thead>
         <tbody>
           <tr><td class="t">0.0 s</td><td><span class="pill deg">degraded</span></td><td>Probe slowed</td><td>slow response: HTTP/1.1 200 OK</td></tr>
-          <tr><td class="t">5.5 s</td><td><span class="pill ok">served</span></td><td>Attack started</td><td>slow read (HTTP/2) · 30 connections · 50/s</td></tr>
-          <tr><td class="t">17.8 s</td><td><span class="pill ok">served</span></td><td>Attack stopped</td><td>giving up: no connection could be established</td></tr>
+          <tr><td class="t">5.6 s</td><td><span class="pill ok">served</span></td><td>Attack started</td><td>slow read · 5000 connections · 1000/s</td></tr>
+          <tr><td class="t">6.0 s</td><td><span class="pill den">denied</span></td><td>Service denied</td><td>no response within 5000 ms</td></tr>
+          <tr><td class="t">61.1 s</td><td><span class="pill ok">served</span></td><td>Service restored</td><td>HTTP/1.1 200 OK</td></tr>
+          <tr><td class="t">63.8 s</td><td><span class="pill den">denied</span></td><td>Service denied</td><td>no response within 5000 ms</td></tr>
+          <tr><td class="t">245.6 s</td><td><span class="pill ok">served</span></td><td>Attack stopped</td><td>test duration reached</td></tr>
         </tbody>
       </table>
     </div>
@@ -295,7 +298,7 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
     <div class="bracket">
       <span class="bracket-label">Denial threshold</span>
       <span class="bracket-value muted">not measured</span>
-      <span class="bracket-note">not measured: the connection ramp reaches its target faster than the probe samples it (100 connections per sample), so any threshold read off this run would be an artifact of ramp timing. Use --capacity for a staircase search.</span>
+      <span class="bracket-note">not measured: the connection ramp reaches its target faster than the probe samples it (2000 connections per sample), so any threshold read off this run would be an artifact of ramp timing. Use --capacity for a staircase search.</span>
     </div>
   </section>
 
@@ -303,22 +306,25 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
     <div class="card-head"><h2>Test parameters</h2></div>
     <dl class="params">
       <div class="param"><dt>Target</dt><dd>https://exler.es:443/archive/lel-svad.htm</dd></div>
-      <div class="param"><dt>Mode</dt><dd>slow read (HTTP/2) (-X --http2)</dd></div>
-      <div class="param"><dt>Connections</dt><dd>30</dd></div>
-      <div class="param"><dt>Connection rate</dt><dd>50 / s</dd></div>
-      <div class="param"><dt>Duration</dt><dd>300 s</dd></div>
-      <div class="param"><dt>Followup interval</dt><dd>10 s (-i)</dd></div>
-      <div class="param"><dt>Probe protocol</dt><dd>HTTP/1.1 (attack used HTTP/2)</dd></div>
+      <div class="param"><dt>Mode</dt><dd>slow read (-X)</dd></div>
+      <div class="param"><dt>Connections</dt><dd>5000</dd></div>
+      <div class="param"><dt>Connection rate</dt><dd>1000 / s</dd></div>
+      <div class="param"><dt>Duration</dt><dd>240 s</dd></div>
+      <div class="param"><dt>Read interval</dt><dd>1 s (-n)</dd></div>
+      <div class="param"><dt>Read size</dt><dd>5 B (-z)</dd></div>
+      <div class="param"><dt>Advertised window</dt><dd>1–512 B requested</dd></div>
+      <div class="param"><dt>Kernel SO_RCVBUF</dt><dd>27 336 B actual — kernel overrode the requested window, so -w/-y were not in force</dd></div>
       <div class="param"><dt>Probe interval</dt><dd>2.0 s</dd></div>
       <div class="param"><dt>Probe timeout</dt><dd>5.0 s (-p)</dd></div>
-      <div class="param"><dt>Degraded above</dt><dd>1000 ms</dd></div>
-      <div class="param"><dt>Baseline latency</dt><dd>not measured</dd></div>
+      <div class="param"><dt>Degraded above</dt><dd>7405 ms</dd></div>
+      <div class="param"><dt>Baseline latency</dt><dd>1481 ms</dd></div>
       <div class="param"><dt>User agent</dt><dd>Mozilla/5.0 (compatible; slowhttptest-ng/2.0.0-beta2; +https://github.com/shekyan/slowhttptest)</dd></div>
+      <div class="param"><dt>TLS</dt><dd>TLSv1.2 / ECDHE-ECDSA-CHACHA20-POLY1305 / no ALPN</dd></div>
     </dl>
   </section>
 
   <footer>
-    <div>Generated by <code>slowhttptest-ng</code> · exit code <code>3</code> · machine-readable companion carries <code>"outcome": "inconclusive"</code> and <code>"pass": false</code> against an availability threshold of <code>95%</code> (measured 0.0%).</div>
+    <div>Generated by <code>slowhttptest-ng</code> · exit code <code>0</code> · machine-readable companion carries <code>"outcome": "inconclusive"</code> and <code>"pass": false</code> against an availability threshold of <code>95%</code> (measured 1.1%).</div>
     <div>Outcome is one of <code>denied</code>, <code>degraded</code>, <code>held</code>, or <code>inconclusive</code> — the last when the baseline was already unhealthy or too few probes landed to justify a conclusion.</div>
     <div>Run only against systems you are authorized to test.</div>
   </footer>
@@ -328,13 +334,13 @@ a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--accent); out
 
 <script>
 window.RUN = {
-  run_end: 17.78,
-  attack_start: 5.54,
-  attack_end: 17.78,
+  run_end: 265.59,
+  attack_start: 5.59,
+  attack_end: 245.59,
   timeout_ms: 5000,
-  probes: [{t:0.00,state:"degraded",ms:1599},{t:2.00,state:"degraded",ms:1398},{t:4.00,state:"degraded",ms:1537},{t:6.00,state:"degraded",ms:1382},{t:8.00,state:"degraded",ms:1335},{t:10.00,state:"degraded",ms:1413},{t:12.01,state:"degraded",ms:1367},{t:14.01,state:"degraded",ms:1425},{t:16.01,state:"degraded",ms:1483}],
-  conns: [{t:0.53,n:0},{t:1.10,n:0},{t:1.70,n:0},{t:2.24,n:0},{t:2.74,n:0},{t:3.28,n:0},{t:3.80,n:0},{t:4.33,n:0},{t:4.84,n:0},{t:5.34,n:0},{t:5.92,n:0},{t:6.43,n:0},{t:6.95,n:0},{t:7.49,n:0},{t:7.99,n:0},{t:8.54,n:0},{t:9.10,n:0},{t:9.64,n:0},{t:10.20,n:0},{t:10.70,n:0},{t:11.21,n:0},{t:11.72,n:0},{t:12.24,n:0},{t:12.74,n:0},{t:13.26,n:0},{t:13.78,n:0},{t:14.34,n:0},{t:14.91,n:0},{t:15.43,n:0},{t:15.94,n:0},{t:16.44,n:0},{t:17.01,n:0},{t:17.59,n:0},{t:17.78,n:0}],
-  markers: [{t:5.54,label:"attack started"},{t:17.78,label:"attack stopped"}]
+  probes: [{t:0.00,state:"degraded",ms:1481},{t:2.00,state:"degraded",ms:1347},{t:4.00,state:"degraded",ms:1584},{t:6.01,state:"denied",ms:null},{t:11.02,state:"denied",ms:null},{t:16.04,state:"denied",ms:null},{t:21.05,state:"denied",ms:null},{t:26.05,state:"denied",ms:null},{t:31.06,state:"denied",ms:null},{t:36.07,state:"denied",ms:null},{t:41.07,state:"denied",ms:null},{t:46.08,state:"denied",ms:null},{t:51.08,state:"denied",ms:null},{t:56.09,state:"denied",ms:null},{t:61.09,state:"served",ms:2686},{t:63.77,state:"denied",ms:null},{t:68.80,state:"denied",ms:null},{t:73.80,state:"denied",ms:null},{t:78.81,state:"denied",ms:null},{t:83.82,state:"denied",ms:null},{t:88.82,state:"denied",ms:null},{t:93.83,state:"denied",ms:null},{t:98.83,state:"denied",ms:null},{t:103.84,state:"denied",ms:null},{t:108.84,state:"denied",ms:null},{t:113.86,state:"denied",ms:null},{t:118.86,state:"denied",ms:null},{t:123.86,state:"denied",ms:null},{t:128.87,state:"denied",ms:null},{t:133.88,state:"denied",ms:null},{t:138.89,state:"denied",ms:null},{t:143.91,state:"denied",ms:null},{t:148.91,state:"denied",ms:null},{t:153.91,state:"denied",ms:null},{t:158.91,state:"denied",ms:null},{t:163.94,state:"denied",ms:null},{t:168.95,state:"denied",ms:null},{t:173.97,state:"denied",ms:null},{t:178.98,state:"denied",ms:null},{t:183.98,state:"denied",ms:null},{t:188.99,state:"denied",ms:null},{t:194.00,state:"denied",ms:null},{t:199.02,state:"denied",ms:null},{t:204.02,state:"denied",ms:null},{t:209.04,state:"denied",ms:null},{t:214.05,state:"denied",ms:null},{t:219.07,state:"denied",ms:null},{t:224.09,state:"denied",ms:null},{t:229.09,state:"denied",ms:null},{t:234.09,state:"denied",ms:null},{t:239.11,state:"denied",ms:null},{t:244.11,state:"denied",ms:null},{t:249.12,state:"denied",ms:null},{t:254.12,state:"denied",ms:null},{t:259.12,state:"denied",ms:null}],
+  conns: [{t:0.54,n:0},{t:1.10,n:0},{t:1.68,n:0},{t:2.24,n:0},{t:2.74,n:0},{t:3.32,n:0},{t:3.85,n:0},{t:4.35,n:0},{t:4.86,n:0},{t:5.36,n:0},{t:5.88,n:0},{t:6.39,n:0},{t:6.90,n:0},{t:7.40,n:0},{t:7.91,n:0},{t:8.43,n:1},{t:8.94,n:1},{t:9.45,n:5},{t:9.97,n:27},{t:10.50,n:58},{t:11.02,n:73},{t:11.54,n:90},{t:12.05,n:117},{t:12.56,n:222},{t:13.06,n:242},{t:13.57,n:313},{t:14.09,n:338},{t:14.60,n:372},{t:15.11,n:414},{t:15.61,n:442},{t:16.11,n:447},{t:16.62,n:460},{t:17.12,n:476},{t:17.62,n:594},{t:18.13,n:640},{t:18.64,n:979},{t:19.14,n:1057},{t:19.65,n:1154},{t:20.15,n:1256},{t:20.66,n:1347},{t:21.16,n:1342},{t:21.66,n:1348},{t:22.16,n:1356},{t:22.66,n:1367},{t:23.16,n:1368},{t:23.66,n:1369},{t:24.16,n:1369},{t:24.66,n:1369},{t:25.16,n:1369},{t:25.66,n:1369},{t:26.16,n:1369},{t:26.66,n:1369},{t:27.19,n:1369},{t:27.71,n:1369},{t:28.21,n:1369},{t:28.73,n:1425},{t:29.24,n:1499},{t:29.76,n:1560},{t:30.27,n:1593},{t:30.79,n:1617},{t:31.30,n:1623},{t:31.82,n:1640},{t:32.33,n:1657},{t:32.85,n:1667},{t:33.35,n:1684},{t:33.86,n:1707},{t:34.37,n:1715},{t:34.89,n:1733},{t:35.39,n:1745},{t:35.90,n:1752},{t:36.40,n:1763},{t:36.92,n:1772},{t:37.42,n:1784},{t:37.94,n:1793},{t:38.44,n:1802},{t:38.95,n:1863},{t:39.47,n:2247},{t:40.00,n:2281},{t:40.50,n:2281},{t:41.01,n:2281},{t:41.51,n:2324},{t:42.02,n:2433},{t:42.52,n:2433},{t:43.03,n:2433},{t:43.53,n:2425},{t:44.04,n:2425},{t:44.54,n:2358},{t:45.04,n:2358},{t:45.55,n:2337},{t:46.05,n:2337},{t:46.55,n:2305},{t:47.05,n:2305},{t:47.57,n:2282},{t:48.10,n:2282},{t:48.61,n:1990},{t:49.14,n:1990},{t:49.64,n:1682},{t:50.16,n:1721},{t:50.68,n:1597},{t:51.19,n:1615},{t:51.70,n:1540},{t:52.20,n:1545},{t:52.71,n:1568},{t:53.21,n:1580},{t:53.72,n:1573},{t:54.23,n:1593},{t:54.75,n:1601},{t:55.25,n:1632},{t:55.76,n:1642},{t:56.29,n:1656},{t:56.81,n:1666},{t:57.33,n:1674},{t:57.83,n:1684},{t:58.35,n:1700},{t:58.85,n:1711},{t:59.35,n:1719},{t:59.86,n:1710},{t:60.37,n:1746},{t:60.87,n:2013},{t:61.37,n:2094},{t:61.87,n:2087},{t:62.38,n:2087},{t:62.88,n:2087},{t:63.39,n:2087},{t:63.90,n:2087},{t:64.40,n:2087},{t:64.90,n:2085},{t:65.40,n:2085},{t:65.90,n:2084},{t:66.41,n:2084},{t:66.92,n:2084},{t:67.42,n:2084},{t:67.92,n:2084},{t:68.42,n:2084},{t:68.94,n:2084},{t:69.45,n:2084},{t:69.95,n:1942},{t:70.46,n:1966},{t:70.97,n:1766},{t:71.47,n:1804},{t:71.99,n:1829},{t:72.50,n:1854},{t:73.00,n:1742},{t:73.52,n:1751},{t:74.03,n:1767},{t:74.53,n:1777},{t:75.04,n:1790},{t:75.55,n:1804},{t:76.05,n:1821},{t:76.56,n:1828},{t:77.07,n:1841},{t:77.58,n:1850},{t:78.09,n:1860},{t:78.62,n:1867},{t:79.13,n:1877},{t:79.64,n:1889},{t:80.15,n:1897},{t:80.65,n:1903},{t:81.16,n:1943},{t:81.67,n:1935},{t:82.17,n:2012},{t:82.67,n:2155},{t:83.18,n:2267},{t:83.68,n:2259},{t:84.18,n:2259},{t:84.68,n:2259},{t:85.18,n:2259},{t:85.69,n:2259},{t:86.19,n:2259},{t:86.69,n:2259},{t:87.19,n:2259},{t:87.70,n:2259},{t:88.20,n:2259},{t:88.71,n:2259},{t:89.21,n:2259},{t:89.72,n:2259},{t:90.24,n:2259},{t:90.76,n:2205},{t:91.26,n:2205},{t:91.77,n:1890},{t:92.27,n:1917},{t:92.78,n:1971},{t:93.30,n:1997},{t:93.81,n:2016},{t:94.32,n:2034},{t:94.82,n:2050},{t:95.33,n:2057},{t:95.85,n:2074},{t:96.37,n:2081},{t:96.89,n:2085},{t:97.41,n:2097},{t:97.93,n:2106},{t:98.43,n:2113},{t:98.95,n:2118},{t:99.46,n:2126},{t:99.96,n:2135},{t:100.47,n:2145},{t:100.98,n:2150},{t:101.48,n:2156},{t:101.98,n:2146},{t:102.49,n:2199},{t:102.99,n:2431},{t:103.49,n:2574},{t:103.99,n:2574},{t:104.50,n:2574},{t:105.01,n:2574},{t:105.51,n:2574},{t:106.01,n:2574},{t:106.51,n:2574},{t:107.01,n:2574},{t:107.51,n:2574},{t:108.01,n:2574},{t:108.51,n:2574},{t:109.01,n:2574},{t:109.51,n:2574},{t:110.01,n:2574},{t:110.51,n:2574},{t:111.01,n:2574},{t:111.53,n:2574},{t:112.05,n:2574},{t:112.57,n:2574},{t:113.08,n:2461},{t:113.60,n:2492},{t:114.11,n:2384},{t:114.62,n:2411},{t:115.13,n:2420},{t:115.63,n:2438},{t:116.14,n:2438},{t:116.66,n:2439},{t:117.17,n:2450},{t:117.69,n:2459},{t:118.19,n:2473},{t:118.70,n:2477},{t:119.21,n:2491},{t:119.72,n:2497},{t:120.23,n:2507},{t:120.75,n:2515},{t:121.26,n:2521},{t:121.77,n:2533},{t:122.28,n:2540},{t:122.79,n:2548},{t:123.30,n:2575},{t:123.80,n:2612},{t:124.30,n:2937},{t:124.80,n:2937},{t:125.30,n:2928},{t:125.80,n:2928},{t:126.30,n:2928},{t:126.80,n:2928},{t:127.30,n:2928},{t:127.81,n:2928},{t:128.32,n:2928},{t:128.83,n:2928},{t:129.33,n:2928},{t:129.84,n:2928},{t:130.34,n:2928},{t:130.85,n:2928},{t:131.35,n:2928},{t:131.86,n:2928},{t:132.37,n:2928},{t:132.89,n:2928},{t:133.40,n:2928},{t:133.91,n:2928},{t:134.43,n:2595},{t:134.95,n:2637},{t:135.46,n:2670},{t:135.96,n:2690},{t:136.46,n:2696},{t:136.97,n:2714},{t:137.48,n:2722},{t:138.00,n:2726},{t:138.51,n:2733},{t:139.01,n:2745},{t:139.53,n:2747},{t:140.04,n:2747},{t:140.55,n:2762},{t:141.05,n:2773},{t:141.56,n:2784},{t:142.07,n:2789},{t:142.58,n:2792},{t:143.08,n:2801},{t:143.61,n:2806},{t:144.11,n:2813},{t:144.62,n:2869},{t:145.12,n:2948},{t:145.62,n:3279},{t:146.13,n:3279},{t:146.63,n:3279},{t:147.14,n:3279},{t:147.65,n:3279},{t:148.15,n:3279},{t:148.66,n:3279},{t:149.16,n:3279},{t:149.67,n:3279},{t:150.17,n:3279},{t:150.68,n:3279},{t:151.18,n:3279},{t:151.68,n:3279},{t:152.19,n:3279},{t:152.70,n:3279},{t:153.22,n:3279},{t:153.73,n:3279},{t:154.26,n:3294},{t:154.76,n:3314},{t:155.27,n:3006},{t:155.78,n:3028},{t:156.30,n:3050},{t:156.81,n:3051},{t:157.33,n:3061},{t:157.85,n:3071},{t:158.36,n:3072},{t:158.86,n:3077},{t:159.39,n:3086},{t:159.89,n:3086},{t:160.40,n:3091},{t:160.90,n:3092},{t:161.40,n:3093},{t:161.91,n:3098},{t:162.43,n:3117},{t:162.93,n:3122},{t:163.45,n:3129},{t:163.97,n:3137},{t:164.48,n:3154},{t:164.98,n:3195},{t:165.49,n:3476},{t:166.00,n:3582},{t:166.51,n:3609},{t:167.01,n:3609},{t:167.51,n:3609},{t:168.02,n:3719},{t:168.52,n:3723},{t:169.03,n:3723},{t:169.53,n:3723},{t:170.03,n:3723},{t:170.53,n:3723},{t:171.03,n:3723},{t:171.54,n:3723},{t:172.04,n:3723},{t:172.55,n:3723},{t:173.06,n:3723},{t:173.58,n:3723},{t:174.08,n:3723},{t:174.60,n:3725},{t:175.11,n:3749},{t:175.61,n:3754},{t:176.11,n:3768},{t:176.62,n:3420},{t:177.13,n:3427},{t:177.66,n:3450},{t:178.17,n:3460},{t:178.68,n:3460},{t:179.19,n:3464},{t:179.70,n:3469},{t:180.22,n:3471},{t:180.74,n:3475},{t:181.25,n:3477},{t:181.77,n:3486},{t:182.29,n:3497},{t:182.80,n:3502},{t:183.31,n:3506},{t:183.83,n:3514},{t:184.33,n:3519},{t:184.84,n:3567},{t:185.34,n:3567},{t:185.84,n:3644},{t:186.35,n:3773},{t:186.86,n:3931},{t:187.36,n:3931},{t:187.86,n:3931},{t:188.36,n:3931},{t:188.87,n:3931},{t:189.37,n:3931},{t:189.88,n:3931},{t:190.40,n:3931},{t:190.92,n:3931},{t:191.43,n:3931},{t:191.94,n:3955},{t:192.44,n:4025},{t:192.95,n:4061},{t:193.46,n:4061},{t:193.98,n:4061},{t:194.48,n:4061},{t:194.98,n:4070},{t:195.50,n:4080},{t:196.01,n:4099},{t:196.51,n:3761},{t:197.02,n:3771},{t:197.54,n:3768},{t:198.06,n:3781},{t:198.57,n:3715},{t:199.08,n:3720},{t:199.59,n:3721},{t:200.11,n:3724},{t:200.61,n:3730},{t:201.13,n:3740},{t:201.63,n:3750},{t:202.13,n:3756},{t:202.64,n:3760},{t:203.15,n:3771},{t:203.66,n:3829},{t:204.16,n:3835},{t:204.68,n:4095},{t:205.21,n:4095},{t:205.72,n:4115},{t:206.22,n:4115},{t:206.72,n:4205},{t:207.23,n:4205},{t:207.73,n:4205},{t:208.24,n:4228},{t:208.74,n:4335},{t:209.26,n:4335},{t:209.77,n:4335},{t:210.27,n:4389},{t:210.79,n:4468},{t:211.30,n:4468},{t:211.80,n:4468},{t:212.31,n:4468},{t:212.81,n:4468},{t:213.33,n:4537},{t:213.83,n:4537},{t:214.33,n:4539},{t:214.84,n:4539},{t:215.35,n:4551},{t:215.89,n:4644},{t:216.40,n:4701},{t:216.92,n:4457},{t:217.45,n:4498},{t:217.97,n:4494},{t:218.48,n:4494},{t:218.98,n:4494},{t:219.48,n:4494},{t:219.99,n:4697},{t:220.49,n:4775},{t:220.99,n:4775},{t:221.49,n:4775},{t:222.00,n:4775},{t:222.50,n:4775},{t:223.02,n:4759},{t:223.55,n:4759},{t:224.06,n:4725},{t:224.57,n:4764},{t:225.09,n:4815},{t:225.59,n:4849},{t:226.09,n:4899},{t:226.59,n:4934},{t:227.09,n:4949},{t:227.59,n:4981},{t:228.09,n:4981},{t:228.59,n:4981},{t:229.10,n:4985},{t:229.60,n:4985},{t:230.10,n:4990},{t:230.60,n:4990},{t:231.10,n:4990},{t:231.60,n:4990},{t:232.10,n:4990},{t:232.60,n:4990},{t:233.10,n:4990},{t:233.60,n:4990},{t:234.10,n:4990},{t:234.60,n:4990},{t:235.10,n:4898},{t:235.60,n:4898},{t:236.12,n:4774},{t:236.63,n:4796},{t:237.15,n:4773},{t:237.66,n:4814},{t:238.16,n:4824},{t:238.66,n:4988},{t:239.16,n:4984},{t:239.66,n:4984},{t:240.17,n:4917},{t:240.68,n:4917},{t:241.18,n:4967},{t:241.69,n:4976},{t:242.19,n:4922},{t:242.70,n:4925},{t:243.20,n:4991},{t:243.74,n:4991},{t:244.24,n:4991},{t:244.74,n:4991},{t:245.24,n:4991},{t:246.02,n:0},{t:246.52,n:0},{t:247.12,n:0},{t:247.62,n:0},{t:248.22,n:0},{t:248.72,n:0},{t:249.32,n:0},{t:249.82,n:0},{t:250.42,n:0},{t:250.92,n:0},{t:251.52,n:0},{t:252.12,n:0},{t:252.62,n:0},{t:253.22,n:0},{t:253.72,n:0},{t:254.32,n:0},{t:254.83,n:0},{t:255.42,n:0},{t:255.93,n:0},{t:256.52,n:0},{t:257.12,n:0},{t:257.63,n:0},{t:258.22,n:0},{t:258.73,n:0},{t:259.33,n:0},{t:259.83,n:0},{t:260.43,n:0},{t:260.93,n:0},{t:261.53,n:0},{t:262.12,n:0},{t:262.63,n:0},{t:263.23,n:0},{t:263.73,n:0},{t:264.33,n:0},{t:264.83,n:0},{t:265.43,n:0},{t:265.59,n:0}],
+  markers: [{t:5.59,label:"attack started"},{t:6.01,label:"first denial"},{t:245.59,label:"attack stopped"}]
 };
 </script>
 <script>

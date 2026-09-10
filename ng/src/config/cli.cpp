@@ -159,7 +159,11 @@ void print_usage() {
       "  --h2-reset-rate N       streams reset per second per connection (100)\n"
       "\n"
       "Availability probe (the verdict is based on this):\n"
-      "  -p seconds              probe timeout; no response = unavailable (5)\n"
+      "  -p seconds              probe timeout; no answer at all = denied (5)\n"
+      "                          an answer is served or slow, never denied:\n"
+      "                          slow means it replied, late. Late is 5x\n"
+      "                          the target's own baseline latency,\n"
+      "                          measured before the attack starts\n"
       "  --probe-interval SEC    seconds between probes (2)\n"
       "  --no-probe              do not measure availability; no verdict or report\n"
       "\n"
@@ -174,7 +178,10 @@ void print_usage() {
       "  -g                      write a report (self-contained HTML + JSON)\n"
       "  -o base                 report base name; writes base.html and base.json\n"
       "  --availability-threshold F\n"
-      "                          share of probes served for the CI pass (0.95)\n"
+      "                          share of measured time served promptly (0.95).\n"
+      "                          Slow answers count against it without\n"
+      "                          counting as denial, so a target that\n"
+      "                          answers everything late can still fail\n"
       // "gate" invited the reading that this changes the exit status. It does
       // not: the exit status says whether the test ran, and the criterion is
       // reported as .criterion.pass in the JSON, which is what automation gates

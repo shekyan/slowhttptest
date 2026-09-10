@@ -448,8 +448,14 @@ request at a time, timing the first response byte.
 .Bl -tag -width Ds
 .It Fl p Ar seconds
 Probe timeout.
-No response within this counts as unavailable.
+No answer at all within this counts as denied.
 Default 5.
+.Pp
+A probe has three outcomes, not two: served, slow, or denied.
+An answer is never denied \(em slow means the target replied, late.
+The bar for late is five times the target's own baseline latency, measured
+from the probes taken before the attack starts, so a target that is simply
+slow is not reported as degraded from its first sample.
 .It Fl -probe-interval Ar seconds
 Seconds between probes.
 Accepts fractional values.
@@ -507,9 +513,13 @@ and
 Default
 .Pa slowhttptest-ng .
 .It Fl -availability-threshold Ar fraction
-Fraction of the attack window that must have been served for the JSON
-criterion to pass.
+Fraction of the measured attack window that must have been served promptly
+for the JSON criterion to pass.
 Default 0.95.
+.Pp
+Time spent slow counts against this without counting as denial, so a target
+that answers every probe late can still fall below the threshold.
+The counters and the summary distinguish the two; this one number does not.
 .It Fl -fail-on-status Ar list
 Status codes that additionally fail the CI criterion, e.g.
 .Cm 5xx
