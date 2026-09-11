@@ -25,6 +25,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import threading
 import sys
 import tempfile
 import time
@@ -307,6 +308,89 @@ def case_proxy_refuses(tool, mock, proxy_script, cert, key, port, pport):
     finally:
         terminate(proxy)
         terminate(server)
+
+
+# A TLS listener that records, per connection, what ALPN was negotiated and the
+# first bytes the client sent. Enough to tell the probe from the attack without
+# implementing any of HTTP/2.
+def _alpn_spy(port, cert, key, seconds, out):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cert, key)
+    ctx.set_alpn_protocols(["h2", "http/1.1"])
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", port))
+    srv.listen(64)
+    lock = threading.Lock()
+
+    def handle(conn):
+        try:
+            t = ctx.wrap_socket(conn, server_side=True)
+            alpn = t.selected_alpn_protocol()
+            t.settimeout(2)
+            try:
+                first = t.recv(64)
+            except Exception:
+                first = b""
+            with lock:
+                out.append((alpn, bytes(first[:16])))
+            t.close()
+        except Exception:
+            pass
+
+    def accept():
+        while True:
+            try:
+                c, _ = srv.accept()
+                threading.Thread(target=handle, args=(c,), daemon=True).start()
+            except Exception:
+                return
+
+    threading.Thread(target=accept, daemon=True).start()
+    time.sleep(seconds)
+    srv.close()
+
+
+def case_probe_alpn(tool, cert, key, port):
+    """The probe speaks HTTP/1.1, so it must not negotiate h2.
+
+    Regression test for a run that reported every HTTP/2 attack as total denial
+    against a perfectly healthy server. One TLS context was built with
+    alpn_h2 = cfg.http2 and handed to both the attack and the probe, so the
+    probe negotiated h2 and then sent an HTTP/1.1 request on it. A conforming
+    server will not answer that, the probe timed out, and the timeout was
+    recorded as the target denying service -- a verdict of SERVICE DENIED for a
+    target that was serving normally.
+    """
+    seen = []
+    t = threading.Thread(target=_alpn_spy, args=(port, cert, key, 14, seen),
+                         daemon=True)
+    t.start()
+    time.sleep(0.5)
+    subprocess.run([tool, "-X", "--http2", "--h2-streams", "4",
+                    "-c", "2", "-r", "2", "-l", "5", "-n", "2",
+                    "-p", "2", "--probe-interval", "1",
+                    "-u", "https://127.0.0.1:%d/" % port],
+                   capture_output=True, text=True, timeout=90)
+    t.join(timeout=20)
+
+    if not seen:
+        return fail("probe does not inherit h2 ALPN", "no connections observed")
+    # The attack opens with the HTTP/2 preface; the probe opens with a method.
+    guilty = [(a, f) for (a, f) in seen
+              if a == "h2" and (f.startswith(b"GET") or f.startswith(b"HEAD"))]
+    if guilty:
+        return fail("probe does not inherit h2 ALPN",
+                    "a connection negotiated h2 and then sent HTTP/1.1: %s"
+                    % guilty[:2])
+    probes = [(a, f) for (a, f) in seen
+              if f.startswith(b"GET") or f.startswith(b"HEAD")]
+    if not probes:
+        return fail("probe does not inherit h2 ALPN",
+                    "no probe connection seen, so nothing was proven: %s"
+                    % seen[:3])
+    ok("probe does not inherit h2 ALPN",
+       "%d probe connection(s), none on h2" % len(probes))
 
 
 def case_capacity(tool, mock, port):
@@ -637,6 +721,7 @@ def main():
                                  free_port())
             case_proxy_refuses(tool, mock, proxy_script, cert, key, free_port(),
                                free_port())
+            case_probe_alpn(tool, cert, key, free_port())
 
     shutil.rmtree(tmpdir, ignore_errors=True)
     if failures:
