@@ -57,6 +57,19 @@ bool scheme_is(const std::string& url, const char* prefix) {
 }  // namespace
 
 bool Url::prepare(const char* url) {
+  // prepare() appends, so a second call on the same object concatenated the two
+  // URLs: host came back as "first.examplefirst.example" and the path as the
+  // rest of the second URL glued on. Nothing reuses a Url today -- both call
+  // sites run once per run -- so this is a trap rather than a live bug, and it
+  // costs nothing to close.
+  data_.clear();
+  host_.clear();
+  path_.clear();
+  port_str_.clear();
+  port_ = 0;
+  is_ssl_ = false;
+  is_literal_ipv6_ = false;
+
   if(!url)
     return false;
   bool has_port = false;
@@ -163,6 +176,12 @@ Proxy::Proxy()
 }
 
 bool Proxy::prepare(const char* proxy) {
+  // Same append-without-reset as Url::prepare.
+  data_.clear();
+  host_.clear();
+  port_str_.clear();
+  port_ = 0;
+
   if(!proxy)
     return false;
   data_.append(proxy);
