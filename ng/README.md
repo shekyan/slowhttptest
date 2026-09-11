@@ -25,7 +25,7 @@ rationale, and the roadmap.
   compared on one machine.
 - **Attack state-machine interface** (`slowhttp/attack.hpp`) — attacks decide *what
   bytes to dribble and when*; the engine owns all I/O and timers.
-- **Six attack modes**, each wired end-to-end against a real target. Four over
+- **Seven attack modes**, each wired end-to-end against a real target. Four over
   HTTP/1.1 — slow headers (`-H`), slow body (`-B`), slow read (`-X`), range
   (`-R`) — and, over HTTP/2, slow read (`--http2`, CVE-2019-9517), rapid reset
   (`--rapid-reset`, CVE-2023-44487) and the CONTINUATION flood
