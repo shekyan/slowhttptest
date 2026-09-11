@@ -37,7 +37,8 @@ constexpr int kMaxBurst = 2000;
 RapidReset::RapidReset(const Config& cfg)
     : cfg_(cfg),
       tick_(kTick),
-      next_stream_(static_cast<std::size_t>(cfg.connections), 1) {
+      next_stream_(static_cast<std::size_t>(cfg.connections), 1),
+      goaway_(static_cast<std::size_t>(cfg.connections)) {
   const int rate = cfg.h2_reset_rate < 1 ? 1 : cfg.h2_reset_rate;
   // Per connection per tick, rounded up so a rate below the tick frequency
   // still produces one stream rather than none.
@@ -53,6 +54,10 @@ RapidReset::RapidReset(const Config& cfg)
 void RapidReset::on_open(ConnId id) {
   if (id >= 0 && static_cast<std::size_t>(id) < next_stream_.size())
     next_stream_[static_cast<std::size_t>(id)] = 1;
+  // A GOAWAY belongs to the connection that sent it, not to the slot that
+  // outlives it.
+  if (id >= 0 && static_cast<std::size_t>(id) < goaway_.size())
+    goaway_[static_cast<std::size_t>(id)].reset();
 }
 
 std::string RapidReset::burst(ConnId id, int count) {
@@ -102,11 +107,20 @@ Action RapidReset::on_timer(ConnId id) {
   return Action::send(std::move(out), tick_);
 }
 
-Action RapidReset::on_readable(ConnId /*id*/, const char* /*data*/,
-                               std::size_t /*len*/) {
-  // Read and discarded. What the server said does not change what this attack
-  // does next; that it stopped saying anything is noticed by the engine as a
-  // peer close, which is the signal worth having.
+bool RapidReset::goaway_seen(ConnId id) const {
+  return id >= 0 && static_cast<std::size_t>(id) < goaway_.size() &&
+         goaway_[static_cast<std::size_t>(id)].seen();
+}
+
+Action RapidReset::on_readable(ConnId id, const char* data, std::size_t len) {
+  // SETTINGS and the resets coming back are still read and discarded: what the
+  // server says about a stream does not change what this attack does next.
+  // GOAWAY is different in kind -- it is about the connection, not a stream.
+  // Streams opened after it cost the server nothing, and leave the run claiming
+  // a load it is no longer applying.
+  if (id >= 0 && static_cast<std::size_t>(id) < goaway_.size() &&
+      goaway_[static_cast<std::size_t>(id)].feed(data, len))
+    return Action::reconnect();
   return Action::idle();
 }
 

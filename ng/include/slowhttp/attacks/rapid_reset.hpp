@@ -11,6 +11,7 @@
 
 #include "slowhttp/attack.hpp"
 #include "slowhttp/config.hpp"
+#include "slowhttp/http2.hpp"
 
 namespace slowhttp {
 
@@ -59,6 +60,9 @@ class RapidReset : public Attack {
   int per_tick() const { return per_tick_; }
   std::chrono::milliseconds tick() const { return tick_; }
 
+  // Exposed for tests: whether this slot has been told to go away.
+  bool goaway_seen(ConnId id) const;
+
  private:
   // One HEADERS immediately followed by one RST_STREAM, for `count` streams.
   std::string burst(ConnId id, int count);
@@ -68,6 +72,7 @@ class RapidReset : public Attack {
   std::chrono::milliseconds tick_;
   int per_tick_;
   std::vector<std::uint32_t> next_stream_;
+  std::vector<http2::GoawayWatch> goaway_;
   long streams_reset_ = 0;
   long recycled_ = 0;
 };

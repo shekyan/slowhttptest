@@ -24,11 +24,17 @@ ContinuationFlood::ContinuationFlood(const Config& cfg)
     : cfg_(cfg),
       interval_(std::chrono::duration_cast<std::chrono::milliseconds>(
           cfg.interval)),
-      rng_(std::random_device{}()) {
+      rng_(std::random_device{}()),
+      goaway_(static_cast<std::size_t>(cfg.connections)) {
   opening_ = opening();
 }
 
-void ContinuationFlood::on_open(ConnId /*id*/) {}
+void ContinuationFlood::on_open(ConnId id) {
+  // A slot is reused across connections, and a GOAWAY belongs to the
+  // connection that sent it, not to the slot.
+  if (id >= 0 && static_cast<std::size_t>(id) < goaway_.size())
+    goaway_[id].reset();
+}
 
 std::string ContinuationFlood::opening() const {
   std::string out;
@@ -91,11 +97,26 @@ Action ContinuationFlood::on_timer(ConnId /*id*/) {
   return Action::send(fragment(), interval_);
 }
 
-Action ContinuationFlood::on_readable(ConnId /*id*/, const char* /*data*/,
-                                      std::size_t /*len*/) {
-  // Anything arriving here is the server giving up -- a GOAWAY, or a reset of
-  // the stream. Not parsed: the engine already notices the connection closing,
-  // and that is the signal that matters.
+bool ContinuationFlood::goaway_seen(ConnId id) const {
+  return id >= 0 && static_cast<std::size_t>(id) < goaway_.size() &&
+         goaway_[static_cast<std::size_t>(id)].seen();
+}
+
+Action ContinuationFlood::on_readable(ConnId id, const char* data,
+                                      std::size_t len) {
+  // Most of what arrives is the server's own SETTINGS and the ACK of ours, and
+  // still means nothing here. GOAWAY does: the server is done with this
+  // connection, so every frame sent afterwards is discarded by a peer that has
+  // already decided, while the slot goes on counting as one that is carrying
+  // the attack.
+  //
+  // Waiting for the peer to close instead was measurably wrong. A server may
+  // send GOAWAY and hold the connection open to drain it, and this flood then
+  // ran on at full rate for the whole test against a server that had stopped
+  // listening.
+  if (id >= 0 && static_cast<std::size_t>(id) < goaway_.size() &&
+      goaway_[static_cast<std::size_t>(id)].feed(data, len))
+    return Action::reconnect();
   return Action::idle();
 }
 

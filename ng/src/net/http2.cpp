@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2011-2026 Sergey Shekyan and contributors
 #include "slowhttp/http2.hpp"
+#include <cstring>
+#include <algorithm>
 
 namespace slowhttp {
 namespace http2 {
@@ -99,6 +101,40 @@ void hpack_literal(std::string& out, const std::string& name,
   out.push_back('\0');  // literal without indexing, new name
   hpack_string(out, name);
   hpack_string(out, value);
+}
+
+
+void GoawayWatch::reset() {
+  have_ = 0;
+  skip_ = 0;
+  seen_ = false;
+}
+
+bool GoawayWatch::feed(const char* data, std::size_t len) {
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(data);
+  while (len > 0) {
+    if (skip_ > 0) {  // inside a payload: count past it, never store it
+      const std::uint32_t take =
+          static_cast<std::uint32_t>(std::min<std::size_t>(skip_, len));
+      p += take;
+      len -= take;
+      skip_ -= take;
+      continue;
+    }
+    const std::size_t want = static_cast<std::size_t>(9 - have_);
+    const std::size_t take = std::min(want, len);
+    std::memcpy(header_ + have_, p, take);
+    have_ += static_cast<int>(take);
+    p += take;
+    len -= take;
+    if (have_ < 9) return seen_;  // header split across reads; resume next time
+    skip_ = (static_cast<std::uint32_t>(header_[0]) << 16) |
+            (static_cast<std::uint32_t>(header_[1]) << 8) |
+            static_cast<std::uint32_t>(header_[2]);
+    if (header_[3] == static_cast<std::uint8_t>(FrameType::Goaway)) seen_ = true;
+    have_ = 0;
+  }
+  return seen_;
 }
 
 }  // namespace http2

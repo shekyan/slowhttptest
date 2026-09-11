@@ -3,6 +3,7 @@
 #ifndef SLOWHTTP_HTTP2_HPP_
 #define SLOWHTTP_HTTP2_HPP_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -36,6 +37,9 @@ enum class FrameType : std::uint8_t {
   Settings = 0x4,
   WindowUpdate = 0x8,
   Continuation = 0x9,
+  // Never sent by this tool, only recognised on the way in: it is how a server
+  // says it is finished with the connection.
+  Goaway = 0x7,
 };
 
 // Frame flags, per type. END_STREAM and END_HEADERS share a byte position with
@@ -57,6 +61,35 @@ enum : std::uint16_t {
 // above this is a FLOW_CONTROL_ERROR, so this is what "open the window as far
 // as it will go" means.
 constexpr std::uint32_t kMaxWindow = 0x7fffffffu;
+
+// Watches an inbound byte stream for a GOAWAY frame.
+//
+// This tool is otherwise send-only -- no frame parser, no HPACK decoder -- and
+// that stays true: this walks frame *headers* and counts payload bytes past,
+// decoding nothing. Nine bytes of state per connection, no buffering of
+// payloads however large they are.
+//
+// It exists because ignoring GOAWAY was measurably wrong. A server that has had
+// enough may send GOAWAY and keep the connection open to drain it; the flood
+// attacks read that as nothing at all and kept sending at full rate -- measured
+// at 720 bytes after the GOAWAY against 822 with none sent. The load is wasted,
+// and worse, those connections still counted as carrying the attack, so the run
+// overstated what it had actually applied to a server that had already
+// defended itself.
+class GoawayWatch {
+ public:
+  // Feeds received bytes. Returns true once a GOAWAY has been seen, and keeps
+  // returning true; the caller is expected to retire the connection.
+  bool feed(const char* data, std::size_t len);
+  bool seen() const { return seen_; }
+  void reset();
+
+ private:
+  unsigned char header_[9] = {0};
+  int have_ = 0;            // header bytes collected so far
+  std::uint32_t skip_ = 0;  // payload bytes still to walk past
+  bool seen_ = false;
+};
 
 // Appends one frame -- 9-byte header then payload -- to `out`.
 //

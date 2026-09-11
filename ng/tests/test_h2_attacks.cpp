@@ -255,7 +255,13 @@ static void test_continuation_flood() {
   cfg.interval = std::chrono::seconds(3);
 
   slowhttp::ContinuationFlood atk(cfg);
-  check(!atk.wants_read_events(), "the flood does not drain the socket");
+  // It does drain now, and the assertion used to say the opposite. Not reading
+  // is the mechanism of slow read -- the server's buffers fill because this end
+  // will not take the data -- and the flood inherited the flag without needing
+  // it. What it cost was GOAWAY: the engine only hands bytes to an attack that
+  // asks for them, so a server saying "stop" was invisible and the flood ran on
+  // at full rate against a peer that had stopped listening.
+  check(atk.wants_read_events(), "the flood reads, so it can see a GOAWAY");
 
   atk.on_open(0);
   const Action a = atk.on_connect(0);
@@ -309,6 +315,51 @@ static bool headers_contain(const std::string& wire, const std::string& needle) 
         f.payload.find(needle) != std::string::npos)
       return true;
   return false;
+}
+
+// A GOAWAY has to end the connection, and nothing else may.
+static void test_flood_stops_on_goaway() {
+  auto frame = [](unsigned char type, unsigned len) {
+    std::string f;
+    f += static_cast<char>((len >> 16) & 0xff);
+    f += static_cast<char>((len >> 8) & 0xff);
+    f += static_cast<char>(len & 0xff);
+    f += static_cast<char>(type);
+    f += '\0'; f += '\0'; f += '\0'; f += '\0'; f += '\0';
+    f.append(len, 'x');
+    return f;
+  };
+
+  {
+    Config cfg = h2_config();
+    slowhttp::ContinuationFlood atk(cfg);
+    atk.on_open(0);
+    const std::string settings = frame(0x4, 6);
+    check(atk.on_readable(0, settings.data(), settings.size()).kind ==
+              slowhttp::Action::Kind::Idle,
+          "continuation: SETTINGS alone does not end the connection");
+    check(!atk.goaway_seen(0), "continuation: SETTINGS is not a GOAWAY");
+    const std::string bye = frame(0x7, 8);
+    check(atk.on_readable(0, bye.data(), bye.size()).kind ==
+              slowhttp::Action::Kind::Reconnect,
+          "continuation: GOAWAY retires the connection");
+    check(atk.goaway_seen(0), "continuation: the slot records it");
+    atk.on_open(0);
+    check(!atk.goaway_seen(0), "continuation: reopening the slot clears it");
+  }
+  {
+    Config cfg = h2_config();
+    slowhttp::RapidReset atk(cfg);
+    atk.on_open(0);
+    const std::string settings = frame(0x4, 6);
+    check(atk.on_readable(0, settings.data(), settings.size()).kind ==
+              slowhttp::Action::Kind::Idle,
+          "rapid reset: SETTINGS alone does not end the connection");
+    const std::string bye = frame(0x7, 8);
+    check(atk.on_readable(0, bye.data(), bye.size()).kind ==
+              slowhttp::Action::Kind::Reconnect,
+          "rapid reset: GOAWAY retires the connection");
+  }
 }
 
 static void test_h2_carries_caller_headers() {
@@ -435,6 +486,7 @@ int main() {
   test_no_trickle_unchanged();
   test_rapid_reset();
   test_continuation_flood();
+  test_flood_stops_on_goaway();
   test_h2_carries_caller_headers();
   if (failures == 0) std::fprintf(stderr, "h2 attacks: all checks passed\n");
   return failures == 0 ? 0 : 1;

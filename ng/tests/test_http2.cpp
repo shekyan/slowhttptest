@@ -155,6 +155,61 @@ int main() {
            static_cast<unsigned char>(out[5]) == 0x7f);
   }
 
+  // GoawayWatch: the one thing this tool reads rather than writes.
+  //
+  // It walks frame headers and counts payloads past without decoding them, so
+  // there are two ways to be wrong. Missing a GOAWAY leaves a flood running
+  // against a server that has stopped listening -- measured at 720 bytes sent
+  // after one, before this existed. Inventing one out of payload bytes would
+  // tear down a healthy connection instead.
+  {
+    auto frame = [](unsigned char type, unsigned len) {
+      std::string s;
+      s += static_cast<char>((len >> 16) & 0xff);
+      s += static_cast<char>((len >> 8) & 0xff);
+      s += static_cast<char>(len & 0xff);
+      s += static_cast<char>(type);
+      s += '\0'; s += '\0'; s += '\0'; s += '\0'; s += '\0';
+      s.append(len, 'x');
+      return s;
+    };
+
+    {
+      GoawayWatch w;
+      const std::string s = frame(0x4, 6) + frame(0x8, 4);
+      expect("SETTINGS and WINDOW_UPDATE are not GOAWAY",
+             !w.feed(s.data(), s.size()));
+    }
+    {
+      GoawayWatch w;
+      const std::string s = frame(0x4, 6) + frame(0x7, 8) + frame(0x9, 3);
+      expect("GOAWAY found mid-stream", w.feed(s.data(), s.size()));
+    }
+    {  // TLS records split where they like, so a header may straddle reads
+      GoawayWatch w;
+      const std::string s = frame(0x4, 6) + frame(0x7, 8);
+      bool hit = false;
+      for (std::size_t i = 0; i < s.size(); ++i)
+        hit = w.feed(s.data() + i, 1) || hit;
+      expect("GOAWAY found one byte at a time", hit);
+    }
+    {  // a payload full of 0x07 must not read as a GOAWAY header
+      GoawayWatch w;
+      std::string s = frame(0x0, 300);
+      for (std::size_t i = 9; i < s.size(); ++i) s[i] = static_cast<char>(0x07);
+      expect("payload bytes are walked past, not parsed",
+             !w.feed(s.data(), s.size()));
+    }
+    {
+      GoawayWatch w;
+      const std::string s = frame(0x7, 8);
+      w.feed(s.data(), s.size());
+      expect("seen() stays set", w.seen());
+      w.reset();
+      expect("reset() clears it for the next connection", !w.seen());
+    }
+  }
+
   if (failures == 0) std::fprintf(stderr, "http2: all checks passed\n");
   return failures == 0 ? 0 : 1;
 }

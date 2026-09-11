@@ -12,6 +12,7 @@
 
 #include "slowhttp/attack.hpp"
 #include "slowhttp/config.hpp"
+#include "slowhttp/http2.hpp"
 
 namespace slowhttp {
 
@@ -48,7 +49,10 @@ class ContinuationFlood : public Attack {
 
   // Nothing is expected back. The server cannot answer a request whose headers
   // have not finished arriving, which is the whole point.
-  bool wants_read_events() const override { return false; }
+  // Reading costs this attack nothing -- unlike slow read, where not reading is
+  // the mechanism -- and without it a GOAWAY is never seen at all, because the
+  // engine only delivers bytes to attacks that ask for them.
+  bool wants_read_events() const override { return true; }
 
   void on_open(ConnId id) override;
   Action on_connect(ConnId id) override;
@@ -56,6 +60,8 @@ class ContinuationFlood : public Attack {
   Action on_readable(ConnId id, const char* data, std::size_t len) override;
 
   long fragments_sent() const { return fragments_; }
+  // Exposed for tests: whether this slot has been told to go away.
+  bool goaway_seen(ConnId id) const;
   std::size_t opening_size() const { return opening_.size(); }
 
  private:
@@ -68,6 +74,7 @@ class ContinuationFlood : public Attack {
   std::chrono::milliseconds interval_;
   std::mt19937 rng_;
   long fragments_ = 0;
+  std::vector<http2::GoawayWatch> goaway_;
 };
 
 }  // namespace slowhttp
