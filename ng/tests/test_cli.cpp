@@ -180,6 +180,24 @@ static void test_proxy_flags() {
     check(run({"slowhttptest-ng", "-d", "proxy.local:http"}, cfg) == CliResult::kError,
           "-d rejects a non-numeric port");
   }
+  {  // Bracketed IPv6: the brackets are syntax and must not reach the
+     // resolver, which wants ::1, not [::1].
+    Config cfg;
+    check(run({"slowhttptest-ng", "-d", "[::1]:8080"}, cfg) == CliResult::kRun,
+          "-d accepts a bracketed IPv6 endpoint");
+    check(cfg.proxy.host == "::1" && cfg.proxy.port == "8080",
+          "-d strips the brackets from an IPv6 host");
+  }
+  {  // Unbracketed IPv6 has no unambiguous split into host and port.
+    Config cfg;
+    check(run({"slowhttptest-ng", "-d", "::1:8080"}, cfg) == CliResult::kError,
+          "-d rejects an ambiguous unbracketed IPv6 endpoint");
+  }
+  {  // A bracket with no port is not a complete endpoint.
+    Config cfg;
+    check(run({"slowhttptest-ng", "-d", "[::1]"}, cfg) == CliResult::kError,
+          "-d rejects a bracketed host with no port");
+  }
   {  // Through a proxy, a plain-http request must name the absolute URI; through
      // a CONNECT tunnel it must not.
     Config cfg;

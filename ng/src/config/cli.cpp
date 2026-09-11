@@ -308,14 +308,46 @@ bool parse_fraction(double& val, const char* name) {
 // guess, and guessing wrong sends the whole test somewhere silent.
 bool parse_endpoint(ProxyEndpoint& out, char flag) {
   const std::string s = optarg;
-  const auto colon = s.rfind(':');
-  if (colon == std::string::npos || colon == 0 || colon + 1 == s.size()) {
+  std::string host, port;
+  if (!s.empty() && s.front() == '[') {
+    // Bracketed IPv6: [::1]:8080. The brackets are syntax; the resolver wants
+    // the address without them, and leaving them in made getaddrinfo fail on
+    // every IPv6 proxy.
+    const auto rb = s.find(']');
+    if (rb == std::string::npos || rb + 1 >= s.size() || s[rb + 1] != ':') {
+      std::fprintf(stderr,
+                   "Error: -%c expects [ipv6]:port (got '%s')\n", flag, optarg);
+      return false;
+    }
+    host = s.substr(1, rb - 1);
+    port = s.substr(rb + 2);
+  } else {
+    const auto colon = s.rfind(':');
+    if (colon == std::string::npos || colon == 0 || colon + 1 == s.size()) {
+      std::fprintf(stderr,
+                   "Error: -%c expects host:port (got '%s')\n", flag, optarg);
+      return false;
+    }
+    // More than one colon and no brackets is an unbracketed IPv6 address, where
+    // there is no way to tell the address from the port -- reject it rather than
+    // silently split at the last colon and resolve garbage.
+    if (s.find(':') != colon) {
+      std::fprintf(stderr,
+                   "Error: -%c: '%s' has several colons; an IPv6 address must be"
+                   " bracketed, e.g. [::1]:8080\n",
+                   flag, optarg);
+      return false;
+    }
+    host = s.substr(0, colon);
+    port = s.substr(colon + 1);
+  }
+  if (host.empty() || port.empty()) {
     std::fprintf(stderr,
                  "Error: -%c expects host:port (got '%s')\n", flag, optarg);
     return false;
   }
-  out.host = s.substr(0, colon);
-  out.port = s.substr(colon + 1);
+  out.host = host;
+  out.port = port;
   for (char c : out.port) {
     if (c < '0' || c > '9') {
       std::fprintf(stderr, "Error: -%c port '%s' is not a number\n", flag,
