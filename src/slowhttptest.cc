@@ -400,9 +400,17 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
     }
     csv_report_.append(csv_file_name);
     html_report_.append(html_file_name);
-    char test_info[1024];
+    // Sized to its inputs. The cookie and extra header below can each be up
+    // to 8 KB (raised so a JWT is not truncated), and sprintf into a fixed
+    // 1 KB buffer smashed the stack the moment either was large -- reachable
+    // with -g and a real cookie.
+    const std::size_t info_cap =
+        2048 + std::strlen(cookie) + std::strlen(header) +
+        std::strlen(proxy_type_ == eNoProxy ? " " : proxy_.getData()) +
+        verb_.size();
+    std::vector<char> test_info(info_cap, 0);
     if(eSlowRead != test_type_) { 
-      sprintf(test_info,"<table class='slow_results' border='0'>"
+      snprintf(test_info.data(), info_cap, "<table class='slow_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
@@ -432,7 +440,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           proxy_type_ == eNoProxy ? " " : proxy_.getData()
           );
     } else {
-      sprintf(test_info,"<table class='slow_results' border='0'>"
+      snprintf(test_info.data(), info_cap, "<table class='slow_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
           "<tr><td><b>Test type</b></td><td>%s</td></tr>"
           "<tr><td><b>Number of connections</b></td><td>%d</td></tr>"
@@ -463,8 +471,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           );
     }
 
-    dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(), 
-        test_info));
+    dumpers_.push_back(new HTMLDumper(html_file_name, base_uri_.getData(),
+        test_info.data()));
     dumpers_.push_back(new CSVDumper(csv_file_name,
         "Seconds,Closed,Pending,Connected,Service Available\n"));
     for (uint i = 0; i < dumpers_.size(); ++i) {
@@ -851,8 +859,13 @@ bool SlowHTTPTest::run_test() {
 #else
         if(FD_ISSET(probe_socket_->get_sockfd(), &readfds)) {
 #endif
-          ret = probe_socket_->recv_slow(buf, kBufSize);
-          buf[ret] = '\0';
+          // One short of the buffer, so there is always room for the
+          // terminator, and terminate only on a real read. recv_slow
+          // returns -1 on EAGAIN or error -- routine on this
+          // non-blocking socket -- and buf[-1] = 0 wrote one byte before
+          // the buffer every time the probe woke with no data ready.
+          ret = probe_socket_->recv_slow(buf, kBufSize - 1);
+          if(ret >= 0) buf[ret] = '\0';
           if(ret < 0 && errno != EAGAIN) {
             is_dosed_ = true;
             slowlog(LOG_DEBUG, "%s: probe socket %d closed: %s\n", __FUNCTION__,
@@ -920,7 +933,13 @@ bool SlowHTTPTest::run_test() {
 #else
           if(FD_ISSET(sock_[i]->get_sockfd(), &readfds)) { // read
 #endif
-            ret = sock_[i]->recv_slow(buf, (eSlowRead == test_type_ ? read_len_ : kBufSize));
+            // Cap the read at one below the buffer. -z (read_len_) has no
+            // upper bound, so an oversized value read past buf, and even a
+            // full kBufSize read left the later buf[ret] one past the end.
+            ret = sock_[i]->recv_slow(buf,
+                (eSlowRead == test_type_
+                     ? (read_len_ < kBufSize ? read_len_ : kBufSize - 1)
+                     : kBufSize - 1));
             if(ret <= 0 && errno != EAGAIN) {
               sock_[i]->set_state(eClosed);
               slowlog(LOG_DEBUG, "%s: socket %d closed: %s\n", __FUNCTION__,
