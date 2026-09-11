@@ -25,6 +25,7 @@
 
 #include <errno.h>
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -51,7 +52,9 @@
 #include "text-generator.h"
 
 // Global flag to indicate if we need to run.
-extern int g_running;
+// Written from a signal handler, so it has to be sig_atomic_t: anything
+// wider may be updated non-atomically and read half-written here.
+extern volatile sig_atomic_t g_running;
 
 namespace {
 static const int kBufSize = 65537;
@@ -148,12 +151,24 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       window_upper_limit_(window_upper_limit),
       is_dosed_(false),
       proxy_type_(proxy_type),
-      debug_level_(debug_level) {
+      debug_level_(debug_level),
+      // Both were left uninitialised. ~SlowHTTPTest does
+      // if (addr_) freeaddrinfo(addr_), so any failure in init() before
+      // the resolve -- a bad URL is enough -- freed whatever the stack
+      // happened to hold.
+      addr_(NULL),
+      probe_proxy_addr_(NULL) {
 }
 
 SlowHTTPTest::~SlowHTTPTest() {
   if (addr_) {
     freeaddrinfo(addr_);
+    addr_ = NULL;
+  }
+  // Resolved for -e and never released.
+  if (probe_proxy_addr_) {
+    freeaddrinfo(probe_proxy_addr_);
+    probe_proxy_addr_ = NULL;
   }
 
   for(std::vector<StatsDumper*>::iterator i = dumpers_.begin();
@@ -716,9 +731,13 @@ bool SlowHTTPTest::run_test() {
           (seconds_passed_ - probe_taken >= probe_timeout_)) {
         delete probe_socket_;
         probe_socket_ = NULL;
+#ifdef HAVE_POLL
+        // fds is declared only in the poll() build; this block sat outside
+        // the guard, so a select() build did not compile at all.
         fds[0].fd = -1;
         fds[0].events = 0;
         fds[0].revents = 0;
+#endif
         is_dosed_ = true;
       }
     }

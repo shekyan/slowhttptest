@@ -119,9 +119,17 @@ bool SlowSocket::init(addrinfo* addr, const char* host, const bool isSSL, int& m
       set_window_size(window_size_);
     }
     slowlog(LOG_DEBUG, "socket %d created \n", sockfd_);
-    if((connect_initiated = isSSL ? connect_ssl(addr, host) : connect_plain(addr))) {
+    // res, not addr. The loop walks the resolved list and the socket above
+    // is created from res->ai_family -- but the connect used the first
+    // record every time, so fallback never happened, and a mixed A/AAAA
+    // result could hand an AF_INET socket an AF_INET6 address.
+    if((connect_initiated = isSSL ? connect_ssl(res, host) : connect_plain(res))) {
       break; // found right addrinfo
     }
+    // This attempt failed and the next iteration overwrites sockfd_, so the
+    // descriptor has to go back now or every fallback leaks one.
+    ::close(sockfd_);
+    sockfd_ = -1;
   }
   if(!addr_found) {
     slowlog(LOG_FATAL, "addrinfo corrupted/null\n");

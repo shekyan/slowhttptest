@@ -147,10 +147,10 @@ static bool copy_opt(char *dst, size_t cap, const char *src) {
 }
 
 // global flag to indicite if we need to run
-int g_running = true;
+volatile sig_atomic_t g_running = 1;
 
 void int_handler(int param) {
-  g_running = false;  
+  g_running = 0;
 }
 
 using slowhttptest::slowlog_init;
