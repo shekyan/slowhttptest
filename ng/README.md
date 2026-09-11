@@ -45,7 +45,7 @@ rationale, and the roadmap.
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
   -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`,
-  `--window-trickle` and `--expect-continue`.
+  `--window-trickle`, `--expect-continue` and `--slow-tls`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real
@@ -645,11 +645,11 @@ resident memory.
 > lands on the server's send path; the effective granularity is a TLS record
 > rather than `-z` bytes.
 
-## The five modes, and why each is distinct
+## The six modes, and why each is distinct
 
 Each mode attacks a different point in the request lifecycle, and — importantly —
 each is stopped by a *different* timeout. That is the practical reason to keep all
-five rather than collapsing them: a server hardened against one can be wide open
+six rather than collapsing them: a server hardened against one can be wide open
 to the next.
 
 | Mode | What is withheld | Server blocks in | Defense |
@@ -659,6 +659,7 @@ to the next.
 | `-X` slow read | acknowledgement of the response | sending | **send** timeout |
 | `-R` range | nothing — it is amplification | CPU/memory | patched since 2011 |
 | `--expect-continue` | the body the server *agreed* to wait for | reading body | body timeout **after the interim response** |
+| `--slow-tls` | the end of the ClientHello | the TLS handshake | **handshake** timeout — on a terminator |
 
 `tests/e2e_attacks.py` asserts exactly this, including the negative results: a
 header timeout demonstrably does **not** defend against slow body or slow read,
@@ -678,10 +679,32 @@ python3 tests/mock_slow_server.py 8080 --workers 4
 # one that offered to wait. Nothing is dribbled and nothing is malformed.
 ./build/slowhttptest-ng --expect-continue -u http://127.0.0.1:8080/ -c 12 -l 60
 
+# slow TLS: the handshake never completes, so no HTTP timeout is ever reached
+./build/slowhttptest-ng --slow-tls -u https://127.0.0.1:8443/ -c 12 -i 5 -l 60
+
 # range: a 13 KB request naming 2002 overlapping ranges
 python3 tests/mock_slow_server.py 8080 --workers 4 --body-bytes 1000000
 ./build/slowhttptest-ng -R -u http://127.0.0.1:8080/ -c 4 -a 5 -b 2000 -l 30
 ```
+
+> **On slow TLS:** whether this reaches a clock the HTTP modes cannot depends on
+> what terminates TLS, and it is worth being precise about. Measured against
+> nginx 1.31 with `client_header_timeout 10s`:
+>
+> | terminator | unfinished ClientHello | unfinished headers (TLS completed) |
+> |---|---|---|
+> | `http {}` server | cut at **10.0s** | cut at **10.0s** |
+> | `stream {}` server (TLS terminator) | held **60.1s** | cut at **10.0s** |
+>
+> nginx's http server has no separate handshake timeout at all — it bounds the
+> handshake with `client_header_timeout`, the same setting slow headers runs
+> into, so there is no advantage. Its `stream` module has `ssl_handshake_timeout`
+> (default 60s) and that clock is genuinely separate. The mode is therefore
+> aimed at TLS terminators and L4 load balancers, where the handshake completes
+> somewhere other than where the request timeouts live — the common shape of a
+> modern deployment, and the layer whose timeouts are least often revisited.
+> Against an origin serving its own TLS it may simply measure the same clock
+> twice, and the run will look like slow headers because it is.
 
 > **On the range attack:** CVE-2011-3192 was patched in 2011, so against a current
 > server this is a regression check ("is this still vulnerable?"), not a live

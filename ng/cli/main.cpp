@@ -6,6 +6,7 @@
 #include "slowhttp/attacks/range.hpp"
 #include "slowhttp/attacks/slow_body.hpp"
 #include "slowhttp/attacks/expect_continue.hpp"
+#include "slowhttp/attacks/slow_tls.hpp"
 #include "slowhttp/attacks/slow_headers.hpp"
 #include "slowhttp/attacks/slow_read.hpp"
 #include "slowhttp/attacks/slow_read_h2.hpp"
@@ -60,6 +61,16 @@ int main(int argc, char** argv) {
                      "  expect 100-continue: %zu byte request announcing a"
                      " %d byte body that never starts\n",
                      ec->request_size(), cfg.content_length);
+      break;
+    }
+    case slowhttp::Mode::SlowTls: {
+      auto* st = new slowhttp::SlowTls(cfg);
+      attack.reset(st);
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  slow TLS handshake: a %zu byte ClientHello declared and"
+                     " dribbled, never completed\n",
+                     st->declared_size());
       break;
     }
     case slowhttp::Mode::Continuation: {

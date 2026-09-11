@@ -11,7 +11,7 @@
 namespace slowhttp {
 
 enum class Mode { SlowHeaders, SlowBody, SlowRead, Range, RapidReset,
-                 Continuation, ExpectContinue };
+                 Continuation, ExpectContinue, SlowTls };
 
 const char* mode_name(Mode m);
 
@@ -280,6 +280,10 @@ struct Config {
     switch (mode) {
       case Mode::SlowBody: return "POST";
       case Mode::ExpectContinue: return "POST";
+      // No HTTP request is ever sent under --slow-tls, but effective_verb()
+      // has no way to say "none" and callers would have to special-case it.
+      // The banner suppresses the line instead.
+      case Mode::SlowTls: return "GET";
       case Mode::Range:    return "HEAD";
       case Mode::RapidReset: return "GET";
       case Mode::Continuation: return "GET";

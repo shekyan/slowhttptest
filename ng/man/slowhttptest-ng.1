@@ -114,6 +114,41 @@ At the end of the run
 reports how many connections were invited to send a body and how many were
 answered outright, because an intermediary may answer the expectation itself
 and that changes what was measured.
+.It Fl -slow-tls
+Dribble a ClientHello that never finishes, holding the TLS handshake itself.
+Requires an
+.Sy https
+URL: the mode speaks the record layer by hand to a plain socket, so there has
+to be a TLS listener on the other end.
+.Pp
+A single handshake record is opened, its full length declared, and its body
+delivered
+.Fl x
+bytes per
+.Fl i
+interval, stopping one byte short forever.
+Nothing is malformed, and a server cannot tell this from a genuinely slow
+client.
+.Pp
+Whether this reaches a clock the HTTP modes cannot depends on what terminates
+TLS.
+Measured against nginx 1.31 with
+.Sy client_header_timeout
+at 10s: an
+.Sy http
+server has no separate handshake timeout and cut the unfinished ClientHello at
+10.0s, exactly as it cut unfinished headers.
+A
+.Sy stream
+server, nginx as a TLS terminator, has
+.Sy ssl_handshake_timeout
+with a 60s default and held the same connection for 60.1s.
+The mode is therefore aimed at TLS terminators and L4 load balancers, where the
+handshake completes somewhere other than where the request timeouts live;
+against an origin serving its own TLS it may measure the same clock twice.
+.Pp
+The availability probe still performs a real handshake, so the control is
+unaffected.
 .El
 .Pp
 Three further modes are specific to HTTP/2 and are described under
@@ -176,6 +211,10 @@ Default 10.
 .It Fl x Ar bytes
 Maximum length of each randomized name/value pair of followup data.
 Default 32.
+Under
+.Fl -slow-tls
+it is instead the number of ClientHello bytes released per interval; the
+hello is large enough that no practical run can drain it either way.
 .It Fl s Ar bytes
 Value of the
 .Sy Content-Length

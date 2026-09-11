@@ -393,6 +393,130 @@ def case_probe_alpn(tool, cert, key, port):
        "%d probe connection(s), none on h2" % len(probes))
 
 
+def _hello_spy(port, cert, key, seconds, seen):
+    """A TLS listener that records what each connection delivered.
+
+    Feeds the incoming bytes to OpenSSL through a memory BIO instead of a
+    socket, because the question is not whether the handshake finished -- under
+    TLS 1.3 it could not finish anyway, since the client's Finished never comes
+    -- but whether the ClientHello was ever *complete*. OpenSSL answers that by
+    writing a ServerHello into the outgoing BIO, and by staying silent until
+    then. Outgoing bytes therefore mean the hello arrived in full, which is the
+    one thing this mode must never do.
+    """
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cert, key)
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", port))
+    srv.listen(64)
+    srv.settimeout(0.5)
+    conns = []
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        try:
+            c, _ = srv.accept()
+        except (socket.timeout, OSError):
+            c = None
+        if c is not None:
+            c.setblocking(False)
+            inc, out = ssl.MemoryBIO(), ssl.MemoryBIO()
+            conns.append([c, ctx.wrap_bio(inc, out, server_side=True), inc, out,
+                          0, False])
+        for entry in conns:
+            sock, obj, inc, out, total, replied = entry
+            try:
+                data = sock.recv(65536)
+            except (BlockingIOError, OSError):
+                data = None
+            if data:
+                entry[4] = total + len(data)
+                inc.write(data)
+                try:
+                    obj.do_handshake()
+                except ssl.SSLWantReadError:
+                    pass
+                except ssl.SSLError:
+                    pass
+                if out.pending:
+                    entry[5] = True
+                    out.read()
+        time.sleep(0.1)
+    for sock, _, _, _, total, replied in conns:
+        seen.append((total, replied))
+        try:
+            sock.close()
+        except OSError:
+            pass
+    srv.close()
+
+
+def case_slow_tls(tool, cert, key, port):
+    """--slow-tls must dribble a ClientHello and never complete it.
+
+    Two failure modes this rules out. If the hello were completed, the server
+    would answer with a ServerHello and the connection would leave the
+    handshake -- the mode would be testing an ordinary TLS connection. If the
+    tool sent nothing at all, every assertion about "holding" would be vacuous,
+    so the bytes actually delivered are checked too.
+    """
+    seen = []
+    conns = 6
+    t = threading.Thread(target=_hello_spy,
+                         args=(port, cert, key, 26, seen), daemon=True)
+    t.start()
+    time.sleep(0.5)
+    # -x is deliberately large enough that the run *could* deliver the whole
+    # hello. With a small -x the 16 KB hello cannot drain inside the run, and
+    # then "no ServerHello" is true whether or not the last byte is withheld --
+    # the test would pass against a tool that completes the handshake.
+    rc, err = run_tool(tool, ["--slow-tls", "-u", "https://127.0.0.1:%d/" % port,
+                              "-c", str(conns), "-i", "1", "-x", "2000",
+                              "-l", "20", "--no-probe"], timeout=90)
+    t.join(timeout=30)
+
+    if not seen:
+        return fail("slow tls holds the handshake", "no connections observed")
+    replied = [n for (n, r) in seen if r]
+    if replied:
+        return fail("slow tls holds the handshake",
+                    "%d connection(s) got a ServerHello, so the ClientHello was "
+                    "delivered in full" % len(replied))
+    # A record header alone is 9 bytes. Requiring well past that proves the
+    # dribble ran rather than the connection merely opening and stalling.
+    # The hello must have been delivered to the very end, or "it never
+    # completed" says nothing: an undrained hello cannot complete either way.
+    drained = [n for (n, _) in seen if n >= 16000]
+    if not drained:
+        return fail("slow tls holds the handshake",
+                    "no connection got near the end of the hello, so stopping "
+                    "short was never actually tested: %s" % seen[:4])
+
+    ready = summary_counter(err, "attack_ready")
+    closed = summary_counter(err, "peer_closed")
+    if ready != conns or closed != 0:
+        return fail("slow tls holds the handshake",
+                    "attack_ready=%s peer_closed=%s, wanted %d and 0"
+                    % (ready, closed, conns))
+    if "TLS:" not in err or "refused" not in err:
+        return fail("slow tls holds the handshake",
+                    "the run did not report whether the handshake was refused")
+    ok("slow tls holds the handshake",
+       "%d connection(s), %d of %d bytes delivered, no ServerHello"
+       % (len(seen), max(n for (n, _) in seen), 16389))
+
+
+def case_slow_tls_refuses_cleartext(tool, port):
+    """An http:// URL has nothing to hold, and the tool must say so."""
+    rc, err = run_tool(tool, ["--slow-tls", "-u", "http://127.0.0.1:%d/" % port,
+                              "-c", "1", "-l", "2"], timeout=30)
+    if rc == 0 or "needs an https" not in err:
+        return fail("slow tls refuses cleartext",
+                    "rc=%s, stderr did not explain the refusal: %r"
+                    % (rc, err[:200]))
+    ok("slow tls refuses cleartext")
+
+
 def case_capacity(tool, mock, port):
     """The staircase must bracket the threshold around the server's worker count."""
     server, log = start_server(mock, port, workers=8)
@@ -722,6 +846,8 @@ def main():
             case_proxy_refuses(tool, mock, proxy_script, cert, key, free_port(),
                                free_port())
             case_probe_alpn(tool, cert, key, free_port())
+            case_slow_tls(tool, cert, key, free_port())
+            case_slow_tls_refuses_cleartext(tool, free_port())
 
     shutil.rmtree(tmpdir, ignore_errors=True)
     if failures:

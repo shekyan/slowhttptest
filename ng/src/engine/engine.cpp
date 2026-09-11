@@ -1097,7 +1097,10 @@ struct Engine::Impl {
     if (!logged_tls_ && cfg.target.tls()) {
       logged_tls_ = true;
       log.meta.tls_description = c.sock.tls_description();
-      if (chatty())
+      // Empty under --slow-tls: the socket is plain and the handshake this
+      // would describe is the thing being left unfinished. Printing the label
+      // with nothing after it claimed a negotiation that never happened.
+      if (chatty() && !log.meta.tls_description.empty())
         std::fprintf(stderr, "  TLS: %s\n", log.meta.tls_description.c_str());
     }
     report_advertised_window(c);
@@ -1743,6 +1746,10 @@ struct Engine::Impl {
   }
 
   bool build_setup_plan(std::string& err) {
+    // Slow TLS speaks the record layer itself and must reach a plain socket:
+    // letting the library handshake first would complete the very thing the
+    // mode exists to leave unfinished. The proxy tunnel, if any, is still
+    // built below -- the handmade records go through it like any other bytes.
     if (cfg.target.tls()) {
       if (!TlsContext::available()) {
         // The wording is load-bearing: tests and CI grep for "no TLS backend"
@@ -1755,8 +1762,12 @@ struct Engine::Impl {
       }
       tls = TlsContext::create(/*verify_peer=*/false, err, cfg.http2);
       if (!tls) return false;
-      plan.tls = tls;
-      plan.sni = cfg.target.host;
+      // The context is still built under --slow-tls: the availability probe
+      // needs it. Only the attack's own sockets skip it -- see above.
+      if (cfg.mode != Mode::SlowTls) {
+        plan.tls = tls;
+        plan.sni = cfg.target.host;
+      }
     }
     if (cfg.proxy.enabled() && cfg.target.tls()) {
       const std::string authority = cfg.target.authority();
@@ -1781,6 +1792,8 @@ struct Engine::Impl {
         log.meta.mode_flag = "--continuation-flood"; break;
       case Mode::ExpectContinue:
         log.meta.mode_flag = "--expect-continue"; break;
+      case Mode::SlowTls:
+        log.meta.mode_flag = "--slow-tls"; break;
     }
     // A flag that does not reproduce the run is worse than none: -X alone
     // describes a different attack from the one that was carried out.
@@ -1988,7 +2001,10 @@ struct Engine::Impl {
       row("test type:", "%s", type.c_str());
       row("number of connections:", "%d", cfg.connections);
       row("URL:", "%s", log.meta.target_url.c_str());
-      row("verb:", "%s", cfg.effective_verb().c_str());
+      // Not under --slow-tls: no HTTP request is ever sent, and naming a verb
+      // implied one was.
+      if (cfg.mode != Mode::SlowTls)
+        row("verb:", "%s", cfg.effective_verb().c_str());
       row("resolved address:", "%s (%zu candidate%s)",
           ResolvedAddr::describe(current_addr()).c_str(),
           addr.candidates().size(),

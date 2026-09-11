@@ -29,6 +29,10 @@ SECTIONS = [
         ("--expect-continue", "send Expect: 100-continue and then no body "
                               "at all, holding whatever the server "
                               "committed when it agreed to receive one"),
+        ("--slow-tls", "dribble a ClientHello that never finishes, holding "
+                       "the TLS handshake itself; needs an https:// URL. "
+                       "Separate from the HTTP timeouts on a TLS terminator, "
+                       "the same clock as -H on an origin serving its own TLS"),
     ]),
     ("Target", [
         ("-u URL", "absolute URL of target (http://localhost/)"),

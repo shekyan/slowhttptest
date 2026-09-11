@@ -59,6 +59,7 @@ const char* mode_name(Mode m) {
     case Mode::SlowHeaders: return "slow headers (Slowloris)";
     case Mode::SlowBody:    return "slow body (R-U-Dead-Yet)";
     case Mode::ExpectContinue: return "expect 100-continue";
+    case Mode::SlowTls: return "slow TLS handshake";
     case Mode::SlowRead:    return "slow read";
     case Mode::Range:       return "range (Apache killer)";
     case Mode::RapidReset:  return "HTTP/2 rapid reset";
@@ -111,6 +112,10 @@ void print_usage() {
       "  --expect-continue       send Expect: 100-continue and then no body at all,\n"
       "                          holding whatever the server committed when it agreed\n"
       "                          to receive one\n"
+      "  --slow-tls              dribble a ClientHello that never finishes, holding\n"
+      "                          the TLS handshake itself; needs an https:// URL.\n"
+      "                          Separate from the HTTP timeouts on a TLS terminator,\n"
+      "                          the same clock as -H on an origin serving its own TLS\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -468,6 +473,7 @@ enum {
   kOptContinuation,
   kOptChunked,
   kOptExpectContinue,
+  kOptSlowTls,
   kOptWindowTrickle,
 };
 
@@ -484,6 +490,7 @@ const struct option kLongOptions[] = {
     {"user-agent", required_argument, nullptr, 'A'},
     {"chunked", no_argument, nullptr, kOptChunked},
     {"expect-continue", no_argument, nullptr, kOptExpectContinue},
+    {"slow-tls", no_argument, nullptr, kOptSlowTls},
     {"window-trickle", required_argument, nullptr, kOptWindowTrickle},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
@@ -565,6 +572,9 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
       case kOptChunked:
         cfg.chunked = true;
+        break;
+      case kOptSlowTls:
+        cfg.mode = Mode::SlowTls;
         break;
       case kOptExpectContinue:
         cfg.mode = Mode::ExpectContinue;
@@ -874,6 +884,17 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   std::string err;
   if (!parse_url(url, cfg.target, err)) {
     std::fprintf(stderr, "Error: %s\n", err.c_str());
+    return CliResult::kError;
+  }
+
+  if (cfg.mode == Mode::SlowTls && !cfg.target.tls()) {
+    std::fprintf(stderr,
+                 "Error: --slow-tls needs an https:// URL.\n"
+                 "       The mode attacks the TLS handshake itself, so there\n"
+                 "       has to be a TLS listener to hold; against a cleartext\n"
+                 "       port it would send handshake bytes to something that\n"
+                 "       is waiting for a request line, which measures the\n"
+                 "       resulting 400 rather than a handshake timeout.\n");
     return CliResult::kError;
   }
 
