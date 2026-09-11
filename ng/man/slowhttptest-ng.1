@@ -353,6 +353,27 @@ requests use absolute-URI form.
 .It Fl e Ar host : Ns Ar port
 Route only the availability probe through this proxy, to measure availability
 from a different network path than the one being saturated.
+Refused together with
+.Fl \-probe-direct ,
+which asks for the opposite.
+.It Fl \-probe-direct
+Send the availability probe straight to the origin, even when
+.Fl d
+routes the attack through a proxy.
+.Pp
+By default the probe follows
+.Fl d ,
+which means a run through a proxy measures the proxy's availability, not the
+origin's.
+That is the right answer when the proxy is the system under test, and the wrong
+one when it is merely in the way \(em and the difference is invisible in the
+output unless it is asked for.
+Both are now stated: the report's caveats name the endpoint the probe actually
+used, whichever it was.
+.Pp
+Without
+.Fl d
+this changes nothing, since the probe already goes straight to the target.
 .El
 .Ss HTTP/2 modes
 Two attacks exist only here, because they abuse framing and flow control that

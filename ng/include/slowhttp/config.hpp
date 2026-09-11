@@ -243,6 +243,11 @@ struct Config {
   // one being saturated.
   ProxyEndpoint proxy;                   // -d  host:port, all traffic
   ProxyEndpoint probe_proxy;             // -e  host:port, probe traffic only
+  // --probe-direct: measure availability at the origin rather than through the
+  // proxy the attack is using. Without it the probe inherits -d, which answers
+  // a different question -- whether the proxy is still serving -- and that is
+  // the one a run through a proxy usually answers by accident.
+  bool probe_direct = false;
 
   // Availability probe. `probe_timeout` keeps the classic -p meaning: how long to
   // wait for a response before calling the service unavailable.

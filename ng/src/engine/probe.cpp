@@ -115,10 +115,16 @@ Prober::~Prober() = default;
 bool Prober::start(std::string& error, int family,
                    const std::string& pinned_host) {
   const Config& cfg = impl_->cfg;
-  // -e wins over -d for probe traffic: naming a probe proxy explicitly is a
-  // statement about where availability should be measured from.
+  // Three ways to answer "where is availability measured from", in order of
+  // how explicit the operator was. --probe-direct says the origin, whatever
+  // the attack is doing. -e names a proxy for the probe alone. Otherwise the
+  // probe follows -d, which measures the proxy -- useful when the proxy is the
+  // target, misleading when it is not.
+  static const ProxyEndpoint kDirect;
   const ProxyEndpoint& via =
-      cfg.probe_proxy.enabled() ? cfg.probe_proxy : cfg.proxy;
+      cfg.probe_direct ? kDirect
+                       : (cfg.probe_proxy.enabled() ? cfg.probe_proxy
+                                                    : cfg.proxy);
   impl_->through_proxy = via.enabled();
 
   // Straight to the address the attack chose when there is no proxy in the

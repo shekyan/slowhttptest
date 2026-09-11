@@ -121,6 +121,9 @@ void print_usage() {
       "  -u URL                  absolute URL of target (http://localhost/)\n"
       "  -d host:port            route all traffic through this HTTP proxy\n"
       "  -e host:port            route only the availability probe through a proxy\n"
+      "  --probe-direct          measure availability at the origin even when -d\n"
+      "                          routes the attack through a proxy; without this the\n"
+      "                          probe follows -d and reports on the proxy\n"
       "  -4, --ipv4              use IPv4 only; pins the run to one network path\n"
       "  -6, --ipv6              use IPv6 only; pins the run to one network path\n"
       "\n"
@@ -474,6 +477,7 @@ enum {
   kOptChunked,
   kOptExpectContinue,
   kOptSlowTls,
+  kOptProbeDirect,
   kOptWindowTrickle,
 };
 
@@ -491,6 +495,7 @@ const struct option kLongOptions[] = {
     {"chunked", no_argument, nullptr, kOptChunked},
     {"expect-continue", no_argument, nullptr, kOptExpectContinue},
     {"slow-tls", no_argument, nullptr, kOptSlowTls},
+    {"probe-direct", no_argument, nullptr, kOptProbeDirect},
     {"window-trickle", required_argument, nullptr, kOptWindowTrickle},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
@@ -575,6 +580,9 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         break;
       case kOptSlowTls:
         cfg.mode = Mode::SlowTls;
+        break;
+      case kOptProbeDirect:
+        cfg.probe_direct = true;
         break;
       case kOptExpectContinue:
         cfg.mode = Mode::ExpectContinue;
@@ -885,6 +893,24 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   if (!parse_url(url, cfg.target, err)) {
     std::fprintf(stderr, "Error: %s\n", err.c_str());
     return CliResult::kError;
+  }
+
+  if (cfg.probe_direct && cfg.probe_proxy.enabled()) {
+    std::fprintf(stderr,
+                 "Error: --probe-direct and -e ask for opposite things.\n"
+                 "       -e routes the availability probe through a proxy;\n"
+                 "       --probe-direct routes it straight at the origin.\n"
+                 "       Pick whichever endpoint the verdict should describe.\n");
+    return CliResult::kError;
+  }
+
+  if (cfg.probe_direct && !cfg.proxy.enabled()) {
+    // Not an error: it is what the tool already does, and saying it out loud
+    // costs nothing. But silence would let a mistyped -d go unnoticed.
+    if (cfg.log_level >= 1)
+      std::fprintf(stderr,
+                   "Note: --probe-direct without -d changes nothing; the probe"
+                   " already goes straight to the target.\n");
   }
 
   if (cfg.mode == Mode::SlowTls && !cfg.target.tls()) {

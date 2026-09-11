@@ -169,6 +169,27 @@ static void test_proxy_flags() {
     check(cfg.probe_proxy.enabled() && !cfg.proxy.enabled(),
           "-e configures the probe proxy only");
   }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "-d", "10.0.0.1:3128", "--probe-direct"},
+              cfg) == CliResult::kRun,
+          "--probe-direct combines with -d");
+    check(cfg.probe_direct && cfg.proxy.enabled(),
+          "the attack keeps the proxy while the probe leaves it");
+  }
+  {  // Opposite instructions about the same connection. Picking one silently
+     // would decide, without saying so, which endpoint the verdict describes.
+    Config cfg;
+    check(run({"slowhttptest-ng", "-e", "127.0.0.1:8888", "--probe-direct"},
+              cfg) == CliResult::kError,
+          "-e and --probe-direct are refused together");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng"}, cfg) == CliResult::kRun, "defaults parse");
+    check(!cfg.probe_direct,
+          "the probe follows -d by default, which is the old behaviour");
+  }
   {  // An implied port would be a guess, and a wrong guess sends the whole test
      // somewhere silent.
     Config cfg;

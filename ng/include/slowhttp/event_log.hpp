@@ -119,6 +119,9 @@ struct RunMeta {
   std::string probe_protocol = "HTTP/1.1";
   std::string proxy;             // "host:port" or empty
   std::string probe_proxy;       // "host:port" or empty
+  // --probe-direct: availability was measured at the origin, not through
+  // the proxy the attack used.
+  bool probe_direct = false;
   std::string fail_on_status_spec;  // --fail-on-status as typed, or empty
   // Which browser agent this run presented. Recorded because it is chosen at
   // random when -A is not given, and because CDNs and WAFs route on it -- two

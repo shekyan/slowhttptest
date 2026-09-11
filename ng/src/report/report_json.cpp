@@ -69,6 +69,8 @@ std::string render_json(const EventLog& log, const Verdict& v) {
   o += "    \"proxy\": " + (m.proxy.empty() ? "null" : q(m.proxy)) + ",\n";
   o += "    \"probe_proxy\": " +
        (m.probe_proxy.empty() ? "null" : q(m.probe_proxy)) + ",\n";
+  o += "    \"probe_direct\": " +
+       std::string(m.probe_direct ? "true" : "false") + ",\n";
   o += "    \"tls\": " +
        (m.tls_description.empty() ? "null" : q(m.tls_description)) + "\n";
   o += "  },\n";

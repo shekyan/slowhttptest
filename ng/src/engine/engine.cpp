@@ -1825,6 +1825,10 @@ struct Engine::Impl {
       log.meta.proxy = cfg.proxy.host + ":" + cfg.proxy.port;
     if (cfg.probe_proxy.enabled())
       log.meta.probe_proxy = cfg.probe_proxy.host + ":" + cfg.probe_proxy.port;
+    // Recorded even though it names no endpoint: a report showing a proxy for
+    // the attack and nothing for the probe is ambiguous about which of the two
+    // the availability numbers describe.
+    log.meta.probe_direct = cfg.probe_direct;
     log.meta.fail_on_status_spec = cfg.fail_on_status_spec;
     log.meta.user_agent = cfg.user_agent;
     log.meta.tool_version = kToolVersion;
@@ -2030,10 +2034,15 @@ struct Engine::Impl {
       // Printed next to the attack's address on purpose: when they differ
       // without a proxy to explain it, the run is measuring one endpoint and
       // reporting on another.
-      if (prober && !prober->endpoint().empty())
-        row("probe endpoint:", "%s%s", prober->endpoint().c_str(),
-            (cfg.proxy.enabled() || cfg.probe_proxy.enabled()) ? " (via proxy)"
-                                                               : "");
+      if (prober && !prober->endpoint().empty()) {
+        const char* how =
+            cfg.probe_direct
+                ? " (direct, bypassing the proxy)"
+                : ((cfg.proxy.enabled() || cfg.probe_proxy.enabled())
+                       ? " (via proxy)"
+                       : "");
+        row("probe endpoint:", "%s%s", prober->endpoint().c_str(), how);
+      }
       row("probe:", "%s", probe_desc);
       row("test duration:", "%lld seconds",
           static_cast<long long>(cfg.duration.count()));

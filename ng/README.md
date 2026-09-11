@@ -45,7 +45,7 @@ rationale, and the roadmap.
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
   -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`,
-  `--window-trickle`, `--expect-continue` and `--slow-tls`.
+  `--window-trickle`, `--expect-continue`, `--slow-tls` and `--probe-direct`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real
@@ -532,12 +532,35 @@ SSL_CERT=client.pem SSL_KEY=client.key \
 
 # attack directly, but measure availability from a different network path
 ./build/slowhttptest-ng -u http://target.example/ -e probe-proxy.local:3128 -c 200
+
+# attack through the proxy, but ask the origin whether it is still up
+./build/slowhttptest-ng -u http://target.example/ -d proxy.local:3128 \
+  --probe-direct -c 200
 ```
 
 Certificates are **not** verified by default: refusing to test a staging host or
 an appliance because it presents a self-signed certificate would block the common
-case. When the probe goes through a proxy, the report says so — the proxy's own
-health is part of every measurement.
+case.
+
+### Where the probe goes
+
+The probe decides what the verdict is *about*, so its route is worth choosing
+deliberately rather than inheriting.
+
+| flags | attack goes via | probe goes via | the verdict describes |
+|---|---|---|---|
+| *(none)* | direct | direct | the origin |
+| `-d P` | `P` | `P` | **the proxy** |
+| `-d P --probe-direct` | `P` | direct | the origin |
+| `-e Q` | direct | `Q` | the origin, seen from `Q` |
+| `-d P -e Q` | `P` | `Q` | the origin, seen from `Q` |
+
+The default — the probe following `-d` — is right when the proxy is the system
+under test, and misleading when it is merely in the way: a proxy that runs out
+of connections reports as a denial whether or not the origin behind it ever
+noticed. `--probe-direct` separates the two. Either way the report's caveats now
+name the endpoint the probe actually used, which previously went unsaid when the
+probe inherited `-d`.
 
 ## Slow read (`-X`) — the mirror image
 

@@ -381,10 +381,23 @@ Verdict EventLog::evaluate(double threshold) const {
       "An intermediary (load balancer, CDN, reverse proxy) may have failed or "
       "held up rather than the origin.");
   v.caveats.push_back("Single run — re-run to confirm.");
-  if (!meta.probe_proxy.empty()) {
+  // Where the probe actually went, which is not always where -e says. With
+  // only -d set the probe inherits the attack's proxy, and until this was
+  // spelled out the report showed a proxy for the attack and said nothing
+  // about the availability numbers having been taken through it.
+  const std::string probe_via =
+      meta.probe_direct ? std::string()
+                        : (!meta.probe_proxy.empty() ? meta.probe_proxy
+                                                     : meta.proxy);
+  if (!probe_via.empty()) {
     v.caveats.push_back(
-        "Probes went through " + meta.probe_proxy +
+        "Probes went through " + probe_via +
         "; the proxy's own health is part of every measurement here.");
+  } else if (!meta.proxy.empty()) {
+    v.caveats.push_back(
+        "The attack ran through " + meta.proxy +
+        " but availability was measured directly at the origin, so this "
+        "verdict describes the origin and not the path a user would take.");
   }
   // The availability oracle and the attack can be on different protocols, and
   // on an HTTP/2 run they always are. A server can hold up perfectly well on

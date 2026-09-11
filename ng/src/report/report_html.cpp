@@ -820,6 +820,8 @@ std::string render_html(const EventLog& log, const Verdict& v) {
   if (!m.tls_description.empty()) param("TLS", esc(m.tls_description));
   if (!m.proxy.empty()) param("Proxy (-d)", esc(m.proxy));
   if (!m.probe_proxy.empty()) param("Probe proxy (-e)", esc(m.probe_proxy));
+  if (m.probe_direct)
+    param("Probe routing", "direct to the origin, bypassing the proxy");
   o += "    </dl>\n  </section>\n\n";
 
   // ---- footer ----

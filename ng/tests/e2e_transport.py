@@ -288,6 +288,56 @@ def case_probe_proxy(tool, mock, proxy_script, port, pport):
         terminate(server)
 
 
+def case_probe_direct(tool, mock, port):
+    """--probe-direct must measure the origin, not the proxy the attack uses.
+
+    Both runs point -d at a closed port, so the attack fails identically in
+    each and the only thing that differs is where the probe went. Without the
+    flag the probe follows -d into the closed port and reports the service
+    down; with it the probe reaches the origin and reports it up. Anything that
+    routed the probe the same way in both runs would fail one of these.
+    """
+    server, log = start_server(mock, port)
+    dead = "127.0.0.1:9"  # discard, closed on any machine that is not running it
+    try:
+        if not wait_until(lambda: port_open(port), timeout=15):
+            return fail("probe-direct", "server never became healthy")
+        common = ["-u", f"http://127.0.0.1:{port}/", "-d", dead,
+                  "-c", "3", "-l", "8", "-p", "2", "--probe-interval", "1"]
+        _, follow = run_tool(tool, common)
+        _, direct = run_tool(tool, [*common, "--probe-direct"])
+
+        if "available=YES" in follow:
+            return fail("probe-direct",
+                        "the probe reached something without the flag, so the "
+                        "run does not distinguish the two routings")
+        if "available=YES" not in direct:
+            return fail("probe-direct",
+                        "with --probe-direct the probe never reached the "
+                        "origin: %s" % direct[-300:])
+        # The banner names the endpoint, and it must be the origin rather than
+        # the proxy -- "available" alone could be reached the wrong way.
+        if f"127.0.0.1:{port} (direct" not in direct:
+            return fail("probe-direct",
+                        "the banner did not name the origin as the probe "
+                        "endpoint: %s" % direct[:600])
+        ok("probe-direct", "probe follows -d by default, the origin with the flag")
+    finally:
+        terminate(server)
+
+
+def case_probe_direct_conflicts_with_e(tool, port):
+    """-e and --probe-direct ask for opposite things, so one must be refused."""
+    rc, err = run_tool(tool, ["-u", f"http://127.0.0.1:{port}/",
+                              "-e", "127.0.0.1:9", "--probe-direct",
+                              "-c", "1", "-l", "2"], timeout=30)
+    if rc == 0 or "opposite things" not in err:
+        return fail("probe-direct conflicts with -e",
+                    "rc=%s, stderr did not explain the conflict: %r"
+                    % (rc, err[:200]))
+    ok("probe-direct conflicts with -e")
+
+
 def case_proxy_refuses(tool, mock, proxy_script, cert, key, port, pport):
     """A proxy that will not tunnel must be a loud failure, never a silent pass."""
     server, log = start_server(mock, port, ("--tls-cert", cert, "--tls-key", key))
@@ -815,6 +865,8 @@ def main():
     print("e2e: proxying")
     case_http_via_proxy(tool, mock, proxy_script, free_port(), free_port())
     case_probe_proxy(tool, mock, proxy_script, free_port(), free_port())
+    case_probe_direct(tool, mock, free_port())
+    case_probe_direct_conflicts_with_e(tool, free_port())
 
     print("e2e: failure diagnosis")
     case_local_limit_not_blamed_on_target(tool, mock, free_port())
