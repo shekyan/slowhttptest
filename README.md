@@ -42,6 +42,6 @@ JSON, exit codes are `2`/`3` rather than `-1`, and the report is organised aroun
 availability rather than socket states. All flags otherwise mean what they always
 have.
 
-See the [v2.0.0-beta1 release notes](https://github.com/shekyan/slowhttptest/releases/tag/v2.0.0-beta1),
+See the [latest release notes](https://github.com/shekyan/slowhttptest/releases/latest),
 and please open an issue if it gets something wrong — a report that misdescribes a
 run is the worst bug this tool can have, and that is exactly what a beta is for.
