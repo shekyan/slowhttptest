@@ -424,6 +424,15 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
         std::strlen(proxy_type_ == eNoProxy ? " " : proxy_.getData()) +
         verb_.size();
     std::vector<char> test_info(info_cap, 0);
+    // These come straight from the command line and are written into a
+    // report people open in a browser, so they are escaped for the HTML
+    // text context they land in. Unescaped, a cookie containing markup
+    // closed the table and ran whatever followed.
+    const std::string esc_cookie = escape_html(cookie);
+    const std::string esc_header = escape_html(header);
+    const std::string esc_verb = escape_html(verb_);
+    const std::string esc_proxy =
+        escape_html(proxy_type_ == eNoProxy ? " " : proxy_.getData());
     if(eSlowRead != test_type_) { 
       snprintf(test_info.data(), info_cap, "<table class='slow_results' border='0'>"
           "<tr><th>Test parameters</th></tr>"
@@ -442,17 +451,17 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "</table>",
           test_type_name[test_type_],
           num_connections_,
-          verb_.c_str(),
+          esc_verb.c_str(),
           content_length_,
-          cookie,
-          header,
+          esc_cookie.c_str(),
+          esc_header.c_str(),
           extra_data_max_len_total_,
           followup_timing_,
           delay_,
           probe_timeout_,
           duration_,
           proxy_type_name[proxy_type_],
-          proxy_type_ == eNoProxy ? " " : proxy_.getData()
+          esc_proxy.c_str()
           );
     } else {
       snprintf(test_info.data(), info_cap, "<table class='slow_results' border='0'>"
@@ -471,8 +480,8 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           "</table>",
           test_type_name[test_type_],
           num_connections_,
-          cookie,
-          header,
+          esc_cookie.c_str(),
+          esc_header.c_str(),
           window_lower_limit_,
           window_upper_limit_,
           pipeline_factor_,
@@ -482,7 +491,7 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           probe_timeout_,
           duration_,
           proxy_type_name[proxy_type_],
-          proxy_type_ == eNoProxy ? " " : proxy_.getData()
+          esc_proxy.c_str()
           );
     }
 

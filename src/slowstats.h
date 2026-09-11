@@ -73,6 +73,16 @@ class StatsDumper {
   FILE* file_;
 };
 
+// Report values come from the command line and from the target, and the report
+// is HTML that people open in a browser and pass around. Two contexts, two
+// escapers: reusing one for both is how "escaped" output still executes.
+//
+// escape_html is for text inside an element. escape_js is for a value inside a
+// single-quoted JavaScript string, and also neutralises '<' so that a value
+// containing </script> cannot close the block it sits in.
+std::string escape_html(const std::string& s);
+std::string escape_js(const std::string& s);
+
 class HTMLDumper : public StatsDumper {
  public:
   HTMLDumper(const std::string& file_name, const std::string& url,

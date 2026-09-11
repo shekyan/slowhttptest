@@ -77,6 +77,42 @@ const char* HTML_FOOTER =
 
 namespace slowhttptest {
 
+
+std::string escape_html(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() + 16);
+  for (std::string::const_iterator i = s.begin(); i != s.end(); ++i) {
+    switch (*i) {
+      case '&':  out += "&amp;";  break;
+      case '<':  out += "&lt;";   break;
+      case '>':  out += "&gt;";   break;
+      case '"':  out += "&quot;"; break;
+      case '\'': out += "&#39;";  break;
+      default:   out += *i;
+    }
+  }
+  return out;
+}
+
+std::string escape_js(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() + 16);
+  for (std::string::const_iterator i = s.begin(); i != s.end(); ++i) {
+    switch (*i) {
+      case '\\': out += "\\\\"; break;
+      case '\'': out += "\\'";  break;
+      case '"':  out += "\\\""; break;
+      case '\n': out += "\\n";  break;
+      case '\r': out += "\\r";  break;
+      // Not a JavaScript metacharacter, but a value holding </script> would end
+      // the block regardless of quoting -- the parser sees the tag first.
+      case '<':  out += "\\x3c"; break;
+      default:   out += *i;
+    }
+  }
+  return out;
+}
+
 bool StatsDumper::Initialize() {
   file_ = fopen(file_name_.c_str(), "w");
   return file_ != NULL;
@@ -166,7 +202,11 @@ void HTMLDumper::WriteHeader() {
 }
 
 void HTMLDumper::WriteFooter() {
-  WriteFormattedString(HTML_FOOTER, url_.c_str(), test_info_.c_str());
+  // url_ lands inside a single-quoted JS string in the chart title.
+  // test_info_ is markup this code built; the caller-supplied values
+  // inside it are escaped where they are interpolated.
+  WriteFormattedString(HTML_FOOTER, escape_js(url_).c_str(),
+                       test_info_.c_str());
 }
 
 void HTMLDumper::PreWrite() {
