@@ -21,7 +21,9 @@
  *  https://github.com/shekyan/slowhttptest
  *****/
 
+#include <ctype.h>
 #include <limits.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -37,6 +39,23 @@ Url::Url()
       is_literal_ipv6_(false) {
 }
 
+namespace {
+
+// Case-insensitive prefix match for a URL scheme.
+bool scheme_is(const std::string& url, const char* prefix) {
+  const size_t n = strlen(prefix);
+  if(url.size() < n) return false;
+  for(size_t i = 0; i < n; ++i) {
+    if(tolower(static_cast<unsigned char>(url[i])) !=
+       tolower(static_cast<unsigned char>(prefix[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 bool Url::prepare(const char* url) {
   if(!url)
     return false;
@@ -51,12 +70,21 @@ bool Url::prepare(const char* url) {
   const std::string scheme("https");
   size_t host_start = 0;
 
-  if(data_.size() < 7 || data_.find("http") != 0
-      || 4 > data_.find("://") || data_.find("://") > 5) {
-    return false;
+  // Match the scheme exactly, and case-insensitively (RFC 3986 3.1).
+  //
+  // The old test only required the string to start with "http" and to
+  // have "://" at offset 4 or 5, so any five-character scheme passed --
+  // httpx:// parsed happily. Worse, SSL was decided by data_[4] == 's',
+  // lowercase only, so httpS:// was accepted *and* treated as cleartext:
+  // a capital S in the scheme silently produced an unencrypted run.
+  if(scheme_is(data_, "https://")) {
+    is_ssl_ = true;
+    host_start = 8;
+  } else if(scheme_is(data_, "http://")) {
+    is_ssl_ = false;
+    host_start = 7;
   } else {
-    is_ssl_ = data_[4] == 's';
-    host_start = is_ssl_ ? 8 : 7;
+    return false;
   }
   if('[' == data_[host_start]) {
     size_t host_end = data_.find_first_of("]", host_start);
