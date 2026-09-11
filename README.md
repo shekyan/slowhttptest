@@ -40,6 +40,7 @@ still means the tool described above, and stays installed and unchanged.
 | slow headers (`-H`), slow body (`-B`), range (`-R`), slow read (`-X`) | yes | yes |
 | HTTP/2 slow read, rapid reset, CONTINUATION flood | no | yes |
 | chunked request body (`--chunked`) | no | yes |
+| Expect/100-continue hold (`--expect-continue`) | no | yes |
 | flow-control throttling (`--window-trickle`) | no | yes |
 | capacity search (`--capacity`) | no | yes |
 | address family pinning (`-4` / `-6`) | no | yes |

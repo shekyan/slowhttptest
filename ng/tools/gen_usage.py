@@ -26,6 +26,9 @@ SECTIONS = [
         ("-X", "slow read"),
         ("--rapid-reset", "HTTP/2 rapid reset (CVE-2023-44487); implies --http2"),
         ("--continuation-flood", "HTTP/2 CONTINUATION flood; implies --http2"),
+        ("--expect-continue", "send Expect: 100-continue and then no body "
+                              "at all, holding whatever the server "
+                              "committed when it agreed to receive one"),
     ]),
     ("Target", [
         ("-u URL", "absolute URL of target (http://localhost/)"),

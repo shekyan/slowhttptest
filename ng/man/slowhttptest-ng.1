@@ -93,6 +93,27 @@ response, advertising a tiny TCP receive window.
 The server blocks
 .Em sending .
 Neither a header nor a body timeout helps; the defense is a send timeout.
+.It Fl -expect-continue
+Sends a complete, valid request carrying
+.Sy Expect: 100-continue
+and a
+.Sy Content-Length ,
+then never begins the body.
+Unlike
+.Fl B
+nothing is dribbled: the request is finished and syntactically unremarkable,
+and the server is the one that agreed to wait.
+RFC 9110 10.1.1 lets it answer immediately with a final status instead, and a
+server that does so is not held at all.
+The defense is a body timeout that starts when the interim response is sent,
+which is a later and less commonly configured clock than the one
+.Fl B
+tests.
+At the end of the run
+.Nm
+reports how many connections were invited to send a body and how many were
+answered outright, because an intermediary may answer the expectation itself
+and that changes what was measured.
 .El
 .Pp
 Three further modes are specific to HTTP/2 and are described under

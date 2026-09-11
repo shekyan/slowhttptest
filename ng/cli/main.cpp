@@ -5,6 +5,7 @@
 
 #include "slowhttp/attacks/range.hpp"
 #include "slowhttp/attacks/slow_body.hpp"
+#include "slowhttp/attacks/expect_continue.hpp"
 #include "slowhttp/attacks/slow_headers.hpp"
 #include "slowhttp/attacks/slow_read.hpp"
 #include "slowhttp/attacks/slow_read_h2.hpp"
@@ -26,6 +27,10 @@ int main(int argc, char** argv) {
   }
 
   std::unique_ptr<slowhttp::Attack> attack;
+  // Kept so the interim-response tally can be reported after the run. It is
+  // the half of this mode that only exists on the wire: whether the server
+  // agreed to receive the body it is now waiting for.
+  slowhttp::ExpectContinue* expect_attack = nullptr;
   switch (cfg.mode) {
     case slowhttp::Mode::SlowHeaders:
       attack.reset(new slowhttp::SlowHeaders(cfg));
@@ -46,6 +51,17 @@ int main(int argc, char** argv) {
     case slowhttp::Mode::SlowBody:
       attack.reset(new slowhttp::SlowBody(cfg));
       break;
+    case slowhttp::Mode::ExpectContinue: {
+      auto* ec = new slowhttp::ExpectContinue(cfg);
+      attack.reset(ec);
+      expect_attack = ec;
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  expect 100-continue: %zu byte request announcing a"
+                     " %d byte body that never starts\n",
+                     ec->request_size(), cfg.content_length);
+      break;
+    }
     case slowhttp::Mode::Continuation: {
       auto* cf = new slowhttp::ContinuationFlood(cfg);
       attack.reset(cf);
@@ -78,5 +94,8 @@ int main(int argc, char** argv) {
   }
 
   slowhttp::Engine engine(cfg, *attack);
+  // run() leaves by _exit(); anything to report at the end goes through
+  // Attack::summary(), which the engine prints.
+  (void)expect_attack;
   return engine.run();
 }

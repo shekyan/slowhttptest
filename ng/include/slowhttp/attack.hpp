@@ -4,6 +4,7 @@
 #define SLOWHTTP_ATTACK_HPP_
 
 #include <cstddef>
+#include <string>
 
 #include "slowhttp/action.hpp"
 
@@ -55,6 +56,14 @@ class Attack {
 
   // The connection slot was closed or dropped.
   virtual void on_close(ConnId /*id*/) {}
+
+  // One line for the end of the run, or empty for none.
+  //
+  // For a measurement only the attack can make, because it is the only thing
+  // that reads the peer. The engine cannot print it from its own counters --
+  // it does not know an interim response from any other bytes -- and neither
+  // can main(), because run() leaves by _exit().
+  virtual std::string summary() const { return std::string(); }
 };
 
 }  // namespace slowhttp

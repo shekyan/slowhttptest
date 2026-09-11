@@ -1779,6 +1779,8 @@ struct Engine::Impl {
       case Mode::RapidReset:  log.meta.mode_flag = "--rapid-reset"; break;
       case Mode::Continuation:
         log.meta.mode_flag = "--continuation-flood"; break;
+      case Mode::ExpectContinue:
+        log.meta.mode_flag = "--expect-continue"; break;
     }
     // A flag that does not reproduce the run is worse than none: -X alone
     // describes a different attack from the one that was carried out.
@@ -2362,6 +2364,13 @@ struct Engine::Impl {
                  why, opened_total, connected_total, ready_total,
                  peer_closed_total, connect_failed_total, setup_failed_total,
                  connect_timeout_total);
+
+    // Anything the attack measured that the engine's own counters cannot
+    // express -- it is the only side that reads the peer.
+    if (chatty()) {
+      const std::string extra = attack.summary();
+      if (!extra.empty()) std::fprintf(stderr, "%s\n", extra.c_str());
+    }
 
     if (undelivered > 0 && chatty()) {
       std::fprintf(stderr,

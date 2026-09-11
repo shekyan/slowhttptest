@@ -98,6 +98,7 @@ add_library(slowhttp STATIC
   src/attacks/rapid_reset.cpp
   src/attacks/continuation.cpp
   src/attacks/slow_body.cpp
+  src/attacks/expect_continue.cpp
   src/attacks/range.cpp
   src/config/cli.cpp
   src/config/request.cpp
@@ -183,6 +184,10 @@ set_tests_properties(slow_read_unit PROPERTIES LABELS "unit")
 add_executable(test_slow_body tests/test_slow_body.cpp)
 target_link_libraries(test_slow_body PRIVATE slowhttp)
 add_test(NAME slow_body_unit COMMAND test_slow_body)
+
+add_executable(test_expect_continue tests/test_expect_continue.cpp)
+target_link_libraries(test_expect_continue PRIVATE slowhttp)
+add_test(NAME expect_continue_unit COMMAND test_expect_continue)
 set_tests_properties(slow_body_unit PROPERTIES LABELS "unit")
 
 add_executable(test_range tests/test_range.cpp)

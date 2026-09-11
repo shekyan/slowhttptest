@@ -58,6 +58,7 @@ const char* mode_name(Mode m) {
   switch (m) {
     case Mode::SlowHeaders: return "slow headers (Slowloris)";
     case Mode::SlowBody:    return "slow body (R-U-Dead-Yet)";
+    case Mode::ExpectContinue: return "expect 100-continue";
     case Mode::SlowRead:    return "slow read";
     case Mode::Range:       return "range (Apache killer)";
     case Mode::RapidReset:  return "HTTP/2 rapid reset";
@@ -107,6 +108,9 @@ void print_usage() {
       "  -X                      slow read\n"
       "  --rapid-reset           HTTP/2 rapid reset (CVE-2023-44487); implies --http2\n"
       "  --continuation-flood    HTTP/2 CONTINUATION flood; implies --http2\n"
+      "  --expect-continue       send Expect: 100-continue and then no body at all,\n"
+      "                          holding whatever the server committed when it agreed\n"
+      "                          to receive one\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -463,6 +467,7 @@ enum {
   kOptH2ResetRate,
   kOptContinuation,
   kOptChunked,
+  kOptExpectContinue,
   kOptWindowTrickle,
 };
 
@@ -478,6 +483,7 @@ const struct option kLongOptions[] = {
     {"data", required_argument, nullptr, 'P'},
     {"user-agent", required_argument, nullptr, 'A'},
     {"chunked", no_argument, nullptr, kOptChunked},
+    {"expect-continue", no_argument, nullptr, kOptExpectContinue},
     {"window-trickle", required_argument, nullptr, kOptWindowTrickle},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
     {"no-referer", no_argument, nullptr, kOptNoReferer},
@@ -559,6 +565,9 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case kOptRandomUserAgent: cfg.random_user_agent = true; break;
       case kOptChunked:
         cfg.chunked = true;
+        break;
+      case kOptExpectContinue:
+        cfg.mode = Mode::ExpectContinue;
         break;
       case kOptWindowTrickle:
         if (!parse_long_int(cfg.window_trickle, "window-trickle", 1, 1048576))

@@ -44,8 +44,8 @@ rationale, and the roadmap.
   the attack *and* the probe, plus request bodies from a literal or file
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
-  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`
-  and `--window-trickle`.
+  -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`,
+  `--window-trickle` and `--expect-continue`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real
@@ -645,11 +645,11 @@ resident memory.
 > lands on the server's send path; the effective granularity is a TLS record
 > rather than `-z` bytes.
 
-## The four modes, and why each is distinct
+## The five modes, and why each is distinct
 
 Each mode attacks a different point in the request lifecycle, and — importantly —
 each is stopped by a *different* timeout. That is the practical reason to keep all
-four rather than collapsing them: a server hardened against one can be wide open
+five rather than collapsing them: a server hardened against one can be wide open
 to the next.
 
 | Mode | What is withheld | Server blocks in | Defense |
@@ -658,6 +658,7 @@ to the next.
 | `-B` slow body | the body promised by `Content-Length` | reading body | **body** timeout |
 | `-X` slow read | acknowledgement of the response | sending | **send** timeout |
 | `-R` range | nothing — it is amplification | CPU/memory | patched since 2011 |
+| `--expect-continue` | the body the server *agreed* to wait for | reading body | body timeout **after the interim response** |
 
 `tests/e2e_attacks.py` asserts exactly this, including the negative results: a
 header timeout demonstrably does **not** defend against slow body or slow read,
@@ -672,6 +673,10 @@ python3 tests/mock_slow_server.py 8080 --workers 4
 # size cap enforced against one has nothing to enforce. The terminating
 # zero-length chunk is never sent, which is what keeps the request unfinished.
 ./build/slowhttptest-ng -B --chunked -u http://127.0.0.1:8080/ -c 12 -i 5 -l 60
+
+# expect/100-continue: the request is complete and valid, and the server is the
+# one that offered to wait. Nothing is dribbled and nothing is malformed.
+./build/slowhttptest-ng --expect-continue -u http://127.0.0.1:8080/ -c 12 -l 60
 
 # range: a 13 KB request naming 2002 overlapping ranges
 python3 tests/mock_slow_server.py 8080 --workers 4 --body-bytes 1000000
