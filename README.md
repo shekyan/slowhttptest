@@ -11,6 +11,13 @@ Any actions and or activities related to the code provided is solely your respon
 SlowHTTPTest is a highly configurable tool that simulates some Application Layer Denial of Service attacks by prolonging HTTP connections in different ways.
 
 Use it to test your web server for DoS vulnerabilities, or just to figure out how many concurrent connections it can handle.
+
+**Run it only against systems you own or have explicit written permission to
+test.** It is built for defensive work — availability testing, capacity
+planning, and checking that HTTP-layer DoS mitigations do what you think they
+do. Pointed at infrastructure that is not yours, it is an attack, and in most
+jurisdictions a crime.
+
 SlowHTTPTest works on majority of Linux platforms, OS X and Cygwin - a Unix-like environment and command-line interface for Microsoft Windows, and comes with a Dockerfile to make things even easier.
 
 Check out [Wiki](https://github.com/shekyan/slowhttptest/wiki) for installation and usage details.
@@ -25,6 +32,29 @@ run against things its author does not own.
 
 It installs **alongside** the existing binary. Nothing is renamed: `slowhttptest`
 still means the tool described above, and stays installed and unchanged.
+
+### What differs
+
+| | `slowhttptest` | `slowhttptest-ng` |
+|---|---|---|
+| slow headers (`-H`), slow body (`-B`), range (`-R`), slow read (`-X`) | yes | yes |
+| HTTP/2 slow read, rapid reset, CONTINUATION flood | no | yes |
+| chunked request body (`--chunked`) | no | yes |
+| flow-control throttling (`--window-trickle`) | no | yes |
+| capacity search (`--capacity`) | no | yes |
+| address family pinning (`-4` / `-6`) | no | yes |
+| repeatable custom headers | one (`-1`) | repeatable, and sent on the probe |
+| machine-readable report | CSV | JSON |
+| availability verdict | `YES` / `NO` | served / slow / denied, with a verdict and caveats |
+| exit codes | `-1` on error | `2` / `3` / `4`, with the criterion in the JSON |
+
+**The HTML reports differ in a way worth knowing before you archive one.** The
+classic report pulls Google Charts from `https://www.google.com/jsapi` when the
+page is opened, so it needs internet access *at view time* and renders as a bare
+table without it — which is what happens in an air-gapped network, a locked-down
+browser, or a year from now if that endpoint moves. The `ng` report is
+self-contained: the chart is inline SVG and the file has no external resource
+loads, so it renders the same offline and keeps rendering after the fact.
 
 `docker run --rm --entrypoint slowhttptest-ng shekyan/slowhttptest:ng -u https://target/ -c 1000 -H`
 
