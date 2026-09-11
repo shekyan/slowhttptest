@@ -262,7 +262,10 @@ bool SlowHTTPTest::init(const char* url, const char* verb,
           if(!resolve_addr(base_uri_.getHost().c_str(), base_uri_.getPortStr(), &addr_)) {
             return false;
           }
-          if(!resolve_addr(base_uri_.getHost().c_str(), proxy_.getPortStr(), &probe_proxy_addr_)) {
+          // The proxy, not the target. This resolved the target host against
+          // the proxy port -- wrong on both halves -- and the result was then
+          // never read, so -e sent the probe straight at the origin.
+          if(!resolve_addr(proxy_.getHost().c_str(), proxy_.getPortStr(), &probe_proxy_addr_)) {
             return false;
           } 
         }
@@ -727,7 +730,13 @@ bool SlowHTTPTest::run_test() {
     // init and connect probe socket
     if(!probe_socket_ && probe_taken != seconds_passed_ && seconds_passed_ % probe_timeout_ == 0) {
       probe_socket_ = new SlowSocket();
-      if(probe_socket_->init(addr_, base_uri_.getHost().c_str(), proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
+      // Under -e the probe is the one thing that goes through the proxy;
+      // the attack connections stay direct, which is the point of the flag.
+      // probe_request_ is already built in absolute-URI form for this case.
+      addrinfo* probe_addr =
+          (eProbeProxy == proxy_type_ && probe_proxy_addr_) ? probe_proxy_addr_
+                                                           : addr_;
+      if(probe_socket_->init(probe_addr, base_uri_.getHost().c_str(), proxy_type_ == eNoProxy ? base_uri_.isSSL() : false, maxfd, 0)) {
         probe_socket_->set_state(eConnecting);
         probe_taken = seconds_passed_;
       slowlog(LOG_DEBUG, "%s: created probe socket %d\n",
