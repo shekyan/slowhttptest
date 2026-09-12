@@ -1762,9 +1762,10 @@ struct Engine::Impl {
       }
       tls = TlsContext::create(/*verify_peer=*/false, err, cfg.http2);
       if (!tls) return false;
-      // The context is still built under --slow-tls: the availability probe
-      // needs it. Only the attack's own sockets skip it -- see above.
-      if (cfg.mode != Mode::SlowTls) {
+      // The context is still built under --slow-tls and --slow-quic: the
+      // availability probe needs it, and it stays on TCP. Only the attack's
+      // own sockets skip it -- see above.
+      if (cfg.mode != Mode::SlowTls && cfg.mode != Mode::SlowQuic) {
         plan.tls = tls;
         plan.sni = cfg.target.host;
       }
@@ -1794,6 +1795,11 @@ struct Engine::Impl {
         log.meta.mode_flag = "--expect-continue"; break;
       case Mode::SlowTls:
         log.meta.mode_flag = "--slow-tls"; break;
+      case Mode::SlowQuic:
+        log.meta.mode_flag = cfg.quic_complete_hello
+                                 ? "--slow-quic --quic-hello complete"
+                                 : "--slow-quic";
+        break;
     }
     // A flag that does not reproduce the run is worse than none: -X alone
     // describes a different attack from the one that was carried out.
@@ -1854,7 +1860,7 @@ struct Engine::Impl {
       return 2;
     }
     if (!addr.resolve(cfg.connect_host(), cfg.connect_port(), err,
-                      cfg.address_family)) {
+                      cfg.address_family, cfg.needs_udp())) {
       std::fprintf(stderr, "Error: cannot resolve %s (%s)\n",
                    cfg.connect_endpoint().c_str(), err.c_str());
       return 2;
@@ -2005,9 +2011,9 @@ struct Engine::Impl {
       row("test type:", "%s", type.c_str());
       row("number of connections:", "%d", cfg.connections);
       row("URL:", "%s", log.meta.target_url.c_str());
-      // Not under --slow-tls: no HTTP request is ever sent, and naming a verb
-      // implied one was.
-      if (cfg.mode != Mode::SlowTls)
+      // Not under --slow-tls or --slow-quic: no HTTP request is ever sent,
+      // and naming a verb implied one was.
+      if (cfg.mode != Mode::SlowTls && cfg.mode != Mode::SlowQuic)
         row("verb:", "%s", cfg.effective_verb().c_str());
       row("resolved address:", "%s (%zu candidate%s)",
           ResolvedAddr::describe(current_addr()).c_str(),

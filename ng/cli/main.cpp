@@ -7,6 +7,7 @@
 #include "slowhttp/attacks/slow_body.hpp"
 #include "slowhttp/attacks/expect_continue.hpp"
 #include "slowhttp/attacks/slow_tls.hpp"
+#include "slowhttp/attacks/slow_quic.hpp"
 #include "slowhttp/attacks/slow_headers.hpp"
 #include "slowhttp/attacks/slow_read.hpp"
 #include "slowhttp/attacks/slow_read_h2.hpp"
@@ -71,6 +72,19 @@ int main(int argc, char** argv) {
                      "  slow TLS handshake: a %zu byte ClientHello declared and"
                      " dribbled, never completed\n",
                      st->declared_size());
+      break;
+    }
+    case slowhttp::Mode::SlowQuic: {
+      auto* sq = new slowhttp::SlowQuic(
+          cfg, cfg.quic_complete_hello ? slowhttp::SlowQuic::Hello::Complete
+                                       : slowhttp::SlowQuic::Hello::Partial);
+      attack.reset(sq);
+      if (cfg.log_level >= 1)
+        std::fprintf(stderr,
+                     "  slow QUIC handshake: %s %zu byte ClientHello per"
+                     " connection, 1200 byte datagrams\n",
+                     cfg.quic_complete_hello ? "complete" : "partial,",
+                     sq->hello_size());
       break;
     }
     case slowhttp::Mode::Continuation: {

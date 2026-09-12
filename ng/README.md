@@ -45,7 +45,8 @@ rationale, and the roadmap.
   (`-P`/`--data`). The tool identifies itself in its User-Agent by default.
 - **Backward-compatible CLI flags** (`-H -B -R -X -u -c -r -l -i -x -s -t -f -m
   -j -1 -v -n -z -w -y -k -a -b -d -e -p -g -o -h`), plus `-P`, `--chunked`,
-  `--window-trickle`, `--expect-continue`, `--slow-tls` and `--probe-direct`.
+  `--window-trickle`, `--expect-continue`, `--slow-tls`, `--slow-quic`
+  and `--probe-direct`.
 - **CMake** build with unit, smoke and end-to-end tests (`ctest`).
 - A **deliberately vulnerable mock server** (`tests/mock_slow_server.py`, http or
   https) and a **test proxy** (`tests/mock_proxy.py`), so you can watch a real
@@ -668,11 +669,11 @@ resident memory.
 > lands on the server's send path; the effective granularity is a TLS record
 > rather than `-z` bytes.
 
-## The six modes, and why each is distinct
+## The seven modes, and why each is distinct
 
 Each mode attacks a different point in the request lifecycle, and — importantly —
-each is stopped by a *different* timeout. That is the practical reason to keep all
-six rather than collapsing them: a server hardened against one can be wide open
+each is stopped by a *different* defense. That is the practical reason to keep all
+seven rather than collapsing them: a server hardened against one can be wide open
 to the next.
 
 | Mode | What is withheld | Server blocks in | Defense |
@@ -683,6 +684,7 @@ to the next.
 | `-R` range | nothing — it is amplification | CPU/memory | patched since 2011 |
 | `--expect-continue` | the body the server *agreed* to wait for | reading body | body timeout **after the interim response** |
 | `--slow-tls` | the end of the ClientHello | the TLS handshake | **handshake** timeout — on a terminator |
+| `--slow-quic` | the end of the QUIC handshake | holding connection state | **address validation** (Retry), not a timeout |
 
 `tests/e2e_attacks.py` asserts exactly this, including the negative results: a
 header timeout demonstrably does **not** defend against slow body or slow read,
@@ -735,3 +737,80 @@ python3 tests/mock_slow_server.py 8080 --workers 4 --body-bytes 1000000
 > commit rather than really allocating it — enough to show the amplification
 > (measured: a 13 KB request against a 1 MB resource ⇒ ~2 GB committed per
 > request) without putting the test machine at risk.
+
+## Slow QUIC (`--slow-quic`) — where holding a connection stops costing a socket
+
+Every other mode holds a TCP connection, so it costs the client a socket for as
+long as it costs the server one. QUIC breaks that symmetry: the server creates
+connection state on the **first Initial packet it accepts**, before the client has
+proved anything, and keeps it whether or not the client ever speaks again.
+
+So the defense is not a timeout. It's **address validation** — a Retry, which hands
+back a token and creates nothing until the client echoes it. `--slow-quic` tells
+you which side of that line your deployment is on.
+
+```bash
+# partial (default): the ClientHello never finishes arriving
+./build/slowhttptest-ng --slow-quic -u https://target.example/ -c 200
+
+# complete: the hello arrives whole, then silence -- the server signs, sends its
+# flight, and waits for a Finished that never comes
+./build/slowhttptest-ng --slow-quic --quic-hello complete -u https://target.example/
+```
+
+**No QUIC library is involved.** Initial packets are the one part of QUIC whose
+protection keys come from a published salt and the connection ID (RFC 9001 §5.2),
+so they can be built with HKDF and AES alone. Everything past them needs the TLS
+key schedule and is deliberately absent — a handshake that never finishes never
+needs it. The key derivation is checked against RFC 9001 Appendix A's published
+vectors; the packets are accepted by nginx 1.31 and quic-go 0.62.
+
+The run reports which of four things the target did, read from the long header of
+the reply without decrypting it:
+
+| reply | what it means |
+|---|---|
+| **Retry** | address validation is on; no state was created |
+| **Handshake** | the key exchange and certificate signature ran |
+| **Initial** only | the packet was taken and is being held |
+| nothing | no QUIC there, or UDP is filtered |
+
+### What it costs the server — measured
+
+Against nginx 1.31 with `quic_retry` **off**, which is its default:
+
+| | result |
+|---|---|
+| one 1200-byte datagram | over **76 s** of server-side state |
+| 800 half-finished handshakes (937 KB sent) | worker RSS 2 MB → **39 MB** |
+| 300 half-finished handshakes (360 KB sent) | **40 of 40** idle keepalive connections evicted (control: 40 of 40 survived) |
+
+nginx doesn't refuse when `worker_connections` runs out — it logs
+`worker_connections are not enough, reusing connections` and **evicts**, so the
+damage lands on connections that already exist.
+
+quic-go 0.62 held the same handshake for exactly **5.0 s**, its
+`HandshakeIdleTimeout` default. nginx has no equivalent directive. The same 1200
+bytes buys 15× more server-time on one than the other, and that difference is a
+config default rather than a protocol property.
+
+With `quic_retry on`, nginx created no state at all — for either hello.
+
+> **The 1200-byte floor.** RFC 9000 §14.1 requires any datagram carrying an Initial
+> to be at least 1200 bytes, so every packet is 1200 bytes whether it carries a
+> whole ClientHello or eight bytes of one. Dribbling does not make the client's
+> side cheaper — in `partial` mode it costs *more* (4× the bytes, in the runs above)
+> for *less* server work, because no key exchange happens. What it buys is that the
+> server can never parse the hello, so the hold cannot end by completing.
+
+> **Amplification.** `complete` is the only one of the two that yields a ratio,
+> since it is the only one that makes the server send its flight. Measured 1.8×
+> against nginx and 3.4× against quic-go; the tool flags anything above the 3×
+> RFC 9000 §8.1 allows before a client's address is validated. Confirm such a
+> reading with a packet capture before reporting it — the figure is cumulative
+> over the run and includes retransmissions.
+
+An HTTP proxy can't carry this: `-d` and `-e` tunnel TCP with CONNECT, and are
+refused. The availability probe still runs over TCP to the same host, which is
+what catches a QUIC handshake table spilling into a connection budget shared with
+the rest of the server.

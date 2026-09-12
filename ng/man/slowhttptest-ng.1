@@ -149,6 +149,89 @@ against an origin serving its own TLS it may measure the same clock twice.
 .Pp
 The availability probe still performs a real handshake, so the control is
 unaffected.
+.It Fl \-slow-quic
+Open QUIC handshakes and never finish them.
+Requires an
+.Sy https
+URL and an HTTP/3 listener on the target's UDP port.
+.Pp
+Every other mode holds a TCP connection, which costs the client a socket for as
+long as it costs the server one.
+QUIC breaks that symmetry: the server creates connection state on the first
+Initial packet it accepts, before the client has proved anything, and keeps it
+whether or not the client ever speaks again.
+So the defense here is not a timeout but address validation \(em a Retry, which
+hands back a token and creates nothing until the client echoes it.
+.Pp
+No QUIC library is involved.
+Initial packets are the one part of QUIC whose protection keys come from a
+published salt and the connection ID (RFC 9001 5.2), so they can be built with
+nothing but HKDF and AES; everything past them needs the TLS key schedule and is
+deliberately absent.
+A handshake that is never finished never needs any of it.
+.Pp
+RFC 9000 14.1 requires any datagram carrying an Initial to be at least 1200
+bytes, so every packet this sends is 1200 bytes whether it carries a whole
+ClientHello or eight bytes of one.
+Dribbling does not make the client's side cheaper; the server's willingness to
+wait is what is being measured.
+.Pp
+The run reports which of four things the target did, read from the long header
+of the reply without decrypting it.
+A Retry means address validation is on and nothing was held.
+A Handshake packet means the key exchange and the certificate signature ran.
+An Initial and nothing more means the packet was taken and is being held.
+Silence means nothing speaks QUIC there, or UDP to it is filtered.
+.Pp
+Measured against nginx 1.31 with
+.Sy quic_retry
+off, its default: one 1200-byte datagram bought over 76 seconds of server-side
+state, 800 of them grew the worker by 37 MB, and 300 of them were enough to
+evict 40 idle keepalive connections that a control run left untouched \(em nginx
+answers
+.Sy worker_connections are not enough
+by reusing connections rather than refusing new ones.
+quic-go 0.62 held the same handshake for exactly 5.0 seconds, its
+.Sy HandshakeIdleTimeout
+default, which nginx has no equivalent of.
+With
+.Sy quic_retry on
+nginx created no state at all, for either hello.
+.Pp
+An HTTP proxy cannot carry this:
+.Fl d
+and
+.Fl e
+tunnel TCP with CONNECT, and are refused.
+The availability probe still runs over TCP to the same host, which is what
+catches a QUIC handshake table spilling into a connection budget shared with the
+rest of the server.
+.It Fl \-quic-hello Cm partial | complete
+Whether the ClientHello is ever finished.
+Default
+.Cm partial .
+.Pp
+.Cm partial
+delivers the hello
+.Fl x
+bytes per
+.Fl i
+interval and withholds the last byte forever, retransmitting the final fragment
+to keep the server's idle timer from reaping the connection.
+The server parks a connection and buffers a CRYPTO stream it cannot parse, so no
+key exchange happens: this costs it a connection-table slot and memory and
+nothing else.
+.Pp
+.Cm complete
+delivers the whole hello in the first packet and then never speaks again.
+The server runs the key exchange, signs with its certificate, sends its entire
+flight and holds it for retransmission while it waits for a Finished that never
+comes.
+That costs CPU and more memory, and it is the only one of the two that yields an
+amplification figure: bytes received over bytes sent, reported at the end, and
+flagged when it exceeds the 3x RFC 9000 8.1 permits before a client's address is
+validated.
+Measured: 1.8x against nginx, 3.4x against quic-go.
 .El
 .Pp
 Three further modes are specific to HTTP/2 and are described under

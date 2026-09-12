@@ -90,6 +90,7 @@ add_library(slowhttp STATIC
   src/net/socket.cpp
   src/net/address.cpp
   src/net/tls.cpp
+  src/net/quic.cpp
   src/engine/engine.cpp
   src/engine/probe.cpp
   src/attacks/slow_headers.cpp
@@ -100,6 +101,7 @@ add_library(slowhttp STATIC
   src/attacks/slow_body.cpp
   src/attacks/expect_continue.cpp
   src/attacks/slow_tls.cpp
+  src/attacks/slow_quic.cpp
   src/attacks/range.cpp
   src/config/cli.cpp
   src/config/request.cpp
@@ -193,6 +195,14 @@ add_test(NAME expect_continue_unit COMMAND test_expect_continue)
 add_executable(test_slow_tls tests/test_slow_tls.cpp)
 target_link_libraries(test_slow_tls PRIVATE slowhttp)
 add_test(NAME slow_tls_unit COMMAND test_slow_tls)
+
+add_executable(test_quic tests/test_quic.cpp)
+target_link_libraries(test_quic PRIVATE slowhttp)
+add_test(NAME quic_unit COMMAND test_quic)
+
+add_executable(test_slow_quic tests/test_slow_quic.cpp)
+target_link_libraries(test_slow_quic PRIVATE slowhttp)
+add_test(NAME slow_quic_unit COMMAND test_slow_quic)
 set_tests_properties(slow_body_unit PROPERTIES LABELS "unit")
 
 add_executable(test_range tests/test_range.cpp)
@@ -278,6 +288,14 @@ if(Python3_Interpreter_FOUND)
             $<TARGET_FILE:slowhttptest-ng>
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_h2_server.py)
   set_tests_properties(e2e_http2 PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT}
+    ENVIRONMENT "SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
+
+  add_test(NAME e2e_quic
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_quic.py
+            $<TARGET_FILE:slowhttptest-ng>
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/mock_quic_server.py)
+  set_tests_properties(e2e_quic PROPERTIES LABELS "e2e" TIMEOUT ${E2E_TIMEOUT_SHORT}
     ENVIRONMENT "SLOWHTTP_TEST_TIMEOUT_SCALE=${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 
   # The same end-to-end run again, forced onto the poll() backend.

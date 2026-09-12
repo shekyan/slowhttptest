@@ -11,7 +11,7 @@
 namespace slowhttp {
 
 enum class Mode { SlowHeaders, SlowBody, SlowRead, Range, RapidReset,
-                 Continuation, ExpectContinue, SlowTls };
+                 Continuation, ExpectContinue, SlowTls, SlowQuic };
 
 const char* mode_name(Mode m);
 
@@ -289,6 +289,9 @@ struct Config {
       // has no way to say "none" and callers would have to special-case it.
       // The banner suppresses the line instead.
       case Mode::SlowTls: return "GET";
+      // Same for --slow-quic: the handshake stops long before HTTP/3 has a
+      // request to carry a verb in.
+      case Mode::SlowQuic: return "GET";
       case Mode::Range:    return "HEAD";
       case Mode::RapidReset: return "GET";
       case Mode::Continuation: return "GET";
@@ -397,6 +400,16 @@ struct Config {
   std::string connect_port() const {
     return proxy.enabled() ? proxy.port : target.port;
   }
+
+  // QUIC is spoken over UDP, so the resolver has to be asked for a datagram
+  // socket. Nothing else in the engine changes: a connect()ed UDP socket
+  // sends and receives through the same calls a TCP one does.
+  bool needs_udp() const { return mode == Mode::SlowQuic; }
+
+  // Whether the ClientHello is finished. Partial leaves the server holding a
+  // CRYPTO stream it cannot parse; complete makes it run the key exchange and
+  // then wait for a Finished that never arrives.
+  bool quic_complete_hello = false;
 };
 
 }  // namespace slowhttp

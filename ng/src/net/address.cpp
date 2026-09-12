@@ -15,12 +15,16 @@ ResolvedAddr::~ResolvedAddr() {
 }
 
 bool ResolvedAddr::resolve(const std::string& host, const std::string& port,
-                           std::string& error, int family) {
+                           std::string& error, int family, bool udp) {
   addrinfo hints;
   std::memset(&hints, 0, sizeof(hints));
   hints.ai_family = family != 0 ? family : AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;  // TCP
-  hints.ai_protocol = IPPROTO_TCP;
+  // QUIC rides on UDP, and the socktype flows through to ::socket() in
+  // start_connect() untouched. Everything above send_some()/recv_some() is
+  // datagram-agnostic: a connect()ed UDP socket delivers exactly the peer's
+  // packets, so the reactor and the attack see it as an ordinary stream.
+  hints.ai_socktype = udp ? SOCK_DGRAM : SOCK_STREAM;
+  hints.ai_protocol = udp ? IPPROTO_UDP : IPPROTO_TCP;
 
   int rc = ::getaddrinfo(host.c_str(), port.c_str(), &hints, &list_);
   if (rc != 0) {

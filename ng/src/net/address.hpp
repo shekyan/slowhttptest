@@ -20,9 +20,10 @@ class ResolvedAddr {
 
   // Resolves host/port to a TCP addrinfo list. Returns false on failure and sets
   // `error`.
-  // `family` is AF_UNSPEC, AF_INET or AF_INET6.
+  // `family` is AF_UNSPEC, AF_INET or AF_INET6. `udp` selects a datagram socket
+  // (for QUIC) instead of the default TCP stream.
   bool resolve(const std::string& host, const std::string& port,
-               std::string& error, int family = 0);
+               std::string& error, int family = 0, bool udp = false);
 
   // First usable entry, or nullptr if unresolved.
   const addrinfo* first() const { return list_; }

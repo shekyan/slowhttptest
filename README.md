@@ -42,6 +42,7 @@ still means the tool described above, and stays installed and unchanged.
 | chunked request body (`--chunked`) | no | yes |
 | Expect/100-continue hold (`--expect-continue`) | no | yes |
 | slow TLS handshake (`--slow-tls`) | no | yes |
+| slow QUIC/HTTP-3 handshake (`--slow-quic`) | no | yes |
 | probe routing independent of `-d` (`--probe-direct`) | no | yes |
 | flow-control throttling (`--window-trickle`) | no | yes |
 | capacity search (`--capacity`) | no | yes |

@@ -33,6 +33,16 @@ SECTIONS = [
                        "the TLS handshake itself; needs an https:// URL. "
                        "Separate from the HTTP timeouts on a TLS terminator, "
                        "the same clock as -H on an origin serving its own TLS"),
+        ("--slow-quic", "open QUIC handshakes over UDP and never finish them; "
+                        "needs an https:// URL and an HTTP/3 listener. The "
+                        "server creates connection state on the first packet, "
+                        "before the client has proved anything, so the defense "
+                        "is address validation (Retry) rather than a timeout"),
+        ("--quic-hello partial|complete",
+         "whether the ClientHello is finished (default partial). partial "
+         "leaves the server holding a CRYPTO stream it cannot parse; complete "
+         "makes it run the key exchange and sign, then wait for a Finished "
+         "that never comes"),
     ]),
     ("Target", [
         ("-u URL", "absolute URL of target (http://localhost/)"),

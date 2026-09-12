@@ -13,6 +13,7 @@
 #include <random>
 #include <string>
 
+#include "slowhttp/quic.hpp"
 #include "slowhttp/reactor.hpp"
 #include "slowhttp/tls.hpp"
 
@@ -60,6 +61,7 @@ const char* mode_name(Mode m) {
     case Mode::SlowBody:    return "slow body (R-U-Dead-Yet)";
     case Mode::ExpectContinue: return "expect 100-continue";
     case Mode::SlowTls: return "slow TLS handshake";
+    case Mode::SlowQuic: return "slow QUIC handshake";
     case Mode::SlowRead:    return "slow read";
     case Mode::Range:       return "range (Apache killer)";
     case Mode::RapidReset:  return "HTTP/2 rapid reset";
@@ -116,6 +118,17 @@ void print_usage() {
       "                          the TLS handshake itself; needs an https:// URL.\n"
       "                          Separate from the HTTP timeouts on a TLS terminator,\n"
       "                          the same clock as -H on an origin serving its own TLS\n"
+      "  --slow-quic             open QUIC handshakes over UDP and never finish them;\n"
+      "                          needs an https:// URL and an HTTP/3 listener. The\n"
+      "                          server creates connection state on the first packet,\n"
+      "                          before the client has proved anything, so the defense\n"
+      "                          is address validation (Retry) rather than a timeout\n"
+      "  --quic-hello partial|complete\n"
+      "                          whether the ClientHello is finished (default\n"
+      "                          partial). partial leaves the server holding a CRYPTO\n"
+      "                          stream it cannot parse; complete makes it run the key\n"
+      "                          exchange and sign, then wait for a Finished that\n"
+      "                          never comes\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -477,6 +490,8 @@ enum {
   kOptChunked,
   kOptExpectContinue,
   kOptSlowTls,
+  kOptSlowQuic,
+  kOptQuicHello,
   kOptProbeDirect,
   kOptWindowTrickle,
 };
@@ -495,6 +510,8 @@ const struct option kLongOptions[] = {
     {"chunked", no_argument, nullptr, kOptChunked},
     {"expect-continue", no_argument, nullptr, kOptExpectContinue},
     {"slow-tls", no_argument, nullptr, kOptSlowTls},
+    {"slow-quic", no_argument, nullptr, kOptSlowQuic},
+    {"quic-hello", required_argument, nullptr, kOptQuicHello},
     {"probe-direct", no_argument, nullptr, kOptProbeDirect},
     {"window-trickle", required_argument, nullptr, kOptWindowTrickle},
     {"random-user-agent", no_argument, nullptr, kOptRandomUserAgent},
@@ -580,6 +597,21 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         break;
       case kOptSlowTls:
         cfg.mode = Mode::SlowTls;
+        break;
+      case kOptSlowQuic:
+        cfg.mode = Mode::SlowQuic;
+        break;
+      case kOptQuicHello:
+        if (std::strcmp(optarg, "partial") == 0) {
+          cfg.quic_complete_hello = false;
+        } else if (std::strcmp(optarg, "complete") == 0) {
+          cfg.quic_complete_hello = true;
+        } else {
+          std::fprintf(stderr,
+                       "Error: --quic-hello takes 'partial' or 'complete',"
+                       " not '%s'.\n", optarg);
+          return CliResult::kError;
+        }
         break;
       case kOptProbeDirect:
         cfg.probe_direct = true;
@@ -911,6 +943,33 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       std::fprintf(stderr,
                    "Note: --probe-direct without -d changes nothing; the probe"
                    " already goes straight to the target.\n");
+  }
+
+  if (cfg.mode == Mode::SlowQuic) {
+    if (!cfg.target.tls()) {
+      std::fprintf(stderr,
+                   "Error: --slow-quic needs an https:// URL.\n"
+                   "       QUIC carries TLS inside the transport, so there is\n"
+                   "       no cleartext form of it to test.\n");
+      return CliResult::kError;
+    }
+    if (!quic::available()) {
+      std::fprintf(stderr,
+                   "Error: this build has no TLS backend, so QUIC packets\n"
+                   "       cannot be protected (built with -DSLOWHTTP_TLS=OFF).\n"
+                   "       Rebuild with OpenSSL.\n");
+      return CliResult::kError;
+    }
+    if (cfg.proxy.enabled() || cfg.probe_proxy.enabled()) {
+      // An HTTP proxy tunnels TCP. There is no CONNECT for UDP, and pretending
+      // otherwise would send handshake packets to something that cannot carry
+      // them while the run reported an ordinary failure to connect.
+      std::fprintf(stderr,
+                   "Error: --slow-quic cannot go through an HTTP proxy.\n"
+                   "       CONNECT tunnels TCP; QUIC is UDP, and neither -d\n"
+                   "       nor -e applies to it.\n");
+      return CliResult::kError;
+    }
   }
 
   if (cfg.mode == Mode::SlowTls && !cfg.target.tls()) {
