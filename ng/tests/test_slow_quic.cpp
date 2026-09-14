@@ -177,6 +177,139 @@ static void test_connections_get_distinct_identities() {
         "each connection carries its own destination connection ID");
 }
 
+static void test_sni_is_omitted_for_a_literal_address() {
+  // RFC 6066 3 forbids a literal address in SNI, and a server enforcing that
+  // rejects the hello outright -- which would measure the rejection instead of
+  // a hold. The hosts here are the same length, so the only thing that can
+  // make one hello shorter is the missing extension.
+  Config named = make_config();
+  named.target.host = "example.tes";  // 11 characters
+  Config literal = make_config();
+  literal.target.host = "203.0.113.5";  // also 11
+  Config v6 = make_config();
+  v6.target.host = "2001:db8::1";
+
+  SlowQuic a(named, SlowQuic::Hello::Partial);
+  SlowQuic b(literal, SlowQuic::Hello::Partial);
+  SlowQuic c(v6, SlowQuic::Hello::Partial);
+  check(b.hello_size() < a.hello_size(),
+        "an IPv4 literal target carries no SNI");
+  check(c.hello_size() < a.hello_size(),
+        "nor does an IPv6 literal");
+  check(b.hello_size() == c.hello_size(),
+        "and both literals produce the same hello");
+}
+
+static void test_a_retry_can_be_superseded_by_a_handshake() {
+  // A server may Retry one packet and, once re-addressed, go on to answer a
+  // later one. The connection has to leave the Retry bucket when that happens
+  // or the run reports address validation that did not hold.
+  Config cfg = make_config();
+  SlowQuic a(cfg, SlowQuic::Hello::Complete);
+  a.on_open(0);
+  a.on_connect(0);
+  const std::string retry = long_header(kRetry);
+  a.on_readable(0, retry.data(), retry.size());
+  check(a.retried() == 1, "the Retry is counted first");
+  const std::string hs = long_header(kHandshake);
+  a.on_readable(0, hs.data(), hs.size());
+  check(a.handshaked() == 1 && a.retried() == 0,
+        "and is given up when the same connection gets a flight");
+}
+
+static void test_summary_names_what_the_target_did() {
+  // Each verdict has to be distinguishable, because each means something
+  // different about the target's defenses. Asserting the distinguishing words
+  // rather than the whole sentence keeps this from breaking on wording.
+  {
+    Config cfg = make_config();
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string retry = long_header(kRetry);
+    a.on_readable(0, retry.data(), retry.size());
+    check(a.summary().find("Retry") != std::string::npos,
+          "a validated target is reported as validating");
+  }
+  {
+    Config cfg = make_config();
+    SlowQuic a(cfg, SlowQuic::Hello::Complete);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string ack = long_header(kInitial);
+    a.on_readable(0, ack.data(), ack.size());
+    const std::string s = a.summary();
+    check(s.find("held") != std::string::npos, "a held target is reported as held");
+    check(s.find("cannot parse") == std::string::npos,
+          "and the complete mode does not claim an unparseable hello");
+  }
+  {
+    Config cfg = make_config();
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string ack = long_header(kInitial);
+    a.on_readable(0, ack.data(), ack.size());
+    check(a.summary().find("cannot parse") != std::string::npos,
+          "the partial mode says why the target is stuck");
+  }
+  {
+    Config cfg = make_config();
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    check(a.summary().find("never answered") != std::string::npos,
+          "silence is reported as silence, not as a hold");
+  }
+}
+
+static void test_amplification_above_the_rfc_limit_is_flagged() {
+  // RFC 9000 8.1 caps what a server may send to an unvalidated address at
+  // three times what it received, and this mode never validates. Measured 3.4x
+  // against quic-go, so the threshold is not hypothetical.
+  Config cfg = make_config();
+  SlowQuic a(cfg, SlowQuic::Hello::Complete);
+  a.on_open(0);
+  a.on_connect(0);  // one 1200-byte datagram out
+  const std::string hs = long_header(kHandshake);
+  a.on_readable(0, hs.data(), hs.size());
+  const std::string modest = a.summary();
+  check(modest.find("above the 3x") == std::string::npos,
+        "a small reply is not flagged");
+
+  const std::string big(2000, '\0');
+  a.on_readable(0, big.data(), big.size());
+  a.on_readable(0, big.data(), big.size());  // now past 3x of 1200
+  const std::string loud = a.summary();
+  check(a.bytes_in() > 3 * a.bytes_out(), "the run really is past the limit");
+  check(loud.find("above the 3x") != std::string::npos,
+        "and crossing it is called out");
+}
+
+static void test_out_of_range_ids_are_refused_not_indexed() {
+  // These guards are the difference between a bug elsewhere in the engine and
+  // an out-of-bounds write into the per-connection vector. Nothing should ever
+  // pass an id outside the configured range, which is exactly why the guards
+  // have to be checked here rather than trusted.
+  Config cfg = make_config();  // 4 connections
+  SlowQuic a(cfg, SlowQuic::Hello::Partial);
+  for (slowhttp::ConnId bad : {static_cast<slowhttp::ConnId>(-1),
+                               static_cast<slowhttp::ConnId>(4),
+                               static_cast<slowhttp::ConnId>(9999)}) {
+    a.on_open(bad);
+    check(a.on_connect(bad).kind != Action::Kind::Send,
+          "an out-of-range id sends nothing");
+    check(a.on_timer(bad).kind != Action::Kind::Send,
+          "and is not dribbled to");
+    const std::string ack = long_header(kInitial);
+    check(a.on_readable(bad, ack.data(), ack.size()).kind == Action::Kind::Idle,
+          "and its replies are dropped rather than counted");
+    check(a.delivered(bad) == 0, "with no state to read back");
+  }
+  check(a.held() == 0 && a.handshaked() == 0 && a.retried() == 0,
+        "nothing out of range reaches the tally");
+}
+
 static void test_summary_says_nothing_without_a_connection() {
   Config cfg = make_config();
   SlowQuic a(cfg, SlowQuic::Hello::Partial);
@@ -196,6 +329,11 @@ int main() {
   test_retry_frees_the_slot();
   test_version_negotiation_is_not_a_hold();
   test_connections_get_distinct_identities();
+  test_sni_is_omitted_for_a_literal_address();
+  test_a_retry_can_be_superseded_by_a_handshake();
+  test_summary_names_what_the_target_did();
+  test_amplification_above_the_rfc_limit_is_flagged();
+  test_out_of_range_ids_are_refused_not_indexed();
   test_summary_says_nothing_without_a_connection();
   if (failures == 0) {
     std::printf("slow_quic: all checks passed\n");

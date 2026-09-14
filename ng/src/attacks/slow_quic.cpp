@@ -152,11 +152,12 @@ Action SlowQuic::on_readable(ConnId id, const char* data, std::size_t len) {
     return r == quic::Reply::Retry ? Action::reconnect() : Action::idle();
   }
 
-  // Move this connection out of the weaker bucket it was in, if any.
+  // Move this connection out of the weaker bucket it was in, if any. There is
+  // no case for rank 3: Handshake is the highest rank, so nothing can displace
+  // a connection already counted there.
   switch (c.best_rank) {
     case 1: --held_; break;
     case 2: --retried_; break;
-    case 3: --handshaked_; break;
     default: break;
   }
   c.best_rank = rank;

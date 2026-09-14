@@ -345,19 +345,5 @@ Reply classify(const char* data, std::size_t len) {
   }
 }
 
-const char* reply_name(Reply r) {
-  switch (r) {
-    case Reply::None: return "nothing";
-    case Reply::Initial: return "Initial";
-    case Reply::ZeroRtt: return "0-RTT";
-    case Reply::Handshake: return "Handshake";
-    case Reply::Retry: return "Retry";
-    case Reply::VersionNegotiation: return "Version Negotiation";
-    case Reply::Short: return "1-RTT";
-    case Reply::Malformed: return "malformed";
-  }
-  return "?";
-}
-
 }  // namespace quic
 }  // namespace slowhttp

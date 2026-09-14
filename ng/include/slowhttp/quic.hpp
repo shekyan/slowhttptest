@@ -82,7 +82,6 @@ enum class Reply {
   Malformed
 };
 Reply classify(const char* data, std::size_t len);
-const char* reply_name(Reply r);
 
 }  // namespace quic
 }  // namespace slowhttp

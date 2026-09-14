@@ -178,6 +178,67 @@ static void test_summary_says_nothing_without_a_connection() {
         "a run that reached nothing describes nothing");
 }
 
+static void test_summary_reports_what_the_server_did() {
+  // Whether the interim response arrived is half of what this mode measures,
+  // and the summary is the only place it is ever stated. Until now nothing
+  // asserted it -- the mode has no end-to-end test, so this was verified by
+  // hand on the wire and by nothing else.
+  {  // Reached the target, heard nothing back.
+    Config cfg = make_config();
+    ExpectContinue a(cfg);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string s = a.summary();
+    check(s.find("no reply at all") != std::string::npos,
+          "silence after a complete request is reported as a hold");
+  }
+  {  // Invited to send a body.
+    Config cfg = make_config();
+    ExpectContinue a(cfg);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string interim = "HTTP/1.1 100 Continue\r\n\r\n";
+    a.on_readable(0, interim.data(), interim.size());
+    const std::string s = a.summary();
+    check(s.find("1 invited") != std::string::npos,
+          "an invitation is counted in the summary");
+    check(s.find("0 answered") != std::string::npos,
+          "and nothing is claimed to have been answered");
+  }
+  {  // Answered outright, which is the healthy behaviour.
+    Config cfg = make_config();
+    ExpectContinue a(cfg);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string final_ = "HTTP/1.1 417 Expectation Failed\r\n\r\n";
+    a.on_readable(0, final_.data(), final_.size());
+    const std::string s = a.summary();
+    check(s.find("1 answered") != std::string::npos,
+          "a server that declined to wait is reported as such");
+    check(s.find("no reply at all") == std::string::npos,
+          "and is not confused with silence");
+  }
+}
+
+static void test_out_of_range_ids_are_refused_not_indexed() {
+  // The same boundary the other modes guard: an id outside the configured
+  // range must be turned away rather than used to index the per-connection
+  // vectors.
+  Config cfg = make_config();  // 4 connections
+  ExpectContinue a(cfg);
+  for (slowhttp::ConnId bad : {static_cast<slowhttp::ConnId>(-1),
+                               static_cast<slowhttp::ConnId>(4),
+                               static_cast<slowhttp::ConnId>(9999)}) {
+    a.on_open(bad);
+    const std::string interim = "HTTP/1.1 100 Continue\r\n\r\n";
+    check(a.on_readable(bad, interim.data(), interim.size()).kind ==
+              Action::Kind::Idle,
+          "an out-of-range reply is dropped");
+  }
+  check(a.continued() == 0 && a.answered() == 0,
+        "and never reaches the tally");
+}
+
 int main() {
   test_request_shape();
   test_timer_sends_nothing();
@@ -188,6 +249,8 @@ int main() {
   test_peer_close_recycles_the_slot();
   test_state_is_reset_between_connections();
   test_each_reuse_counts_its_own_invitation();
+  test_summary_reports_what_the_server_did();
+  test_out_of_range_ids_are_refused_not_indexed();
   test_summary_says_nothing_without_a_connection();
   if (failures == 0) {
     std::printf("expect_continue: all checks passed\n");

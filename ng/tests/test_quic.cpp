@@ -202,6 +202,9 @@ static void test_classify_reads_the_long_header() {
   check(classify(nullptr, 0) == Reply::None, "nothing is nothing");
   check(classify(pkt(0xc0, 1).data(), 25) == Reply::Initial, "Initial");
   check(classify(pkt(0xe0, 1).data(), 25) == Reply::Handshake, "Handshake");
+  // A server never sends 0-RTT, but the type bits are three wide and the
+  // unused value must not fall through onto a neighbour's meaning.
+  check(classify(pkt(0xd0, 1).data(), 25) == Reply::ZeroRtt, "0-RTT");
   check(classify(pkt(0xf0, 1).data(), 25) == Reply::Retry, "Retry");
   check(classify(pkt(0xc0, 0).data(), 25) == Reply::VersionNegotiation,
         "version zero is a Version Negotiation whatever the type bits say");
