@@ -775,6 +775,15 @@ the reply without decrypting it:
 | **Initial** only | the packet was taken and is being held |
 | nothing | no QUIC there, or UDP is filtered |
 
+> **What the connection count means here.** The status block reports
+> `udp sockets open`, not `connected` — there is no such thing as a connected
+> datagram socket, since `connect(2)` on one returns without putting a packet on
+> the wire. That number reads the same against a live server as against a black
+> hole (verified against `192.0.2.1`, which is unroutable by RFC 5737), so on its
+> own it says nothing about the target. The `target replies` row beside it is the
+> one carrying a measurement.
+
+
 ### What it costs the server — measured
 
 Against nginx 1.31 with `quic_retry` **off**, which is its default:

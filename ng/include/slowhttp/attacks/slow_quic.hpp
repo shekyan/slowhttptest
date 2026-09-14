@@ -68,6 +68,7 @@ class SlowQuic : public Attack {
   Action on_readable(ConnId id, const char* data, std::size_t len) override;
 
   std::string summary() const override;
+  std::string status_note() const override;
 
   long retried() const { return retried_; }
   long handshaked() const { return handshaked_; }

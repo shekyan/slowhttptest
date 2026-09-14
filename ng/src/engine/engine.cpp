@@ -1703,12 +1703,15 @@ struct Engine::Impl {
       struct tm tmv;
       if (::localtime_r(&wall, &tmv) != nullptr)
         std::strftime(clock, sizeof(clock), "%H:%M:%S", &tmv);
+      // Same correction as the block form: "connected" cannot mean anything
+      // over UDP, where connect() never puts a packet on the wire.
       std::fprintf(stderr,
-                   "%s [%4lds %-8s] initializing=%d pending=%d connected=%d"
+                   "%s [%4lds %-8s] initializing=%d pending=%d %s=%d"
                    " error=%ld closed=%ld available=%s\n",
                    clock,
-                   secs, phase_name, setting_up, connecting, held, failed,
-                   peer_closed_total, avail);
+                   secs, phase_name, setting_up, connecting,
+                   cfg.needs_udp() ? "udp_sockets" : "connected", held,
+                   failed, peer_closed_total, avail);
       std::fflush(stderr);
       return;
     }
@@ -1737,7 +1740,16 @@ struct Engine::Impl {
     lines += 3;
     row("initializing:", "%d", setting_up);
     row("pending:", "%d", connecting);
-    row("connected:", "%d", held);
+    // Over UDP, connect() returns without putting a packet on the wire, so
+    // this counts sockets that exist and says nothing about the target.
+    // Measured: against 192.0.2.1 (TEST-NET-1, unroutable) it still reports
+    // every connection as made. The label has to admit that, and the attack
+    // supplies the count that is really known.
+    row(cfg.needs_udp() ? "udp sockets open:" : "connected:", "%d", held);
+    {
+      const std::string note = attack.status_note();
+      if (!note.empty()) row("target replies:", "%s", note.c_str());
+    }
     row("error:", "%ld", failed);
     row("closed:", "%ld", peer_closed_total);
     row("service available:", "%s", avail);
@@ -2009,7 +2021,8 @@ struct Engine::Impl {
       std::string type = attack.name();
       for (char& ch : type) ch = static_cast<char>(::toupper(ch));
       row("test type:", "%s", type.c_str());
-      row("number of connections:", "%d", cfg.connections);
+      row(cfg.needs_udp() ? "number of udp flows:" : "number of connections:",
+          "%d", cfg.connections);
       row("URL:", "%s", log.meta.target_url.c_str());
       // Not under --slow-tls or --slow-quic: no HTTP request is ever sent,
       // and naming a verb implied one was.
@@ -2389,10 +2402,12 @@ struct Engine::Impl {
     // handshake.
     if (chatty())
       std::fprintf(stderr,
-                 "\n\nDone (%s). opened=%ld tcp_connected=%ld attack_ready=%ld"
+                 "\n\nDone (%s). opened=%ld %s=%ld attack_ready=%ld"
                  " peer_closed=%ld connect_failed=%ld setup_failed=%ld"
                  " connect_timeout=%ld\n",
-                 why, opened_total, connected_total, ready_total,
+                 why, opened_total,
+                 cfg.needs_udp() ? "udp_sockets" : "tcp_connected",
+                 connected_total, ready_total,
                  peer_closed_total, connect_failed_total, setup_failed_total,
                  connect_timeout_total);
 

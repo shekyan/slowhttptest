@@ -64,6 +64,12 @@ class Attack {
   // it does not know an interim response from any other bytes -- and neither
   // can main(), because run() leaves by _exit().
   virtual std::string summary() const { return std::string(); }
+
+  // An extra status row while the run is live, or empty for none. For modes
+  // whose connection count does not mean what the generic label implies:
+  // over UDP there is no such thing as a connected socket, so the mode says
+  // what is actually known about the target instead.
+  virtual std::string status_note() const { return std::string(); }
 };
 
 }  // namespace slowhttp

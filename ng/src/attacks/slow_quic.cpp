@@ -172,6 +172,18 @@ Action SlowQuic::on_readable(ConnId id, const char* data, std::size_t len) {
   return r == quic::Reply::Retry ? Action::reconnect() : Action::idle();
 }
 
+std::string SlowQuic::status_note() const {
+  // The engine's socket count cannot mean anything over UDP, so this is what
+  // the run actually knows: how many of those sockets the target has answered,
+  // and with what.
+  if (started_ == 0) return std::string();
+  char buf[160];
+  std::snprintf(buf, sizeof(buf),
+                "%ld held, %ld handshaking, %ld retried, of %ld opened",
+                held_, handshaked_, retried_, started_);
+  return std::string(buf);
+}
+
 std::string SlowQuic::summary() const {
   if (started_ == 0) return std::string();
   char buf[512];

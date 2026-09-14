@@ -310,6 +310,29 @@ static void test_out_of_range_ids_are_refused_not_indexed() {
         "nothing out of range reaches the tally");
 }
 
+static void test_status_note_reports_replies_not_sockets() {
+  // The engine's socket count cannot mean anything over UDP: connect() on a
+  // datagram socket returns without putting a packet on the wire, so it reads
+  // the same against a live server and against a black hole. This row is what
+  // carries the real number, so it has to move when the target answers.
+  Config cfg = make_config();
+  SlowQuic a(cfg, SlowQuic::Hello::Partial);
+  check(a.status_note().empty(), "nothing to say before anything is opened");
+
+  a.on_open(0);
+  a.on_connect(0);
+  const std::string opened = a.status_note();
+  check(opened.find("of 1 opened") != std::string::npos,
+        "an opened socket is counted as opened");
+  check(opened.find("0 held") != std::string::npos,
+        "but not as held, because the target has said nothing");
+
+  const std::string ack = long_header(kInitial);
+  a.on_readable(0, ack.data(), ack.size());
+  check(a.status_note().find("1 held") != std::string::npos,
+        "and becomes held only once the target replies");
+}
+
 static void test_summary_says_nothing_without_a_connection() {
   Config cfg = make_config();
   SlowQuic a(cfg, SlowQuic::Hello::Partial);
@@ -334,6 +357,7 @@ int main() {
   test_summary_names_what_the_target_did();
   test_amplification_above_the_rfc_limit_is_flagged();
   test_out_of_range_ids_are_refused_not_indexed();
+  test_status_note_reports_replies_not_sockets();
   test_summary_says_nothing_without_a_connection();
   if (failures == 0) {
     std::printf("slow_quic: all checks passed\n");

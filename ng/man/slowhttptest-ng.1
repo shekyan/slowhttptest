@@ -183,6 +183,18 @@ A Handshake packet means the key exchange and the certificate signature ran.
 An Initial and nothing more means the packet was taken and is being held.
 Silence means nothing speaks QUIC there, or UDP to it is filtered.
 .Pp
+The status block counts UDP sockets, not established connections, and says so:
+.Sy udp sockets open .
+There is no such thing as a connected datagram socket \(em
+.Xr connect 2
+on one returns without putting a packet on the wire \(em so that number reads
+the same against a live server as against a black hole, and on its own it says
+nothing about the target.
+The
+.Sy target replies
+row beside it is the one that carries a measurement: how many of those sockets
+the target has answered, and with what.
+.Pp
 Measured against nginx 1.31 with
 .Sy quic_retry
 off, its default: one 1200-byte datagram bought over 76 seconds of server-side
