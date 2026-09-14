@@ -2411,6 +2411,11 @@ struct Engine::Impl {
                  peer_closed_total, connect_failed_total, setup_failed_total,
                  connect_timeout_total);
 
+    // Taken now rather than in fill_meta(): what the attack knows about the
+    // target is a result of the run, and at fill_meta() time nothing has
+    // happened yet. Set before any renderer reads the verdict.
+    log.meta.attack_caveat = attack.verdict_caveat();
+
     // Anything the attack measured that the engine's own counters cannot
     // express -- it is the only side that reads the peer.
     if (chatty()) {

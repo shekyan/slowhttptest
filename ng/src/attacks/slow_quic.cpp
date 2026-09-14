@@ -184,6 +184,23 @@ std::string SlowQuic::status_note() const {
   return std::string(buf);
 }
 
+std::string SlowQuic::verdict_caveat() const {
+  // Retry means the server handed back a token and created nothing. If that is
+  // what happened to every connection, no handshake state was ever held, so
+  // whatever made the probe fail was not this attack exhausting it -- the far
+  // likelier reading is that the target is shedding this source address.
+  // Reporting "denied" without that distinction would credit the tool with an
+  // outage it did not cause.
+  if (started_ > 0 && retried_ > 0 && held_ == 0 && handshaked_ == 0) {
+    return "Every connection was answered with Retry, so the target created no "
+           "handshake state at all -- any denial seen here is far more likely "
+           "this source address being shed than handshake resources being "
+           "exhausted. Re-check from a different address before concluding "
+           "anything about capacity.";
+  }
+  return std::string();
+}
+
 std::string SlowQuic::summary() const {
   if (started_ == 0) return std::string();
   char buf[512];

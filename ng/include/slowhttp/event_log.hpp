@@ -122,6 +122,9 @@ struct RunMeta {
   // --probe-direct: availability was measured at the origin, not through
   // the proxy the attack used.
   bool probe_direct = false;
+  // Supplied by the attack, which is the only side that knows whether the
+  // target ever took on work. Empty when it has nothing to add.
+  std::string attack_caveat;
   std::string fail_on_status_spec;  // --fail-on-status as typed, or empty
   // Which browser agent this run presented. Recorded because it is chosen at
   // random when -A is not given, and because CDNs and WAFs route on it -- two

@@ -69,6 +69,7 @@ class SlowQuic : public Attack {
 
   std::string summary() const override;
   std::string status_note() const override;
+  std::string verdict_caveat() const override;
 
   long retried() const { return retried_; }
   long handshaked() const { return handshaked_; }

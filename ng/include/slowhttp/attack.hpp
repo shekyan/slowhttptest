@@ -70,6 +70,15 @@ class Attack {
   // over UDP there is no such thing as a connected socket, so the mode says
   // what is actually known about the target instead.
   virtual std::string status_note() const { return std::string(); }
+
+  // A caveat the verdict must carry, or empty for none.
+  //
+  // The probe and the attack measure different things, and when they
+  // disagree the disagreement is the finding. Only the attack knows whether
+  // the target took on any work at all; if it plainly did not, a verdict of
+  // denial cannot be resource exhaustion, and saying so is the difference
+  // between a result and a guess.
+  virtual std::string verdict_caveat() const { return std::string(); }
 };
 
 }  // namespace slowhttp

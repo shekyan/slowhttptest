@@ -381,6 +381,11 @@ Verdict EventLog::evaluate(double threshold) const {
       "An intermediary (load balancer, CDN, reverse proxy) may have failed or "
       "held up rather than the origin.");
   v.caveats.push_back("Single run — re-run to confirm.");
+  // First, not last: when the attack can show the target took on no work,
+  // that outranks the generic list -- it narrows what the verdict can mean
+  // rather than merely listing what it cannot exclude.
+  if (!meta.attack_caveat.empty())
+    v.caveats.insert(v.caveats.begin(), meta.attack_caveat);
   // Where the probe actually went, which is not always where -e says. With
   // only -d set the probe inherits the attack's proxy, and until this was
   // spelled out the report showed a proxy for the attack and said nothing

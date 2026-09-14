@@ -333,6 +333,79 @@ static void test_status_note_reports_replies_not_sockets() {
         "and becomes held only once the target replies");
 }
 
+static void test_all_retry_qualifies_a_denial_verdict() {
+  // The probe and the attack measure different things, and when they disagree
+  // the disagreement is the finding. If every connection was answered with a
+  // Retry the target created no handshake state, so a probe failure cannot be
+  // this attack exhausting it -- and the verdict has to say so, or the tool
+  // takes credit for an outage it did not cause.
+  Config cfg = make_config();
+  {
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string retry = long_header(kRetry);
+    a.on_readable(0, retry.data(), retry.size());
+    const std::string c = a.verdict_caveat();
+    check(!c.empty(), "an all-Retry run qualifies the verdict");
+    check(c.find("shed") != std::string::npos,
+          "and names source-address shedding as the likelier reading");
+  }
+  {  // A target that actually held something gets no such excuse.
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string ack = long_header(kInitial);
+    a.on_readable(0, ack.data(), ack.size());
+    check(a.verdict_caveat().empty(),
+          "a run that held connections is not explained away");
+  }
+  {  // Nor does a run that got a flight.
+    SlowQuic a(cfg, SlowQuic::Hello::Complete);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string hs = long_header(kHandshake);
+    a.on_readable(0, hs.data(), hs.size());
+    check(a.verdict_caveat().empty(),
+          "nor is one where the target did the expensive work");
+  }
+  {  // The case the guard exists for: a target that Retries some connections
+     // and accepts others did take on work, so the denial is not explained
+     // away just because a Retry appeared somewhere in the run.
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string retry = long_header(kRetry);
+    a.on_readable(0, retry.data(), retry.size());
+    a.on_open(1);
+    a.on_connect(1);
+    const std::string ack = long_header(kInitial);
+    a.on_readable(1, ack.data(), ack.size());
+    check(a.retried() == 1 && a.held() == 1, "the run really is mixed");
+    check(a.verdict_caveat().empty(),
+          "a mixed run is not explained away by the Retries in it");
+  }
+  {  // The same mix, but with a flight rather than a hold: a target that
+     // signed for even one handshake spent real work, whatever it Retried.
+    SlowQuic a(cfg, SlowQuic::Hello::Complete);
+    a.on_open(0);
+    a.on_connect(0);
+    const std::string retry = long_header(kRetry);
+    a.on_readable(0, retry.data(), retry.size());
+    a.on_open(1);
+    a.on_connect(1);
+    const std::string hs = long_header(kHandshake);
+    a.on_readable(1, hs.data(), hs.size());
+    check(a.retried() == 1 && a.handshaked() == 1, "the run really is mixed");
+    check(a.verdict_caveat().empty(),
+          "Retries alongside a completed flight do not excuse the denial");
+  }
+  {  // And nothing is claimed before the run starts.
+    SlowQuic a(cfg, SlowQuic::Hello::Partial);
+    check(a.verdict_caveat().empty(), "silence before anything is attempted");
+  }
+}
+
 static void test_summary_says_nothing_without_a_connection() {
   Config cfg = make_config();
   SlowQuic a(cfg, SlowQuic::Hello::Partial);
@@ -358,6 +431,7 @@ int main() {
   test_amplification_above_the_rfc_limit_is_flagged();
   test_out_of_range_ids_are_refused_not_indexed();
   test_status_note_reports_replies_not_sockets();
+  test_all_retry_qualifies_a_denial_verdict();
   test_summary_says_nothing_without_a_connection();
   if (failures == 0) {
     std::printf("slow_quic: all checks passed\n");
