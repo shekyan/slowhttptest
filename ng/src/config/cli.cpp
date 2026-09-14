@@ -124,11 +124,11 @@ void print_usage() {
       "                          before the client has proved anything, so the defense\n"
       "                          is address validation (Retry) rather than a timeout\n"
       "  --quic-hello partial|complete\n"
-      "                          whether the ClientHello is finished (default\n"
-      "                          partial). partial leaves the server holding a CRYPTO\n"
-      "                          stream it cannot parse; complete makes it run the key\n"
-      "                          exchange and sign, then wait for a Finished that\n"
-      "                          never comes\n"
+      "                          needs --slow-quic. Whether the ClientHello is\n"
+      "                          finished (default partial). partial leaves the server\n"
+      "                          holding a CRYPTO stream it cannot parse; complete\n"
+      "                          makes it run the key exchange and sign, then wait for\n"
+      "                          a Finished that never comes\n"
       "\n"
       "Target:\n"
       "  -u URL                  absolute URL of target (http://localhost/)\n"
@@ -555,6 +555,12 @@ bool parse_long_int(int& val, const char* name, long min, long max) {
 }  // namespace
 
 CliResult parse_cli(int argc, char** argv, Config& cfg) {
+  // Whether these were given at all, which a value alone cannot answer:
+  // --quic-hello partial sets the same default it would have had, and
+  // --h2-streams 100 is the default too. A flag that only means something in
+  // one mode has to be refused outside it, not quietly dropped.
+  bool quic_hello_given = false;
+  bool h2_streams_given = false;
   std::string url = "http://localhost/";
   int tmp = 0;
   int o;
@@ -602,6 +608,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         cfg.mode = Mode::SlowQuic;
         break;
       case kOptQuicHello:
+        quic_hello_given = true;
         if (std::strcmp(optarg, "partial") == 0) {
           cfg.quic_complete_hello = false;
         } else if (std::strcmp(optarg, "complete") == 0) {
@@ -656,6 +663,7 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
         cfg.http2 = true;
         break;
       case kOptH2Streams:
+        h2_streams_given = true;
         if (!parse_long_int(cfg.h2_streams, "h2-streams", 1, 100000))
           return CliResult::kError;
         break;
@@ -943,6 +951,28 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       std::fprintf(stderr,
                    "Note: --probe-direct without -d changes nothing; the probe"
                    " already goes straight to the target.\n");
+  }
+
+  // A flag that only means something in one mode has to be refused outside it.
+  // --window-trickle already works this way, for the reason given there: a run
+  // that silently ignores the flag measures something other than what the
+  // operator asked for, and says nothing about the difference. Reported after
+  // exactly that -- "--quic-hello partial" without --slow-quic ran slow headers
+  // over TCP while reading like a QUIC test.
+  if (quic_hello_given && cfg.mode != Mode::SlowQuic) {
+    std::fprintf(stderr,
+                 "Error: --quic-hello selects how the QUIC handshake is left\n"
+                 "       unfinished, so it needs --slow-quic. Without it this\n"
+                 "       run would be %s over TCP.\n",
+                 mode_name(cfg.mode));
+    return CliResult::kError;
+  }
+  if (h2_streams_given && !cfg.http2) {
+    std::fprintf(stderr,
+                 "Error: --h2-streams counts HTTP/2 streams per connection,\n"
+                 "       so it needs --http2. Without it nothing opens a\n"
+                 "       stream and the value is never read.\n");
+    return CliResult::kError;
   }
 
   if (cfg.mode == Mode::SlowQuic) {

@@ -152,6 +152,59 @@ static void test_flags() {
   }
 }
 
+static void test_mode_specific_flags_are_refused_outside_their_mode() {
+  // A flag that only means something in one mode must be refused outside it
+  // rather than dropped. Reported from the field: "--quic-hello partial"
+  // without --slow-quic ran slow headers over TCP 443 while reading, to the
+  // operator, like a QUIC test -- 100k connections aimed at the wrong thing.
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--quic-hello", "partial"}, cfg) ==
+              CliResult::kError,
+          "--quic-hello without --slow-quic is refused");
+  }
+  {  // Including the value that happens to match the default, which is the
+     // case a plain bool cannot tell from "not given at all".
+    Config cfg;
+    check(run({"slowhttptest-ng", "-B", "--quic-hello", "partial"}, cfg) ==
+              CliResult::kError,
+          "and refused next to another explicit mode");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "complete",
+               "-u", "https://example.test/"}, cfg) == CliResult::kRun,
+          "but accepted with --slow-quic");
+    check(cfg.quic_complete_hello, "and applied");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "partial",
+               "-u", "https://example.test/"}, cfg) == CliResult::kRun,
+          "partial is accepted too");
+    check(!cfg.quic_complete_hello, "and leaves the hello unfinished");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "-X", "--h2-streams", "50"}, cfg) ==
+              CliResult::kError,
+          "--h2-streams without --http2 is refused");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "-X", "--http2", "--h2-streams", "50",
+               "-u", "https://example.test/"}, cfg) == CliResult::kRun,
+          "but accepted with --http2");
+    check(cfg.h2_streams == 50, "and applied");
+  }
+  {  // Not given at all must stay legal, whatever the mode.
+    Config cfg;
+    check(run({"slowhttptest-ng", "-X", "-u", "http://example.test/"}, cfg) ==
+              CliResult::kRun,
+          "neither flag is required");
+  }
+}
+
 static void test_proxy_flags() {
   {
     Config cfg;
@@ -710,6 +763,7 @@ static void test_capacity_flags() {
 int main() {
   test_url_parsing();
   test_flags();
+  test_mode_specific_flags_are_refused_outside_their_mode();
   test_proxy_flags();
   test_host_header();
   test_referer();

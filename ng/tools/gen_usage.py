@@ -39,7 +39,8 @@ SECTIONS = [
                         "before the client has proved anything, so the defense "
                         "is address validation (Retry) rather than a timeout"),
         ("--quic-hello partial|complete",
-         "whether the ClientHello is finished (default partial). partial "
+         "needs --slow-quic. Whether the ClientHello is finished (default "
+         "partial). partial "
          "leaves the server holding a CRYPTO stream it cannot parse; complete "
          "makes it run the key exchange and sign, then wait for a Finished "
          "that never comes"),
