@@ -1080,9 +1080,24 @@ struct Engine::Impl {
                    "           more data before the window closes.%s\n",
                    granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1),
 #if defined(__APPLE__)
-                   " macOS receive-buffer autotuning\n"
-                   "           overrides SO_RCVBUF at connect; see"
-                   " net.inet.tcp.doautorcvbuf.");
+                   // Measured, not inferred: every granted size on this
+                   // platform came back an exact integer multiple of the path
+                   // MSS, with a floor near 20 of them. Requests below that
+                   // floor are indistinguishable from each other, which is the
+                   // part that changes how a run should be read.
+                   "\n"
+                   "           macOS rounds the receive buffer to a whole"
+                   " number of path MSS and\n"
+                   "           will not go below about 20 of them, so small"
+                   " -w/-y values all\n"
+                   "           collapse to the same size. Receive-buffer"
+                   " autotuning has been on\n"
+                   "           by default since OS X 10.8"
+                   " (net.inet.tcp.doautorcvbuf), though an\n"
+                   "           explicit SO_RCVBUF is documented to opt out of"
+                   " it. Run -X from\n"
+                   "           Linux when the window size is itself under"
+                   " test.");
 #else
                    "");
 #endif
