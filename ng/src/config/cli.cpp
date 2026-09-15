@@ -124,7 +124,7 @@ void print_usage() {
       "                          before the client has proved anything, so the defense\n"
       "                          is address validation (Retry) rather than a timeout\n"
       "  --quic-hello partial|complete\n"
-      "                          needs --slow-quic. Whether the ClientHello is\n"
+      "                          an option of --slow-quic. Whether the ClientHello is\n"
       "                          finished (default partial). partial leaves the server\n"
       "                          holding a CRYPTO stream it cannot parse; complete\n"
       "                          makes it run the key exchange and sign, then wait for\n"
@@ -794,18 +794,14 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
 
   if (cfg.window_trickle > 0 && !(cfg.mode == Mode::SlowRead && cfg.http2)) {
     std::fprintf(stderr,
-                 "Error: --window-trickle needs slow read over HTTP/2.\n"
-                 "       The window it trickles is an HTTP/2 stream window."
-                 " Nothing else here\n"
-                 "       has one, and ignoring the flag would leave the run"
-                 " measuring SO_RCVBUF\n"
-                 "       while the operator believed otherwise.\n"
+                 "Error: --window-trickle throttles an HTTP/2 stream window,"
+                 " so it needs slow\n"
+                 "       read over HTTP/2, which was not given.\n"
                  "\n"
                  "       Did you mean:\n"
                  "         -X --http2 --window-trickle %d\n"
                  "\n"
-                 "       Options that require --http2: --h2-streams,"
-                 " --window-trickle\n",
+                 "       --h2-streams needs --http2 too.\n",
                  cfg.window_trickle);
     return CliResult::kError;
   }
@@ -968,37 +964,27 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
   // exactly that -- "--quic-hello partial" without --slow-quic ran slow headers
   // over TCP while reading like a QUIC test.
   if (quic_hello_given && cfg.mode != Mode::SlowQuic) {
-    // Naming the mode that would have run is the load-bearing part: the flag
-    // reads like it selects QUIC, and the run that follows looks like a QUIC
-    // test to whoever launched it. Showing the corrected invocation costs one
-    // line and removes the guesswork.
+    // It is an option of --slow-quic, not a mode of its own. Saying that is
+    // the whole message; what the run would otherwise have done is neither
+    // true any more nor useful to someone fixing the command line.
     std::fprintf(stderr,
-                 "Error: --quic-hello needs --slow-quic.\n"
-                 "       It chooses how the QUIC handshake is left unfinished,"
-                 " but selects no\n"
-                 "       mode by itself -- this run would have been %s over"
-                 " TCP.\n"
+                 "Error: --quic-hello is an option of --slow-quic, which was"
+                 " not given.\n"
                  "\n"
                  "       Did you mean:\n"
-                 "         --slow-quic --quic-hello %s\n"
-                 "\n"
-                 "       Options that require --slow-quic: --quic-hello\n",
-                 mode_name(cfg.mode),
+                 "         --slow-quic --quic-hello %s\n",
                  cfg.quic_complete_hello ? "complete" : "partial");
     return CliResult::kError;
   }
   if (h2_streams_given && !cfg.http2) {
     std::fprintf(stderr,
-                 "Error: --h2-streams needs --http2.\n"
-                 "       It counts HTTP/2 streams per connection, and without"
-                 " --http2 nothing\n"
-                 "       opens a stream, so the value is never read.\n"
+                 "Error: --h2-streams is an option of --http2, which was not"
+                 " given.\n"
                  "\n"
                  "       Did you mean:\n"
                  "         -X --http2 --h2-streams %d\n"
                  "\n"
-                 "       Options that require --http2: --h2-streams,"
-                 " --window-trickle\n",
+                 "       --window-trickle needs --http2 too.\n",
                  cfg.h2_streams);
     return CliResult::kError;
   }

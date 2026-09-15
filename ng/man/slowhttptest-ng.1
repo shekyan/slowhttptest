@@ -222,10 +222,9 @@ rest of the server.
 Whether the ClientHello is ever finished.
 Default
 .Cm partial .
-Requires
-.Fl \-slow-quic
-and is refused without it: on its own it selects no mode, and a run that
-accepted it would quietly be testing something else over TCP.
+An option of
+.Fl \-slow-quic ,
+and refused without it.
 .Pp
 .Cm partial
 delivers the hello

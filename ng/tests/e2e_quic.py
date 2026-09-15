@@ -92,8 +92,9 @@ def main():
                         "-c", "2", "-l", "2"], timeout=30)
     if rc == 0:
         fail("quic-hello needs slow-quic", "it was accepted without --slow-quic")
-    elif "needs --slow-quic" not in out:
-        fail("quic-hello needs slow-quic", "no explanation: %r" % out[:200])
+    elif "--slow-quic" not in out:
+        fail("quic-hello needs slow-quic",
+             "refused without naming the option it belongs to: %r" % out[:200])
     elif "Did you mean" not in out or "--slow-quic --quic-hello partial" not in out:
         fail("quic-hello needs slow-quic",
              "refused, but without showing the fix: %r" % out[:300])
