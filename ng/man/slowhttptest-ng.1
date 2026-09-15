@@ -521,48 +521,51 @@ Requires
 .Fl w
 and
 .Fl y
-are advisory.
-The kernel routinely grants a receive buffer hundreds of times larger than
-asked for, and the run then measures the local kernel rather than the target.
-.Pp
-On macOS the granted buffer is an exact integer multiple of the path MSS, with
-a floor near twenty of them.
-Measured on macOS 26.6, requesting 1 B, 261 B, 16 KB, 64 KB and 400 KB returned
-20, 20, 20, 21 and 25 times the MSS respectively \(em so every request below
-roughly twenty segments collapses to the same buffer, and the small numbers
-.Fl w
-and
-.Fl y
-accept cannot be distinguished from one another.
-On a 1500-byte path that floor is about 27 KB; on loopback, where the MSS is
-16332, it is about 326 KB.
+are advisory, and on macOS they are overridden by default.
 .Pp
 Receive-buffer autotuning
 .Pq Va net.inet.tcp.doautorcvbuf
-has been enabled by default since OS X 10.8, where it was introduced
-.Pq xnu-2050.7.9 .
-Apple publishes no prose documentation for it; the authority is the kernel
-source, in which
-.Fn setsockopt
-on
-.Dv SO_RCVBUF
-sets
-.Dv SB_USRSIZE
-and clears
-.Dv SB_AUTOSIZE ,
-and the connect path re-enables autosizing only when
-.Dv SB_USRSIZE
-is absent.
-An explicit request is therefore documented to opt out of autotuning, which
-does not match the resizing observed above; whether clearing the sysctl
-restores control has not been tested here, and needs root to try.
-Run
+has been on by default since OS X 10.8, where it was introduced
+.Pq xnu-2050.7.9 ;
+the last 10.7 kernel has no trace of it.
+Apple publishes no prose documentation for the sysctl, so the authority is the
+kernel source.
+With autotuning on, the granted buffer sits near twenty times the path MSS
+however little is asked for: measured on macOS 26.6, requests of 1 B, 261 B and
+16 KB all returned 20 times the MSS, so every small value of
+.Fl w
+and
+.Fl y
+collapses to the same buffer.
+.Pp
+Turning it off restores control:
+.Bd -literal -offset indent
+sudo sysctl -w net.inet.tcp.doautorcvbuf=0
+.Ed
+.Pp
+Measured with it off, against a path whose MSS was 1348: a request of 1 B, 100
+B, 261 B or 1024 B was honoured exactly, and 4096 B became 5392 \(em four whole
+segments.
+That is
+.Fn tcp_mss
+in
+.Pa bsd/netinet/tcp_input.c ,
+which rounds the buffer up to a multiple of the MSS only when the request
+already exceeds one.
+So below the path MSS the number asked for is the number used, and above it the
+next whole segment is.
+.Pp
+The floor is still the MSS, which matters on loopback: there the MSS is 16332,
+so the smallest buffer obtainable is tens of kilobytes whatever is requested.
+Point
 .Fl X
-from Linux when the window size is itself the thing under test.
+at a real interface when the window size is itself the thing under test.
 .Pp
 A flow-control window is not advisory
 .Pq RFC 9113 Sx 6.9 :
-the server may not exceed it, so the limit binds wherever the run executes.
+the server may not exceed it, so
+.Fl \-window-trickle
+binds wherever the run executes, with no sysctl involved.
 .Pp
 It also keeps every stream demonstrably progressing.
 A server-side send timeout is the defence that does catch a fully stalled

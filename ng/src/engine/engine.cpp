@@ -1071,36 +1071,55 @@ struct Engine::Impl {
     std::fprintf(stderr,
                  "  advertised window: requested %d B, kernel SO_RCVBUF %d B\n",
                  requested_rcvbuf_, granted);
-    if (log.meta.window_overridden)
+    if (log.meta.window_overridden) {
       std::fprintf(stderr,
                    "  WARNING: the kernel granted %dx the requested window, so"
                    " -w/-y are not\n"
                    "           controlling it on this platform. Each connection"
                    " will absorb far\n"
-                   "           more data before the window closes.%s\n",
-                   granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1),
+                   "           more data before the window closes.\n",
+                   granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1));
 #if defined(__APPLE__)
-                   // Measured, not inferred: every granted size on this
-                   // platform came back an exact integer multiple of the path
-                   // MSS, with a floor near 20 of them. Requests below that
-                   // floor are indistinguishable from each other, which is the
-                   // part that changes how a run should be read.
-                   "\n"
-                   "           macOS rounds the receive buffer to a whole"
-                   " number of path MSS and\n"
-                   "           will not go below about 20 of them, so small"
-                   " -w/-y values all\n"
-                   "           collapse to the same size. Receive-buffer"
-                   " autotuning has been on\n"
-                   "           by default since OS X 10.8"
-                   " (net.inet.tcp.doautorcvbuf), though an\n"
-                   "           explicit SO_RCVBUF is documented to opt out of"
-                   " it. Run -X from\n"
-                   "           Linux when the window size is itself under"
-                   " test.");
-#else
-                   "");
+      // Measured on macOS 26.6 against a 1348-byte-MSS path: with autotuning
+      // on, every request from 1 B to 16 KB came back at about 20x the MSS.
+      // With it off, requests below the MSS are honoured exactly (1 -> 1,
+      // 261 -> 261) and larger ones round up to a whole number of segments,
+      // which is what tcp_mss() in bsd/netinet/tcp_input.c does. So the sysctl
+      // is worth naming with its command, not just its name.
+      int autotune = -1;
+      std::size_t sz = sizeof(autotune);
+      if (::sysctlbyname("net.inet.tcp.doautorcvbuf", &autotune, &sz, nullptr,
+                         0) != 0) {
+        autotune = -1;
+      }
+      if (autotune == 1) {
+        std::fprintf(stderr,
+                     "           macOS receive-buffer autotuning is on (the"
+                     " default since OS X\n"
+                     "           10.8) and holds the buffer near 20x the path"
+                     " MSS whatever you ask\n"
+                     "           for. To put -w/-y back in control:\n"
+                     "               sudo sysctl -w"
+                     " net.inet.tcp.doautorcvbuf=0\n"
+                     "           With it off, a request below the path MSS is"
+                     " honoured exactly and\n"
+                     "           a larger one rounds up to a whole number of"
+                     " segments.\n");
+      } else if (autotune == 0) {
+        // Already off and still overridden: that is the MSS rounding in
+        // tcp_mss(), and on loopback, where the MSS is huge, the floor with it
+        // is several tens of kilobytes. Telling them to run the sysctl again
+        // would be useless.
+        std::fprintf(stderr,
+                     "           Autotuning is already off, so this is MSS"
+                     " rounding: the buffer is\n"
+                     "           a whole number of path segments. On loopback,"
+                     " where the MSS is\n"
+                     "           16 KB, that floor is tens of kilobytes however"
+                     " small the request.\n");
+      }
 #endif
+    }
   }
 
   void begin_conversation(Conn& c) {
