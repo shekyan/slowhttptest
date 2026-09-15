@@ -2259,7 +2259,13 @@ struct Engine::Impl {
         // The reactor cannot wait any more. Retrying would spin at the speed of
         // the failing syscall, so stop -- and do not draw a conclusion from a
         // run whose event loop stopped working partway through.
-        std::fprintf(stderr, "\n\nError: %s\n",
+        //
+        // Interrupted first, or this is written into the live status block and
+        // the final repaint moves the cursor back up over it: the run then
+        // reports that the event loop failed without ever saying why, which is
+        // the one line that explains the rest of the output.
+        interrupt_status();
+        std::fprintf(stderr, "\nError: %s\n",
                      reactor->last_error().c_str());
         reactor_failed = true;
         break;
