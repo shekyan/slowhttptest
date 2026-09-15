@@ -86,6 +86,20 @@ def main():
     else:
         ok("quic dead port")
 
+    # A flag that selects no mode must not be accepted and dropped: this exact
+    # invocation once ran slow headers over TCP while reading as a QUIC test.
+    rc, out = run_tool(["--quic-hello", "partial", "-u", "https://127.0.0.1:443/",
+                        "-c", "2", "-l", "2"], timeout=30)
+    if rc == 0:
+        fail("quic-hello needs slow-quic", "it was accepted without --slow-quic")
+    elif "needs --slow-quic" not in out:
+        fail("quic-hello needs slow-quic", "no explanation: %r" % out[:200])
+    elif "Did you mean" not in out or "--slow-quic --quic-hello partial" not in out:
+        fail("quic-hello needs slow-quic",
+             "refused, but without showing the fix: %r" % out[:300])
+    else:
+        ok("quic-hello needs slow-quic", "and the hint shows the corrected flags")
+
     # An http:// URL has no QUIC to speak to and must be refused up front.
     rc, out = run_tool(["--slow-quic", "-u", "http://127.0.0.1:80/", "-l", "2"],
                        timeout=30)
