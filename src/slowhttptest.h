@@ -139,6 +139,12 @@ class SlowHTTPTest {
   int read_len_;
   int window_lower_limit_;
   int window_upper_limit_;
+  // The receive buffer the kernel granted, and the size asked for, captured
+  // once a connection is established. Part of the redrawn parameter block
+  // rather than a log line: report_parameters() clears the screen every tick,
+  // so anything printed between ticks is wiped before it can be read.
+  int granted_window_;
+  int requested_window_;
   bool is_dosed_;
   ProxyType proxy_type_;
   int debug_level_;

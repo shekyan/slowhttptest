@@ -71,10 +71,26 @@ bool SlowSocket::set_window_size(int wnd_size) {
   if(ret) {
     slowlog(LOG_ERROR, "error setting socket send buffer size to %d: %s\n", wnd_size, strerror(errno));
   } else {
+    // Read back before connect(), so this only confirms the request was
+    // accepted. It cannot detect a kernel that resizes the buffer at connect,
+    // which is what macOS does; get_granted_window_size() is checked after the
+    // connection is up for that.
     getsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &actual_wnd_size, &actual_wnd_size_len);
-    slowlog(LOG_DEBUG, "set socket %d receive buffer size to %d bytes(requested %d)\n", sockfd_, actual_wnd_size, wnd_size);
+    slowlog(LOG_DEBUG, "socket %d accepted a receive buffer of %d bytes(requested %d)\n", sockfd_, actual_wnd_size, wnd_size);
   }
   return ret; 
+}
+
+int SlowSocket::get_granted_window_size() const {
+  if(sockfd_ < 0) {
+    return -1;
+  }
+  int actual = 0;
+  socklen_t len = sizeof(actual);
+  if(getsockopt(sockfd_, SOL_SOCKET, SO_RCVBUF, &actual, &len)) {
+    return -1;
+  }
+  return actual;
 }
 
 int SlowSocket::set_nonblocking() {

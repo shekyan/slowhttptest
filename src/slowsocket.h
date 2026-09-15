@@ -77,6 +77,15 @@ class SlowSocket {
     return last_followup_timing_;
   }
 
+  const int get_window_size() const {
+    return window_size_;
+  }
+
+  // The receive buffer the kernel actually granted. Meaningful only once the
+  // connection is established: set_window_size() reads it back before
+  // connect(), which is the one moment it cannot disagree with the request.
+  int get_granted_window_size() const;
+
   void set_last_followup_timing(int timing) {
     last_followup_timing_ = timing;
   }

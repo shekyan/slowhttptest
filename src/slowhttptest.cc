@@ -43,6 +43,11 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+// sysctlbyname is Darwin-only, and glibc dropped <sys/sysctl.h> in 2.32,
+// so the include itself would break the Linux build.
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
 
 #include "range-generator.h"
 #include "slowlog.h"
@@ -116,6 +121,8 @@ static const char peer_closed[] = "Peer closed connection";
 }  // namespace
 
 namespace slowhttptest {
+
+
 SlowHTTPTest::SlowHTTPTest(int delay, int duration, 
                            int interval, int con_cnt,
                            int max_random_data_len,
@@ -149,6 +156,8 @@ SlowHTTPTest::SlowHTTPTest(int delay, int duration,
       read_len_(read_len),
       window_lower_limit_(window_lower_limit),
       window_upper_limit_(window_upper_limit),
+      granted_window_(-1),
+      requested_window_(-1),
       is_dosed_(false),
       proxy_type_(proxy_type),
       debug_level_(debug_level),
@@ -649,20 +658,61 @@ void SlowHTTPTest::report_status(bool to_stats) {
           !is_dosed_ * num_connections_);
     }
   } else {
+    // Built first and passed as one argument, so the whole block keeps the
+    // single timestamp slowlog() prefixes per call. Only once a connection has
+    // established: before that the kernel has not sized the buffer, and the
+    // number would just echo the request.
+    std::string window_note;
+    if(granted_window_ > 0 && requested_window_ > 0) {
+      char line[512];
+      snprintf(line, sizeof(line),
+               cLGN "receive window:" cLGN "      %d requested, %d granted\n",
+               requested_window_, granted_window_);
+      window_note = line;
+      if(granted_window_ > requested_window_ * 4) {
+        snprintf(line, sizeof(line),
+                 cLRD "  WARNING: kernel granted %dx the request; -w/-y are not"
+                 " in force\n",
+                 granted_window_ / requested_window_);
+        window_note += line;
+#ifdef __APPLE__
+        int autotune = -1;
+        size_t autotune_len = sizeof(autotune);
+        if(sysctlbyname("net.inet.tcp.doautorcvbuf", &autotune, &autotune_len,
+                        NULL, 0)) {
+          autotune = -1;
+        }
+        if(autotune == 1) {
+          window_note +=
+              "           macOS grows application-set buffers (default since"
+              " 10.8); to regain\n"
+              "           control: sudo sysctl -w"
+              " net.inet.tcp.doautorcvbuf=0\n";
+        } else if(autotune == 0) {
+          window_note +=
+              "           autotuning is off; this is rounding to whole"
+              " segments. On loopback\n"
+              "           the MSS is 16 KB, so use a real interface to test the"
+              " window.\n";
+        }
+#endif
+      }
+    }
     slowlog(LOG_INFO, cLGN "\nslow HTTP test status on " cGRN "%d" cLGN "th second:\n\n"
       cLGN "initializing:" cLGN "        %d\n"
       cLGN "pending:     " cLGN "        %d\n"
       cLGN "connected:   " cLGN "        %d\n"
       cLGN "error:       " cLGN "        %d\n"
       cLGN "closed:      " cLGN "        %d\n"
-      cLGN "service available:" cLGN "   %s\n" cRST,
+      cLGN "service available:" cLGN "   %s\n" "%s" cRST,
         seconds_passed_,
         initializing_,
         connecting_,
         connected_,
         errored_,
         closed_,
-        is_dosed_ ? cLRD "NO" cRST : cLGN "YES" cRST);
+        is_dosed_ ? cLRD "NO" cRST : cLGN "YES" cRST,
+        window_note.c_str());
   }
 }
 
@@ -1024,6 +1074,17 @@ bool SlowHTTPTest::run_test() {
                 if(ret > 0) { //actual data was sent
                   sock_[i]->set_state(eConnected);
                   is_any_ever_connected = true;
+                  // Established, so the kernel has finished sizing the
+                  // buffer. Captured rather than logged: the display is
+                  // cleared every tick, so it has to live in the block that
+                  // gets redrawn.
+                  if(granted_window_ < 0) {
+                    const int req = sock_[i]->get_window_size();
+                    if(req > 0) {
+                      granted_window_ = sock_[i]->get_granted_window_size();
+                      requested_window_ = req;
+                    }
+                  }
                   slowlog(LOG_DEBUG,
                       "%s:initial %d of %d bytes sent on socket %d:\n%s",
                       __FUNCTION__, ret,
