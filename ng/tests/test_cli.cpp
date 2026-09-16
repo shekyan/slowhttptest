@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "slowhttp/cli.hpp"
+#include "slowhttp/quic.hpp"
 #include "slowhttp/config.hpp"
 
 using slowhttp::CliResult;
@@ -170,19 +171,24 @@ static void test_mode_specific_flags_are_refused_outside_their_mode() {
               CliResult::kError,
           "and refused next to another explicit mode");
   }
-  {
-    Config cfg;
-    check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "complete",
-               "-u", "https://example.test/"}, cfg) == CliResult::kRun,
-          "but accepted with --slow-quic");
-    check(cfg.quic_complete_hello, "and applied");
-  }
-  {
-    Config cfg;
-    check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "partial",
-               "-u", "https://example.test/"}, cfg) == CliResult::kRun,
-          "partial is accepted too");
-    check(!cfg.quic_complete_hello, "and leaves the hello unfinished");
+  // The acceptance half only holds where QUIC can run at all: a build without
+  // a crypto backend refuses --slow-quic before it ever looks at --quic-hello.
+  // The refusals above are checked either way, since that guard runs first.
+  if (slowhttp::quic::available()) {
+    {
+      Config cfg;
+      check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "complete",
+                 "-u", "https://example.test/"}, cfg) == CliResult::kRun,
+            "but accepted with --slow-quic");
+      check(cfg.quic_complete_hello, "and applied");
+    }
+    {
+      Config cfg;
+      check(run({"slowhttptest-ng", "--slow-quic", "--quic-hello", "partial",
+                 "-u", "https://example.test/"}, cfg) == CliResult::kRun,
+            "partial is accepted too");
+      check(!cfg.quic_complete_hello, "and leaves the hello unfinished");
+    }
   }
   {
     Config cfg;

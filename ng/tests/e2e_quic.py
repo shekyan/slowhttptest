@@ -43,6 +43,19 @@ def run_tool(args, timeout=90):
     return p.returncode, p.stderr + p.stdout
 
 
+def tls_supported(tool_path):
+    """Whether this build has the crypto to protect a QUIC packet.
+
+    QUIC carries TLS inside the transport, so a -DSLOWHTTP_TLS=OFF build
+    refuses --slow-quic outright. Every case here drives that mode, so without
+    a backend there is nothing to test rather than something failing -- the
+    same shape tls_supported() has in e2e_transport.py.
+    """
+    _, out = run_tool(["--slow-quic", "-u", "https://127.0.0.1:1/", "-c", "1",
+                       "-l", "1", "--no-probe"], timeout=30)
+    return "no TLS backend" not in out
+
+
 def case(name, mock_flag, expect, port):
     server = subprocess.Popen([sys.executable, MOCK, str(port), mock_flag],
                               stdout=subprocess.DEVNULL,
@@ -67,6 +80,10 @@ def case(name, mock_flag, expect, port):
 
 
 def main():
+    if not tls_supported(TOOL):
+        print("e2e quic: skipped, this build has no TLS backend")
+        return 0
+
     # A server doing address validation. The point of the mode is to tell this
     # apart from a server that holds -- reporting a hold here would be the
     # worst possible failure, since it is the mitigation working.
