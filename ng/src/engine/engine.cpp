@@ -706,8 +706,12 @@ struct Engine::Impl {
       if (count == 1 && chatty()) {
         const std::string advice = advice_for(err);
         interrupt_status();
-        std::fprintf(stderr, "\n  connect failed (%s)%s%s\n", std::strerror(err),
-                     advice.empty() ? "" : ": ", advice.c_str());
+        // Red, like the rest of the run's failures. Plain text here sat
+        // inside a coloured status block and read as though it came from
+        // something other than this tool.
+        std::fprintf(stderr, "\n  %sconnect failed (%s)%s%s%s\n", C(kLRed),
+                     std::strerror(err), advice.empty() ? "" : ": ",
+                     advice.c_str(), C(kReset));
       }
     }
     if (address_pinned) return;
@@ -1073,12 +1077,14 @@ struct Engine::Impl {
                  requested_rcvbuf_, granted);
     if (log.meta.window_overridden) {
       std::fprintf(stderr,
-                   "  WARNING: the kernel granted %dx the requested window, so"
+                   "  %sWARNING: the kernel granted %dx the requested window, so"
                    " -w/-y are not\n"
                    "           controlling it on this platform. Each connection"
                    " will absorb far\n"
-                   "           more data before the window closes.\n",
-                   granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1));
+                   "           more data before the window closes.%s\n",
+                   C(kLYellow),
+                   granted / (requested_rcvbuf_ > 0 ? requested_rcvbuf_ : 1),
+                   C(kReset));
 #if defined(__APPLE__)
       // Measured on macOS 26.6 against a 1348-byte-MSS path: with autotuning
       // on, every request from 1 B to 16 KB came back at about 20x the MSS.
@@ -1180,8 +1186,8 @@ struct Engine::Impl {
             // drops connections, which is a completely different finding.
             if (chatty())
               interrupt_status(),
-              std::fprintf(stderr, "\n  connection setup failed: %s\n",
-                         c.sock.setup_error().c_str());
+              std::fprintf(stderr, "\n  %sconnection setup failed: %s%s\n",
+                         C(kLRed), c.sock.setup_error().c_str(), C(kReset));
           }
           close_slot(c);
           return;
@@ -2465,7 +2471,7 @@ struct Engine::Impl {
 
     if (undelivered > 0 && chatty()) {
       std::fprintf(stderr,
-                   "\nWARNING: %ld connection(s) never put their request on the"
+                   "\n%sWARNING: %ld connection(s) never put their request on the"
                    " wire.\n"
                    "         The request was written and accepted locally, but"
                    " the kernel reports\n"
@@ -2473,9 +2479,10 @@ struct Engine::Impl {
                    " and the network is\n"
                    "         holding them. They applied no load, so the effective"
                    " connection count\n"
-                   "         was %d, not %d.\n",
-                   undelivered, cfg.connections - static_cast<int>(undelivered),
-                   cfg.connections);
+                   "         was %d, not %d.%s\n",
+                   C(kLYellow), undelivered,
+                   cfg.connections - static_cast<int>(undelivered),
+                   cfg.connections, C(kReset));
       const long cfil = active_content_filters();
       if (cfil > 0)
         std::fprintf(stderr,
