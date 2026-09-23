@@ -323,7 +323,12 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'x':
-        if(!parse_int(max_random_data_len))
+        // Bounded because it is not: -x 2000000000 overflowed
+        // extra_data_max_len_ * 2 and then threw std::length_error out of
+        // basic_string, which nothing catches. A followup name/value pair has
+        // no business being larger than a header, and every other size option
+        // here is capped in this range.
+        if(!parse_int(max_random_data_len, 65536))
           return -1;
         else
           if(max_random_data_len < 2) max_random_data_len = 2;

@@ -669,7 +669,12 @@ void SlowHTTPTest::report_status(bool to_stats) {
                cLGN "receive window:" cLGN "      %d requested, %d granted\n",
                requested_window_, granted_window_);
       window_note = line;
-      if(granted_window_ > requested_window_ * 4) {
+      // Widened: -w/-y accept up to INT_MAX here, so the multiply overflows a
+      // signed int well inside the accepted range. UBSan catches it at
+      // -w 2000000000, and the wrapped negative made the comparison true, so
+      // the warning also fired on a kernel that had clamped the request DOWN
+      // -- the opposite of what it reports.
+      if(granted_window_ > static_cast<long long>(requested_window_) * 4) {
         snprintf(line, sizeof(line),
                  cLRD "  WARNING: kernel granted %dx the request; -w/-y are not"
                  " in force\n",
