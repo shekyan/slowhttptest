@@ -87,9 +87,14 @@ Action SlowQuic::on_connect(ConnId id) {
   // Complete: the whole hello in one go, and then nothing ever again -- the
   // server does its expensive half and waits for a Finished that never comes.
   // Partial: the first fragment only, so the hello can never be parsed.
-  const std::size_t take =
-      hello_mode_ == Hello::Complete ? c.hello.size()
-                                     : std::min(chunk_, c.hello.size() - 1);
+  //
+  // The empty case cannot occur while the CLI gates this mode on
+  // quic::available(), but on_timer() below guards it and this did not. One of
+  // the two was wrong about the invariant and a reader could not tell which.
+  const std::size_t withheld = c.hello.empty() ? 0 : c.hello.size() - 1;
+  const std::size_t take = hello_mode_ == Hello::Complete
+                               ? c.hello.size()
+                               : std::min(chunk_, withheld);
   std::string pkt = build_packet(c, 0, take);
   c.sent = take;
   return Action::send(pkt, interval_);

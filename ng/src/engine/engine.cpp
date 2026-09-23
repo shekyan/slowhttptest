@@ -1069,7 +1069,11 @@ struct Engine::Impl {
     // Kernels round up and add bookkeeping overhead; Linux reports double the
     // request. Only flag the case where the granted buffer is so much larger
     // that the requested window is not meaningfully in force.
-    log.meta.window_overridden = granted > requested_rcvbuf_ * 4;
+    // Widened for the same reason classic needed it. ng caps -w/-y at 1048576
+    // so this cannot overflow today, but the bound and the arithmetic are in
+    // different files and nothing ties them together.
+    log.meta.window_overridden =
+        granted > static_cast<long long>(requested_rcvbuf_) * 4;
     if (!chatty()) return;
     interrupt_status();
     std::fprintf(stderr,

@@ -6,6 +6,7 @@
 // uses.
 #include "slowhttp/quic.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #ifdef SLOWHTTP_HAVE_TLS
@@ -239,6 +240,10 @@ std::string initial_packet(const std::string& dcid, const std::string& scid,
                            std::size_t min_datagram) {
 #ifdef SLOWHTTP_HAVE_TLS
   if (!keys.ok) return std::string();
+  // RFC 9000 17.2 caps a connection ID at 20 bytes, and the length is written
+  // into a single byte. Anything longer would be silently truncated into a
+  // header that does not describe its own contents.
+  if (dcid.size() > 20 || scid.size() > 20) return std::string();
 
   std::string payload;
   put_varint(payload, 0x06);  // CRYPTO frame
@@ -263,9 +268,27 @@ std::string initial_packet(const std::string& dcid, const std::string& scid,
   hdr += scid;
   put_varint(hdr, 0);  // token length: none, this is not a response to a Retry
 
-  // PADDING frames to the datagram floor. The length varint is two bytes for
-  // everything in range here, which the floor guarantees.
-  const std::size_t fixed = hdr.size() + 2 + 1 + 16;
+  // Header protection samples 16 bytes starting four bytes past the packet
+  // number (RFC 9001 5.4.2), so the protected part needs at least 19 bytes
+  // with a one-byte number. That already holds unconditionally -- a CRYPTO
+  // frame header is three bytes before any data, and the tag adds sixteen --
+  // so this is not guarding a reachable overrun. It is here so the guarantee
+  // stops depending on a frame-encoding detail in another function: change how
+  // frames are written and the sample would silently become the thing that
+  // breaks.
+  constexpr std::size_t kSampleFloor = 19;
+  if (payload.size() < kSampleFloor)
+    payload.append(kSampleFloor - payload.size(), '\0');
+
+  // PADDING frames to the datagram floor. The length field is a varint whose
+  // width depends on the value it carries. Two bytes is right for every call
+  // this code makes -- a padded body stays under the 16384 mark, an unpadded
+  // one sizes its own field -- so hardcoding it was not wrong. It is computed
+  // instead because the correctness of the constant depended on the floor
+  // being 1200, which is a parameter, and nothing said so.
+  const std::size_t len_size = varint_size(
+      std::max<std::uint64_t>(payload.size() + 1 + 16, min_datagram));
+  const std::size_t fixed = hdr.size() + len_size + 1 + 16;
   if (fixed + payload.size() < min_datagram)
     payload.append(min_datagram - fixed - payload.size(), '\0');
   put_varint(hdr, payload.size() + 1 + 16);
@@ -281,22 +304,28 @@ std::string initial_packet(const std::string& dcid, const std::string& scid,
   int outl = 0, finl = 0;
   EVP_CIPHER_CTX* c = EVP_CIPHER_CTX_new();
   if (!c) return std::string();
-  EVP_EncryptInit_ex(c, EVP_aes_128_gcm(), nullptr, nullptr, nullptr);
-  EVP_CIPHER_CTX_ctrl(c, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
-  EVP_EncryptInit_ex(c, nullptr, nullptr,
-                     reinterpret_cast<const unsigned char*>(keys.key.data()),
-                     reinterpret_cast<const unsigned char*>(nonce.data()));
-  // The header is authenticated, not encrypted.
-  EVP_EncryptUpdate(c, nullptr, &outl,
-                    reinterpret_cast<const unsigned char*>(hdr.data()),
-                    static_cast<int>(hdr.size()));
-  EVP_EncryptUpdate(c, reinterpret_cast<unsigned char*>(&out[0]), &outl,
-                    reinterpret_cast<const unsigned char*>(payload.data()),
-                    static_cast<int>(payload.size()));
-  EVP_EncryptFinal_ex(c, reinterpret_cast<unsigned char*>(&out[0]) + outl, &finl);
+  // Checked, not assumed: a failure here would otherwise put a packet on the
+  // wire that is garbage after the header, and the target's silence would look
+  // like a hold rather than a malformed send.
   unsigned char tag[16];
-  EVP_CIPHER_CTX_ctrl(c, EVP_CTRL_GCM_GET_TAG, 16, tag);
+  const bool sealed =
+      EVP_EncryptInit_ex(c, EVP_aes_128_gcm(), nullptr, nullptr, nullptr) == 1 &&
+      EVP_CIPHER_CTX_ctrl(c, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) == 1 &&
+      EVP_EncryptInit_ex(c, nullptr, nullptr,
+                         reinterpret_cast<const unsigned char*>(keys.key.data()),
+                         reinterpret_cast<const unsigned char*>(nonce.data())) == 1 &&
+      // The header is authenticated, not encrypted.
+      EVP_EncryptUpdate(c, nullptr, &outl,
+                        reinterpret_cast<const unsigned char*>(hdr.data()),
+                        static_cast<int>(hdr.size())) == 1 &&
+      EVP_EncryptUpdate(c, reinterpret_cast<unsigned char*>(&out[0]), &outl,
+                        reinterpret_cast<const unsigned char*>(payload.data()),
+                        static_cast<int>(payload.size())) == 1 &&
+      EVP_EncryptFinal_ex(c, reinterpret_cast<unsigned char*>(&out[0]) + outl,
+                          &finl) == 1 &&
+      EVP_CIPHER_CTX_ctrl(c, EVP_CTRL_GCM_GET_TAG, 16, tag) == 1;
   EVP_CIPHER_CTX_free(c);
+  if (!sealed) return std::string();
   out.resize(static_cast<std::size_t>(outl + finl));
   out += std::string(reinterpret_cast<char*>(tag), 16);
 

@@ -190,6 +190,37 @@ static void test_every_dribble_costs_a_full_datagram() {
   check(over.size() > 1200, "only a payload past the floor grows the packet");
 }
 
+static void test_oversized_connection_ids_are_refused() {
+  // The header writes the connection ID length into a single byte, so a long
+  // one used to wrap: 300 bytes declared itself as 44 and the packet went out
+  // describing a length it did not have. RFC 9000 17.2 caps a connection ID at
+  // 20 bytes, which is the boundary worth holding.
+  const Keys k = slowhttp::quic::initial_keys(std::string(8, 'D'), false);
+  const std::string scid(8, 'S'), data(50, 'x');
+  check(!slowhttp::quic::initial_packet(std::string(20, 'D'), scid, k, 0, 0, data).empty(),
+        "a 20-byte connection ID is legal and still builds");
+  check(slowhttp::quic::initial_packet(std::string(21, 'D'), scid, k, 0, 0, data).empty(),
+        "21 bytes is over the RFC limit and is refused");
+  check(slowhttp::quic::initial_packet(std::string(300, 'D'), scid, k, 0, 0, data).empty(),
+        "and a length that would wrap the byte is refused rather than truncated");
+  check(slowhttp::quic::initial_packet(std::string(8, 'D'), std::string(21, 'S'), k, 0, 0, data).empty(),
+        "the source connection ID is held to the same limit");
+}
+
+static void test_a_tiny_floor_still_builds_a_samplable_packet() {
+  // min_datagram is a parameter, and header protection needs 19 bytes past the
+  // packet number to sample. Lowering the floor must not produce a packet too
+  // short to protect.
+  const Keys k = slowhttp::quic::initial_keys(std::string(8, 'D'), false);
+  for (std::size_t floor : {std::size_t(0), std::size_t(1), std::size_t(32)}) {
+    const std::string p = slowhttp::quic::initial_packet(
+        std::string(8, 'D'), std::string(8, 'S'), k, 0, 0, std::string(), floor);
+    check(!p.empty(), "a packet is still produced with a tiny floor");
+    // 1 flags + 4 version + 1+8 dcid + 1+8 scid + 1 token + len + 1 pn
+    check(p.size() >= 19, "and it is long enough for the sample to come from");
+  }
+}
+
 static void test_classify_reads_the_long_header() {
   auto pkt = [](unsigned b0, unsigned ver) {
     std::string s;
@@ -226,6 +257,8 @@ int main() {
   test_hello_is_quic_shaped();
   test_initial_packet_shape();
   test_every_dribble_costs_a_full_datagram();
+  test_oversized_connection_ids_are_refused();
+  test_a_tiny_floor_still_builds_a_samplable_packet();
   test_classify_reads_the_long_header();
   if (failures == 0) {
     std::printf("quic: all checks passed\n");
