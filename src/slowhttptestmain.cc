@@ -113,6 +113,10 @@ static bool check_window_range(int a,int b) {
   return true;
 }
 
+// The upper bounds passed here are the same table ng enforces in
+// ng/src/config/cli.cpp, so a flag means the same thing in both tools.
+// ng/tests/test_flag_limits.py compares the two and fails if they drift.
+// -c is the one deliberate exception; see below.
 static bool parse_int(int &val, long max = INT_MAX) {
   long tmp = strtol(optarg, 0, 10);
   if(tmp == 0) { //not last empty argument
@@ -218,6 +222,9 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'c':
+        // Deliberately lower than ng's cap, and not drift: this build may be
+        // using select(), which cannot watch a descriptor at or above
+        // FD_SETSIZE at all. ng has kqueue/epoll/poll and no such ceiling.
 #ifdef HAVE_POLL
         if(!parse_int(conn_cnt, 65539))
 #else
@@ -271,7 +278,7 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'k':
-        if(!parse_int(pipeline_factor, 10))
+        if(!parse_int(pipeline_factor, 1024))
           return -1;
         break;
       case 'l':
@@ -291,11 +298,11 @@ int main(int argc, char **argv) {
           return -1;
         break;
       case 'p':
-        if(!parse_int(probe_interval))
+        if(!parse_int(probe_interval, 3600))
           return -1;
         break;
       case 'r':
-        if(!parse_int(rate))
+        if(!parse_int(rate, 100000))
           return -1;
         break;
       case 's':
@@ -319,7 +326,7 @@ int main(int argc, char **argv) {
         }
         break;
       case 'w':
-        if(!parse_int(window_lower_limit))
+        if(!parse_int(window_lower_limit, 1048576))
           return -1;
         break;
       case 'x':
@@ -334,11 +341,11 @@ int main(int argc, char **argv) {
           if(max_random_data_len < 2) max_random_data_len = 2;
         break;
       case 'y':
-        if(!parse_int(window_upper_limit))
+        if(!parse_int(window_upper_limit, 1048576))
           return -1;
         break;
       case 'z':
-        if(!parse_int(read_len))
+        if(!parse_int(read_len, 1048576))
           return -1;
         break;
       case '?':

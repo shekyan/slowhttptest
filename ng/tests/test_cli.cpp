@@ -88,6 +88,19 @@ static void test_flags() {
     check(run({"slowhttptest-ng", "-v", "9"}, cfg) == CliResult::kError,
           "-v rejects out-of-range level");
   }
+  {  // The bound itself, not just its agreement with classic: the drift check
+     // in test_flag_limits.py reads both parsers as text and cannot tell
+     // whether either one enforces what it reads.
+    Config cfg;
+    check(run({"slowhttptest-ng", "-x", "65536", "-u", "http://h/"}, cfg) ==
+              CliResult::kRun, "-x accepts its documented maximum");
+    check(cfg.max_random_data_len == 65536, "-x applied");
+  }
+  {
+    Config cfg;
+    check(run({"slowhttptest-ng", "-x", "65537", "-u", "http://h/"}, cfg) ==
+              CliResult::kError, "-x rejects a value above the maximum");
+  }
   {
     Config cfg;
     check(run({"slowhttptest-ng", "-c", "100", "-r", "20", "-l", "30", "-i", "5"},

@@ -312,6 +312,10 @@ bool parse_int_arg(int& val, char flag, long min, long max) {
   return true;
 }
 
+// The upper bounds passed here are the same table classic enforces in
+// src/slowhttptestmain.cc, so a flag means the same thing in both tools.
+// tests/test_flag_limits.py compares the two and fails if they drift. -c is
+// the one deliberate exception; see below.
 bool parse_positive(int& val, char flag, long max = 2147483647L) {
   return parse_int_arg(val, flag, 1, max);
 }
@@ -580,6 +584,9 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
       case 'R': cfg.mode = Mode::Range; break;
       case 'X': cfg.mode = Mode::SlowRead; break;
       case 'u': url = optarg; break;
+      // Deliberately higher than classic's cap, and not drift: classic may be
+      // built against select(), which cannot watch a descriptor at or above
+      // FD_SETSIZE. Every backend here polls by descriptor, not by bitmask.
       case 'c': if (!parse_positive(tmp, 'c', 1048576)) return CliResult::kError;
                 cfg.connections = tmp; break;
       case 'r': if (!parse_positive(tmp, 'r', 100000)) return CliResult::kError;
@@ -588,7 +595,10 @@ CliResult parse_cli(int argc, char** argv, Config& cfg) {
                 cfg.duration = std::chrono::seconds(tmp); break;
       case 'i': if (!parse_positive(tmp, 'i')) return CliResult::kError;
                 cfg.interval = std::chrono::seconds(tmp); break;
-      case 'x': if (!parse_positive(tmp, 'x')) return CliResult::kError;
+      // 65536 matches classic, where an unbounded -x threw std::length_error
+      // out of basic_string. Nothing here crashes at INT_MAX, but a followup
+      // name/value pair larger than a header has no use either way.
+      case 'x': if (!parse_positive(tmp, 'x', 65536)) return CliResult::kError;
                 cfg.max_random_data_len = tmp < 2 ? 2 : tmp; break;
       case 's': if (!parse_positive(tmp, 's')) return CliResult::kError;
                 cfg.content_length = tmp; content_length_set = true; break;

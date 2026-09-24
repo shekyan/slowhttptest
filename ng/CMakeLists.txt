@@ -273,6 +273,17 @@ math(EXPR E2E_TIMEOUT_SHORT "300 * ${SLOWHTTP_TEST_TIMEOUT_SCALE}")
 # End-to-end: attack a local vulnerable server and assert it actually saturates.
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+  # Not end-to-end: reads both CLI parsers as text and fails if a flag they
+  # share has picked up different bounds. Deliberately a source comparison
+  # rather than a shared header, so neither build tree depends on the other;
+  # it skips when classic's sources are not present.
+  add_test(NAME flag_limits
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_flag_limits.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/config/cli.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/slowhttptestmain.cc)
+  set_tests_properties(flag_limits PROPERTIES TIMEOUT 60)
+
   add_test(NAME e2e_attacks
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_attacks.py

@@ -11,3 +11,4 @@ stamp-h1
 src/slowhttptest
 
 configure~
+config.h.in~
