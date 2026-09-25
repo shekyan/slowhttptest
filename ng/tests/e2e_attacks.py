@@ -10,10 +10,16 @@ for entirely the wrong reason.
 Availability is measured by the SERVER's own counters rather than by whether one
 racing client got through. With a handful of workers and many attacker
 connections, any single client's success is a coin flip; the counters are not.
-The crisp, non-flaky distinction is progress:
+The distinction is progress:
 
     vulnerable -> the served counter is stuck at zero
     defended   -> the served counter keeps climbing
+
+That removes the coin flip from the vulnerable direction but not from the
+defended one: the counter only climbs if some knocker wins a worker the defense
+freed, and it is racing WORKERS * 3 attacker connections for it. So the window
+the verdict is read from scales with the runner, which is what SCALE below is
+for. A macOS run failed exactly here, on a runner already marked slow.
 
 Range is the exception: it is amplification rather than a slow hold, so it is
 measured by the server-side cost it provokes per byte of request.
@@ -30,6 +36,14 @@ import threading
 import time
 
 WORKERS = 4
+# Runner speed, exported by CMake from SLOWHTTP_TEST_TIMEOUT_SCALE.
+#
+# Widening only ctest's wall-clock budget does not help an assertion that
+# decides from what settles inside a fixed window. served_delta() below reads
+# its verdict from a few seconds of knocking; on a runner slow enough to need a
+# scale, a defense that is working can free too few workers inside that window
+# and read as a denial.
+SCALE = max(1.0, float(os.environ.get("SLOWHTTP_TEST_TIMEOUT_SCALE", "1")))
 COUNTER_RE = re.compile(
     r"workers busy: (\d+)/\d+\s+served: (\d+)\s+reaped: (\d+)\s+stuck_sending: (\d+)")
 RANGE_RE = re.compile(r"range_committed: ([\d.]+)MB")
@@ -145,7 +159,7 @@ def start_attack(tool, port, mode, conns, extra=()):
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def served_delta(server, port, seconds=6.0, patience=3.0):
+def served_delta(server, port, seconds=6.0 * SCALE, patience=3.0 * SCALE):
     """Legit clients keep knocking for a while; returns how many the server served.
 
     Uses the server's counter, so a client that times out but whose request was
@@ -175,12 +189,13 @@ def run_case(name, tool, mock, port, mode, server_extra, attack_extra,
     server = attack = None
     try:
         server = Server(mock, port, server_extra)
-        if not wait_until(lambda: http_get(port) is not None, timeout=10):
+        if not wait_until(lambda: http_get(port) is not None, timeout=10 * SCALE):
             raise SystemExit(f"FAIL[{name}]: server never became healthy")
 
         attack = start_attack(tool, port, mode, WORKERS * 3, attack_extra)
         # Give the attack time to claim the workers.
-        wait_until(lambda: (server.counters() or (0,))[0] >= WORKERS, timeout=30)
+        wait_until(lambda: (server.counters() or (0,))[0] >= WORKERS,
+                   timeout=30 * SCALE)
 
         if saturation_field is not None:
             c = server.counters()
@@ -214,14 +229,14 @@ def run_range_case(tool, mock, port):
     try:
         server = Server(mock, port, ("--body-bytes", str(int(body_mb * 1e6))))
         if not wait_until(lambda: http_get(port, read_all=True) is not None,
-                          timeout=10):
+                          timeout=10 * SCALE):
             raise SystemExit("FAIL[range]: server never became healthy")
 
         attack = subprocess.Popen(
             [tool, "-R", "-u", f"http://127.0.0.1:{port}/", "-c", "4", "-r", "4",
              "-a", "5", "-b", "2000", "-l", "10"],
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        _, err = attack.communicate(timeout=60)
+        _, err = attack.communicate(timeout=60 * SCALE)
         attack = None
 
         m = re.search(rb"range set: (\d+) specs, (\d+) byte request", err)
